@@ -373,7 +373,7 @@ async def toggle_shuffle_ui_callback(update: Update, context: ContextTypes.DEFAU
     config = await get_user_config(user_id)
     new_val = not config.get("shuffle_mode", False)
     await update_user_config(user_id, shuffle_mode=new_val)
-    await query.answer(f"Shuffle {"Enabled" if new_val else "Disabled"}")
+    await query.answer(f"Shuffle {'Enabled' if new_val else 'Disabled'}")
     await manage_settings_callback(update, context)
 
 
@@ -388,7 +388,7 @@ async def toggle_copy_ui_callback(update: Update, context: ContextTypes.DEFAULT_
     config = await get_user_config(user_id)
     new_val = not config.get("copy_mode", False)
     await update_user_config(user_id, copy_mode=new_val)
-    await query.answer(f"Copy Mode {"Enabled" if new_val else "Disabled"}")
+    await query.answer(f"Copy Mode {'Enabled' if new_val else 'Disabled'}")
     await manage_settings_callback(update, context)
 
 
