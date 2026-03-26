@@ -74,8 +74,6 @@ MAIN_BOT_TOKEN=your_main_bot_token
 LOGIN_BOT_TOKEN=your_login_bot_token
 MAIN_BOT_USERNAME=YourMainBot
 LOGIN_BOT_USERNAME=spinifyLoginbot
-API_ID=your_api_id
-API_HASH=your_api_hash
 OWNER_ID=your_telegram_user_id
 MONGODB_URI=mongodb+srv://...
 ```
@@ -102,11 +100,11 @@ python -m login_bot.bot
 # Press Ctrl+A then D to detach
 ```
 
-### Start Worker
+### Start Sender Service
 ```bash
-screen -S worker
+screen -S sender
 source venv/bin/activate
-python -m worker.worker
+python -m services.sender.sender
 # Press Ctrl+A then D to detach
 ```
 
@@ -114,7 +112,7 @@ python -m worker.worker
 ```bash
 screen -r main_bot   # View main bot logs
 screen -r login_bot  # View login bot logs
-screen -r worker     # View worker logs
+screen -r sender     # View sender logs
 ```
 
 ---
@@ -169,14 +167,14 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-**Worker Service:**
+**Sender Service:**
 ```bash
-sudo nano /etc/systemd/system/worker.service
+sudo nano /etc/systemd/system/sender.service
 ```
 
 ```ini
 [Unit]
-Description=Group Message Scheduler - Worker
+Description=Group Message Scheduler - Sender Service
 After=network.target
 
 [Service]
@@ -184,7 +182,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/message-scheduler
 Environment=PATH=/opt/message-scheduler/venv/bin
-ExecStart=/opt/message-scheduler/venv/bin/python -m worker.worker
+ExecStart=/opt/message-scheduler/venv/bin/python -m services.sender.sender
 Restart=always
 RestartSec=10
 
@@ -199,15 +197,15 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 
 # Enable services to start on boot
-sudo systemctl enable main-bot login-bot worker
+sudo systemctl enable main-bot login-bot sender
 
 # Start all services
-sudo systemctl start main-bot login-bot worker
+sudo systemctl start main-bot login-bot sender
 
 # Check status
 sudo systemctl status main-bot
 sudo systemctl status login-bot
-sudo systemctl status worker
+sudo systemctl status sender
 ```
 
 ### Useful Commands
@@ -216,13 +214,13 @@ sudo systemctl status worker
 # View logs
 journalctl -u main-bot -f
 journalctl -u login-bot -f
-journalctl -u worker -f
+journalctl -u sender -f
 
 # Restart services
-sudo systemctl restart main-bot login-bot worker
+sudo systemctl restart main-bot login-bot sender
 
 # Stop services
-sudo systemctl stop main-bot login-bot worker
+sudo systemctl stop main-bot login-bot sender
 ```
 
 ---
@@ -236,7 +234,7 @@ cd /opt/message-scheduler
 git pull origin main
 
 # Restart services
-sudo systemctl restart main-bot login-bot worker
+sudo systemctl restart main-bot login-bot sender
 ```
 
 ---
@@ -245,7 +243,7 @@ sudo systemctl restart main-bot login-bot worker
 
 ### Check if services are running
 ```bash
-systemctl status main-bot login-bot worker
+systemctl status main-bot login-bot sender
 ```
 
 ### View recent logs
@@ -284,10 +282,10 @@ cd /opt/message-scheduler
 source venv/bin/activate
 
 echo "Starting all services..."
-sudo systemctl start main-bot login-bot worker
+sudo systemctl start main-bot login-bot sender
 
 echo "Services started! Checking status..."
-sudo systemctl status main-bot login-bot worker --no-pager
+sudo systemctl status main-bot login-bot sender --no-pager
 ```
 
 ```bash

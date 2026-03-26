@@ -7,7 +7,7 @@ import signal
 import asyncio
 from telegram.ext import Application
 from telegram.request import HTTPXRequest
-from db.database import init_database
+from core.database import init_database
 
 # Configure logging
 def setup_logging():
