@@ -159,6 +159,7 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📊 Live Stats", callback_data="admin_stats"),
         ],
         [
+            InlineKeyboardButton("📁 Group Stats", callback_data="admin_group_stats"),
             InlineKeyboardButton("📢 Global Blast", callback_data="admin_broadcast"),
         ],
         [
@@ -190,6 +191,23 @@ def get_stats_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔙 Admin Panel", callback_data="admin"),
         ],
     ])
+
+
+def get_admin_group_stats_keyboard() -> InlineKeyboardMarkup:
+    """Keyboard for group stats view."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔄 Retry All Failing", callback_data="admin_retry_failing"),
+        ],
+        [
+            InlineKeyboardButton("🔄 Refresh", callback_data="admin_group_stats"),
+            InlineKeyboardButton("🔙 Admin Panel", callback_data="admin"),
+        ],
+        [
+            InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
+        ],
+    ])
+
 
 
 def get_broadcast_keyboard() -> InlineKeyboardMarkup:

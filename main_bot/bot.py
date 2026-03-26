@@ -75,6 +75,8 @@ from main_bot.handlers.admin import (
     admin_upgrade_perform_callback,
     upgrade_command,
     WAITING_UPGRADE_USER_ID,
+    admin_group_stats_callback,
+    admin_retry_failing_callback,
 )
 from main_bot.handlers.help import help_callback, help_command, guide_callback
 from main_bot.handlers.account import (
@@ -221,6 +223,8 @@ def create_application() -> Application:
         ("^admin_nightmode$", admin_nightmode_callback),
         ("^set_nightmode:", set_nightmode_callback),
         ("^admin_health$", admin_health_callback),
+        ("^admin_group_stats$", admin_group_stats_callback),
+        ("^admin_retry_failing$", admin_retry_failing_callback),
         ("^adm_upgr:", admin_upgrade_perform_callback),
         ("^buy_plan:", buy_plan_callback),
     ]

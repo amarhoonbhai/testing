@@ -145,3 +145,10 @@ async def get_failing_groups_count() -> int:
     """Get total number of groups currently marked as failing (admin stat)."""
     db = get_database()
     return await db.groups.count_documents({"first_fail_at": {"$exists": True}})
+
+
+async def get_all_failing_groups() -> List[dict]:
+    """Get all groups currently marked as failing."""
+    db = get_database()
+    cursor = db.groups.find({"first_fail_at": {"$exists": True}})
+    return await cursor.to_list(length=1000)

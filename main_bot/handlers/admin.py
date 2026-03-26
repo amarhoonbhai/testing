@@ -11,7 +11,8 @@ from models.user import get_all_users_for_broadcast
 from models.settings import get_global_settings, update_global_settings
 from main_bot.utils.keyboards import (
     get_admin_keyboard, get_broadcast_keyboard, get_back_home_keyboard,
-    get_night_mode_settings_keyboard, get_admin_upgrade_keyboard, get_stats_keyboard
+    get_night_mode_settings_keyboard, get_admin_upgrade_keyboard, get_stats_keyboard,
+    get_admin_group_stats_keyboard
 )
 from core.config import (
     PLAN_PRICES, PLAN_DURATIONS, TRIAL_DAYS, OWNER_ID,
@@ -20,6 +21,7 @@ from core.config import (
 from shared.utils import escape_markdown
 from models.plan import extend_plan, activate_plan, get_plan
 from models.session import get_all_connected_sessions
+from models.group import get_all_failing_groups, clear_group_fail
 
 
 # Conversation states
@@ -712,3 +714,70 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except: pass
     except:
         await update.message.reply_text("❌ Invalid arguments. Example: `/upgrade 123456 week`")
+
+
+async def admin_group_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show detailed group failure statistics."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("⛔ Access denied", show_alert=True)
+        return
+    
+    await query.answer()
+    
+    failing = await get_all_failing_groups()
+    
+    text = "📁 *GROUP HEALTH MONITOR*\n"
+    text += "══════════════════════════════\n\n"
+    
+    if not failing:
+        text += "✅ *All groups are healthy!*\nNo failures detected in the last 24h."
+    else:
+        text += f"⚠️ *Detected {len(failing)} failing groups:*\n\n"
+        # Group by reason
+        reasons: dict = {}
+        for g in failing:
+            r = g.get("fail_reason", "Unknown")
+            reasons.setdefault(r, []).append(g)
+            
+        for reason, groups in reasons.items():
+            text += f"📍 *{reason}* ({len(groups)})\n"
+            for g in groups[:5]: # Show max 5 per reason
+                title = g.get("chat_title", "Unknown")
+                uid = g.get("user_id", "?")
+                text += f"  ├ `{title[:20]}` (User: `{uid}`)\n"
+            if len(groups) > 5:
+                text += f"  └ ... and {len(groups) - 5} more\n"
+            text += "\n"
+            
+    text += "\n_Failing groups are automatically paused. Click 'Retry All' to attempt recovery._"
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=get_admin_group_stats_keyboard(),
+    )
+
+async def admin_retry_failing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Clear all group failures to trigger retries."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("⛔ Access denied", show_alert=True)
+        return
+    
+    failing = await get_all_failing_groups()
+    if not failing:
+        await query.answer("✅ No failing groups to retry", show_alert=True)
+        return
+        
+    await query.answer(f"🔄 Retrying {len(failing)} groups...", show_alert=True)
+    
+    for g in failing:
+        await clear_group_fail(g["user_id"], g["chat_id"])
+        
+    # Refresh view
+    await admin_group_stats_callback(update, context)
