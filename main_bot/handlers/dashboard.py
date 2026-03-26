@@ -403,7 +403,7 @@ async def toggle_responder_ui_callback(update: Update, context: ContextTypes.DEF
     config = await get_user_config(user_id)
     new_val = not config.get("auto_reply_enabled", False)
     await update_user_config(user_id, auto_reply_enabled=new_val)
-    await query.answer(f"Responder {"Enabled" if new_val else "Disabled"}")
+    await query.answer(f"Responder {'Enabled' if new_val else 'Disabled'}")
     await manage_settings_callback(update, context)
 
 
