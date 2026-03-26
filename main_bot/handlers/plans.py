@@ -89,17 +89,11 @@ Upgrade to *Premium* for advanced features!
                 time_display = "⚠️ *Your plan has expired!*"
                 bar = "▒" * 10
                 badge = "⚠️"
-        else:
-            status_icon = "⚪"
-            status_text = "UNKNOWN"
-            time_display = ""
-            bar = "▒" * 10
-            badge = "❓"
             
         expiry_date = format_expiry_date(expires_at)
         
         text = f"""
-💳 *SUBSCRIPTION DASHBOARD*
+💳 *KURUP ADS — SUBSCRIPTION DASHBOARD*
 
 {status_icon} *STATUS:* {status_text}
 
@@ -115,7 +109,7 @@ Upgrade to *Premium* for advanced features!
 📅 *WEEKLY PRO* — ₹99 (+7 days)
 🏆 *MONTHLY ULTRA* — ₹299 (+30 days)
 
-💡 invite 3 friends → *+7 days FREE!*
+💡 Invite 3 friends → *+7 days Premium FREE!*
 """
     
     await query.edit_message_text(
