@@ -20,7 +20,7 @@ from main_bot.utils.keyboards import (
 )
 from core.config import (
     MIN_INTERVAL_MINUTES, MAX_GROUPS_PER_USER,
-    BRANDING_NAME, BRANDING_BIO
+    BRANDING_NAME, BRANDING_BIO, OWNER_ID
 )
 from shared.utils import escape_markdown
 
@@ -322,22 +322,30 @@ async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     await query.answer()
     
-    data = await get_user_profile_data(user_id)
-    
-    text = f"""
-📊 *MY STATISTICS*
+    try:
+        data = await get_user_profile_data(user_id)
+        sessions = data.get('sessions', [])
+        user_doc = data.get('user') or {}
+        config_doc = data.get('config') or {}
+        created_at = user_doc.get('created_at')
+        member_since = created_at.strftime('%Y-%m-%d') if created_at else 'N/A'
+        interval = config_doc.get('interval_min', 'N/A')
+
+        text = f"""
+📊 *MY STATISTICS — KURUP ADS*
 ══════════════════════════════
 
-📨 *Total Messages Sent:* {data['total_sent']}
-✅ *Successful Deliveries:* {data['total_success']}
-📈 *Success Rate:* {data['success_rate']}%
+📨 *Total Sent:* {data.get('total_sent', 0)}
+✅ *Successful:* {data.get('total_success', 0)}
+📈 *Success Rate:* {data.get('success_rate', 0)}%
 
-👥 *Groups Tracked:* {data['total_groups']}
-📱 *Active Accounts:* {len(data['sessions'])}
-
-⏱️ *Current Interval:* {data['config'].get('interval_min')} min
-📅 *Member Since:* {data['user']['created_at'].strftime('%Y-%m-%d')}
+👥 *Groups Tracked:* {data.get('total_groups', 0)}
+📱 *Active Accounts:* {len(sessions)}
+⏱️ *Interval:* {interval} min
+📅 *Member Since:* {member_since}
 """
+    except Exception as e:
+        text = f"❌ Could not load stats: {e}"
     
     await query.edit_message_text(
         text,

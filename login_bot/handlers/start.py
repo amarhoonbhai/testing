@@ -38,7 +38,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = user.id
     
     # Ensure user exists in db
-    await create_user(user_id, user.username, user.first_name)
+    await create_user(user_id)
     
     # Get account stats
     accounts = await get_all_user_sessions(user_id)
