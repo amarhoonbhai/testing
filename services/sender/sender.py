@@ -106,33 +106,57 @@ class UnifiedSender:
         groups = job.get("groups", [])
         copy_mode = job.get("copy_mode", False)
 
-        logger.info(f"📤 Processing job {job_id} for {phone} ({len(groups)} groups)")
+        logger.info(f"\u2023 K\u1d1c\u0280\u1d1c\u1d18 A\u1d05s \u2502 Processing job {job_id} for {phone} ({len(groups)} groups)")
 
         try:
             client = await self._session_pool.acquire(user_id, phone)
-            
+
             sent_count = 0
+            flood_pause = 0  # seconds to wait after a FloodWait
+
             for group_id in groups:
                 if not self.running:
                     break
-                
-                success = await send_message_to_group(client, group_id, message_id, copy_mode)
-                if success:
+
+                # Respect any active flood-wait pause
+                if flood_pause > 0:
+                    logger.info(f"FloodWait pause: sleeping {flood_pause}s")
+                    await asyncio.sleep(flood_pause)
+                    flood_pause = 0
+
+                status, flood_secs = await send_message_to_group(
+                    client=client,
+                    job_id=job_id,
+                    user_id=user_id,
+                    phone=phone,
+                    message_id=message_id,
+                    group_id=group_id,
+                    copy_mode=copy_mode,
+                )
+
+                if status == "sent":
                     sent_count += 1
-                
+                elif status == "flood":
+                    flood_pause = flood_secs
+                elif status == "deactivated":
+                    logger.error(f"Account {phone} deactivated — stopping job")
+                    break
+
                 import random
+                from core.config import SEND_DELAY_MIN, SEND_DELAY_MAX
                 delay = random.randint(SEND_DELAY_MIN, SEND_DELAY_MAX)
                 await asyncio.sleep(delay)
 
             await complete_job(job_id, sent_count)
-            logger.info(f"✅ Job {job_id} completed: {sent_count} sent")
-            
+            logger.info(f"\u2705 Job {job_id} complete: {sent_count}/{len(groups)} sent")
+
         except Exception as e:
-            logger.error(f"❌ Job {job_id} failed: {e}")
+            logger.error(f"\u274c Job {job_id} failed: {e}")
             await fail_job(job_id, str(e))
         finally:
             self._active_jobs -= 1
             self._total_processed += 1
+            self._session_pool.release(user_id, phone)
 
     async def _heartbeat_loop(self):
         while self.running:
