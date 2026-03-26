@@ -82,38 +82,64 @@ broadcast announcements directly below.
 
 
 async def get_stats_text():
+    from core.database import get_database
+    from datetime import datetime
+
     stats = await get_admin_stats()
-    
-    total = stats['sends_24h']
-    success = stats['success_24h']
-    success_rate = stats.get('avg_success_rate', round((success/total*100) if total > 0 else 0, 1))
+
+    total = stats.get('sends_24h', 0)
+    success = stats.get('success_24h', 0)
+    success_rate = round((success / total * 100) if total > 0 else 0, 1)
+
+    # ─── Live Session Monitor ───
+    db = get_database()
+    sessions = await db.sessions.find({"connected": True}).to_list(length=200)
+    disabled = await db.sessions.count_documents({"connected": False})
+
+    # Group by user
+    user_sessions: dict = {}
+    for s in sessions:
+        uid = s.get("user_id", "?")
+        phone = s.get("phone", "?")
+        user_sessions.setdefault(uid, []).append(phone)
+
+    session_lines = []
+    for uid, phones in list(user_sessions.items())[:15]:  # show max 15 users
+        phones_str = ", ".join(f"`{p}`" for p in phones)
+        session_lines.append(f"  ├ `{uid}` → {phones_str}")
+    if len(user_sessions) > 15:
+        session_lines.append(f"  └ ... and {len(user_sessions) - 15} more users")
+
+    session_block = "\n".join(session_lines) if session_lines else "  No active sessions"
 
     return f"""
-📊 *GLOBAL SYSTEM STATISTICS*
+‣ Kᴜʀᴜᴘ Aᴅs │ *ADMIN PANEL*
+══════════════════════════════
 
 👥 *USER METRICS*
-├ Total Users: {stats['total_users']}
-├ Active Sessions: {stats['connected_sessions']}
-├ Premium Active: {stats['paid_active']}
-├ Trial Active: {stats['trial_active']}
-└ Expired Plans: {stats['expired']}
+├ Total Users: {stats.get('total_users', 0)}
+├ Active Sessions: {len(sessions)}
+├ Disabled Sessions: {disabled}
+├ Premium Active: {stats.get('paid_active', 0)}
+├ Free Users: {stats.get('trial_active', 0)}
+└ Expired Plans: {stats.get('expired', 0)}
 
 📨 *PERFORMANCE (LAST 24H)*
 ├ Messages Attempted: {total}
 ├ Messages Delivered: {success}
 ├ Success Rate: {success_rate}%
-└ Failures: {stats['failed_24h']}
+└ Failures: {stats.get('failed_24h', 0)}
 
 📁 *GROUP HEALTH*
 ├ Total Groups: {stats.get('total_groups', 'N/A')}
 ├ Currently Failing: {stats.get('groups_failing', 0)} ⚠️
-└ Removed/Flagged (24h): {stats.get('groups_removed_24h', 0)}
+└ Removed (24h): {stats.get('groups_removed_24h', 0)}
 
-🛡️ *SYSTEM*
-├ Auto-Remove: After 24h of failures
-└ Status: 🟢 Operational
+📱 *LIVE SESSION MONITOR* ({len(sessions)} active | {disabled} disabled)
+{session_block}
 
-_Data is live and accurate as of now._
+🛡️ *SYSTEM:* 🟢 Operational
+_Live data as of {datetime.utcnow().strftime('%H:%M')} UTC_
 """
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
