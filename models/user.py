@@ -182,3 +182,8 @@ async def get_all_users_for_broadcast(filter_type: str = "all") -> list[int]:
         return [u["user_id"] async for u in cursor]
         
     return []
+
+
+# Alias for backward compatibility
+upsert_user = create_user
+
