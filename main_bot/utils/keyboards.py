@@ -3,7 +3,7 @@ Inline keyboard builders for Main Bot.
 """
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from core.config import MAIN_BOT_USERNAME, CHANNEL_USERNAME
+from core.config import MAIN_BOT_USERNAME, CHANNEL_USERNAME, LOGIN_BOT_USERNAME
 
 
 def get_welcome_keyboard() -> InlineKeyboardMarkup:
