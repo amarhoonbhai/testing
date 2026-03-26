@@ -55,7 +55,7 @@ Manage users, track live statistics, and broadcast announcements directly below.
     await query.edit_message_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
+        reply_markup=get_admin_keyboard(),
     )
 
 
@@ -79,7 +79,7 @@ broadcast announcements directly below.
     await update.message.reply_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
+        reply_markup=get_admin_keyboard(),
     )
 
 
