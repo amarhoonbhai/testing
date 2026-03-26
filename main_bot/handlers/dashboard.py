@@ -110,28 +110,28 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ═══ Plan badge ═══
     if plan:
         if plan.get("status") == "active":
-            plan_type = plan.get("plan_type", "trial").title()
-            days_left = (plan["expires_at"] - datetime.datetime.utcnow()).days
-            hours_left = ((plan["expires_at"] - datetime.datetime.utcnow()).seconds // 3600)
-            expiry_date = format_expiry_date(plan["expires_at"])
-            
-            if plan_type.lower() == "trial":
-                plan_badge = "🏅 TRIAL"
-            else:
+            plan_type = plan.get("plan_type", "free")
+            expires_at = plan.get("expires_at")
+
+            if plan_type == "premium" and expires_at:
+                days_left = (expires_at - datetime.datetime.utcnow()).days
+                hours_left = ((expires_at - datetime.datetime.utcnow()).seconds // 3600)
+                expiry_date = format_expiry_date(expires_at)
                 plan_badge = "💎 PREMIUM"
-            
-            if days_left > 0:
-                plan_status = f"{plan_badge} ▪ {days_left}d {hours_left}h left"
+                if days_left > 0:
+                    plan_status = f"{plan_badge} ▪ {days_left}d {hours_left}h left"
+                else:
+                    plan_status = f"{plan_badge} ▪ {hours_left}h left"
+                plan_line2 = f"     └─ 📅 Expires: {expiry_date}"
             else:
-                plan_status = f"{plan_badge} ▪ {hours_left}h left"
-            
-            plan_line2 = f"     └─ 📅 Expires: {expiry_date}"
+                plan_status = "🆓 FREE PLAN"
+                plan_line2 = "     └─ ✅ Active — No Expiry"
         else:
-            plan_status = "🔴 EXPIRED"
-            plan_line2 = "     └─ Redeem a code to reactivate!"
+            plan_status = "🆓 FREE PLAN"
+            plan_line2 = "     └─ ✅ Active — No Expiry"
     else:
-        plan_status = "⚪ NO PLAN"
-        plan_line2 = "     └─ Connect an account for *7 days FREE!*"
+        plan_status = "🆓 FREE PLAN"
+        plan_line2 = "     └─ ✅ Active — No Expiry"
     
     # ═══ Forwarding status ═══
     has_connected = any(s.get("connected") for s in sessions) if sessions else False
@@ -351,12 +351,32 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
     if user_id == OWNER_ID:
-        from main_bot.handlers.admin import get_stats_text, get_admin_keyboard
+        from main_bot.handlers.admin import get_stats_text
         text = await get_stats_text()
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_admin_keyboard())
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_dashboard_keyboard())
     else:
-        data = await get_user_profile_data(user_id)
-        text = f"📊 *PERSONAL STATS*\n\nTotal Sent: {data['total_sent']}\nGroups: {data['total_groups']}\nSuccess: {data['success_rate']}%"
+        try:
+            data = await get_user_profile_data(user_id)
+            sessions = data.get('sessions', [])
+            user_data = data.get('user') or {}
+            config_data = data.get('config') or {}
+            created_at = user_data.get('created_at')
+            member_since = created_at.strftime('%Y-%m-%d') if created_at else 'N/A'
+            interval = config_data.get('interval_min', 'N/A')
+            text = f"""
+📊 *YOUR STATS — KURUP ADS*
+
+📨 *Total Sent:* {data.get('total_sent', 0)}
+✅ *Successful:* {data.get('total_success', 0)}
+📈 *Success Rate:* {data.get('success_rate', 0)}%
+
+👥 *Groups:* {data.get('total_groups', 0)}
+📱 *Accounts:* {len(sessions)}
+⏱️ *Interval:* {interval} min
+📅 *Member Since:* {member_since}
+"""
+        except Exception as e:
+            text = f"❌ Could not load stats: {e}"
         await update.message.reply_text(text, parse_mode="Markdown", reply_markup=get_dashboard_keyboard())
 
 

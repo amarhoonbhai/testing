@@ -86,11 +86,11 @@ TIMEZONE: str = "Asia/Kolkata"
 
 # ── Trial / Bio ─────────────────────────────────────────────────────────────
 
-BRANDING_NAME: str = "‣ Kᴜʀᴜᴘ Aᴅs"
+BRANDING_NAME: str = "KURUP ADS"
 BRANDING_BIO: str = "Powered by @KurupAdsBot | Network: @Philobots"
 TRIAL_BIO_TEXT: str = BRANDING_BIO
 BIO_CHECK_INTERVAL: int = 600
-TRIAL_DAYS: int = 7
+TRIAL_DAYS: int = 7  # kept for backward compat
 REFERRAL_BONUS_DAYS: int = 7
 REFERRALS_NEEDED: int = 3
 

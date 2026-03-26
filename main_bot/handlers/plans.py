@@ -27,29 +27,41 @@ async def my_plan_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not plan:
         text = """
-💳 *SUBSCRIPTION & PLANS*
+💳 *KURUP ADS — SUBSCRIPTION & PLANS*
 
-⚪ *STATUS:* NO ACTIVE PLAN
+💚 *STATUS:* FREE PLAN— No Expiry!
 
-🚀 *UNLOCK PREMIUM AUTO-FORWARDING*
-Connect your Telegram account to instantly receive *7 DAYS FREE TRIAL!*
+You are currently on the **Free Plan**. Start forwarding right away.
+Upgrade to *Premium* for advanced features!
 
 💰 *PRICING TIERS*
 
-📅 *WEEKLY PRO* — ₹99
-└ 7 days of uninterrupted service
-
-🏆 *MONTHLY ULTRA* — ₹299
-└ 30 days — Best value!
+📅 *WEEKLY PRO* — ₹99 (+7 days Premium)
+🏆 *MONTHLY ULTRA* — ₹299 (+30 days Premium)
 
 💡 *TIP:* Have a promo code? Tap Redeem below!
 """
     else:
-        plan_type = plan.get("plan_type", "trial").upper()
-        status = plan.get("status", "unknown").upper()
+        plan_type = plan.get("plan_type", "free").upper()
+        status = plan.get("status", "active").upper()
         expires_at = plan.get("expires_at")
         
-        if expires_at:
+        if plan_type == "FREE" or expires_at is None:
+            text = f"""
+💳 *KURUP ADS — YOUR PLAN*
+
+💚 *STATUS:* FREE — No Expiry
+
+📄 *Current Plan:* Free
+✅ *Validity:* Permanent (No Expiry)
+
+💎 *UPGRADE TO PREMIUM*
+📅 *WEEKLY PRO* — ₹99 (+7 days)
+🏆 *MONTHLY ULTRA* — ₹299 (+30 days)
+
+💡 Invite 3 friends → *+7 days Premium FREE!*
+"""
+        else:
             now = datetime.utcnow()
             if expires_at > now:
                 days_left = (expires_at - now).days

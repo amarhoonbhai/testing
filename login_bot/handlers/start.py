@@ -11,10 +11,11 @@ from login_bot.utils.keyboards import get_login_welcome_keyboard
 
 
 WELCOME_TEXT = """
-🔐 *SECURE LOGIN PORTAL*
-*★ ‣ Kᴜʀᴜᴘ Aᴅs — PRO LOGIN ★*
+🔐 *KURUP ADS — SECURE LOGIN*
 
-Welcome to the standalone authentication bot for the Group Message Scheduler.
+*★ PRO ACCOUNT PORTAL ★*
+
+Welcome to the official account connection portal for *KURUP ADS* Group Message Scheduler.
 
 🛡️ *YOUR SECURITY IS OUR PRIORITY*
 ✅ Official Telegram API used

@@ -11,8 +11,6 @@ def escape_markdown(text: str) -> str:
     """
     if not text:
         return ""
-    # We only escape characters that are used in our templates or could be accidentally typed by users.
-    # Legacy Markdown (V1) is tricky. V2 is more strict but V1 is what's being used here.
     return re.sub(r'([_*\[\]])', r'\\\1', str(text))
 
 def build_connection_success_text(phone: str, plan: dict) -> str:
@@ -21,50 +19,33 @@ def build_connection_success_text(phone: str, plan: dict) -> str:
     Used by both OTP and 2FA flows.
     """
     from datetime import datetime
+
+    plan_type = plan.get("plan_type", "free") if plan else "free"
     
-    if plan and plan.get("status") == "active" and plan.get("expires_at", datetime.min) > datetime.utcnow():
-        plan_type = plan.get("plan_type", "trial")
+    if plan and plan.get("plan_type") == "premium" and plan.get("expires_at"):
         expires_at = plan["expires_at"]
         days_left = (expires_at - datetime.utcnow()).days
         hours_left = (expires_at - datetime.utcnow()).seconds // 3600
+        time_left = f"{days_left}d {hours_left}h" if days_left > 0 else f"{hours_left}h"
+        return f"""
+✅ *Account Connected Successfully!*
 
-        if plan_type == "trial":
-            # Trial user
-            time_left = f"{days_left}d {hours_left}h" if days_left > 0 else f"{hours_left}h"
-            return f"""
-✅ *Connected Successfully!*
+📱 `{phone}` is now linked.
 
-📱 `{phone}` is now linked to your account.
-
-🏅 *Plan:* Free Trial
-⏳ *Time Left:* {time_left}
-
-💡 Invite *3 friends* to earn +7 bonus days!
-Open the dashboard to add groups and start sending.
-"""
-        else:
-            # Paid/premium user
-            plan_label = plan_type.upper()
-            time_left = f"{days_left}d {hours_left}h" if days_left > 0 else f"{hours_left}h"
-            return f"""
-✅ *Connected Successfully!*
-
-📱 `{phone}` is now linked to your account.
-
-💎 *Plan:* {plan_label} Premium
+💎 *Plan:* PREMIUM
 ⏳ *Remaining:* {time_left}
 
-🚀 Your premium plan is active. Open the dashboard to configure groups and intervals.
+🚀 Open the dashboard to configure groups and start sending.
 """
     else:
-        # No active plan (expired or missing)
+        # Free plan
         return f"""
-✅ *Connected Successfully!*
+✅ *Account Connected to KURUP ADS!*
 
 📱 `{phone}` is now linked to your account.
 
-⚠️ *No Active Plan Found*
-Your plan may have expired or wasn't assigned yet.
+🆓 *Plan:* Free (No Expiry)
+✅ Start forwarding right away!
 
-🎁 Redeem a code or contact support to activate your plan.
+👇 Open the dashboard to add your groups and begin.
 """
