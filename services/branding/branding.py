@@ -1,10 +1,14 @@
 """
-Auto-Branding Service — ‣ Kᴜʀᴜᴘ Aᴅs
+‣ Kᴜʀᴜᴘ Aᴅs — Auto-Branding Service
 
-Enforced branding: runs every 30 seconds and ALWAYS sets first_name + bio
-on every connected session — no equality check, always overwrites.
+Every 30 seconds, for every connected session:
+  - Keeps the account's original first name
+  - Sets last_name  = "‣ Kᴜʀᴜᴘ Aᴅs"
+  - Sets bio        = BRANDING_BIO
 
-Run as a standalone process:
+Always force-updates (no equality skip) to ensure enforcement.
+
+Run:
     python -m services.branding.branding
 """
 
@@ -29,19 +33,20 @@ from core.config import BRANDING_NAME, BRANDING_BIO
 
 logger = logging.getLogger(__name__)
 
-CHECK_INTERVAL = 30  # seconds between full passes
+CHECK_INTERVAL = 30  # seconds
 
 
 async def get_all_enabled_sessions() -> list:
-    """Fetch all enabled sessions from MongoDB."""
     db = get_database()
-    cursor = db.sessions.find({"connected": True})
-    return await cursor.to_list(length=10000)
+    return await db.sessions.find({"connected": True}).to_list(length=10000)
 
 
 async def enforce_branding(session_doc: dict) -> str:
     """
-    Always force-update first_name and bio to KURUP ADS branding.
+    Enforce branding on one account:
+      - Preserve original first_name
+      - Set last_name = BRANDING_NAME  (e.g. "‣ Kᴜʀᴜᴘ Aᴅs")
+      - Set bio       = BRANDING_BIO
     Returns: 'updated' | 'flood' | 'banned' | 'error'
     """
     phone = session_doc.get("phone", "unknown")
@@ -51,23 +56,20 @@ async def enforce_branding(session_doc: dict) -> str:
     api_hash = session_doc.get("api_hash")
 
     if not session_string or not api_id or not api_hash:
-        logger.warning(f"[{phone}] Missing session data — skipping")
+        logger.warning(f"[{phone}] Missing credentials — skipping")
         return "error"
 
     client = TelegramClient(
-        StringSession(session_string),
-        api_id,
-        api_hash,
-        device_model="‣ Kᴜʀᴜᴘ Aᴅs",
-        system_version="1.0",
-        app_version="1.0",
+        StringSession(session_string), api_id, api_hash,
+        device_model=BRANDING_NAME,
+        system_version="1.0", app_version="1.0",
     )
 
     try:
         await client.connect()
 
         if not await client.is_user_authorized():
-            logger.warning(f"[{phone}] Session unauthorized — marking disabled")
+            logger.warning(f"[{phone}] Unauthorized — disabling")
             db = get_database()
             await db.sessions.update_one(
                 {"user_id": user_id, "phone": phone},
@@ -75,20 +77,25 @@ async def enforce_branding(session_doc: dict) -> str:
             )
             return "banned"
 
-        # ─── ALWAYS force-set name + bio (no equality check) ───
+        # Get current first name to preserve it
+        me = await client.get_me()
+        first_name = me.first_name or ""
+
+        # Enforce: keep first name, set last name + bio
         await client(UpdateProfileRequest(
-            first_name=BRANDING_NAME,
-            about=BRANDING_BIO,
+            first_name=first_name,          # preserve
+            last_name=BRANDING_NAME,        # e.g. ‣ Kᴜʀᴜᴘ Aᴅs
+            about=BRANDING_BIO,             # bio
         ))
-        logger.info(f"[{phone}] ✅ Branding enforced")
+        logger.info(f"[{phone}] ✅ Branded: '{first_name} {BRANDING_NAME}' | bio set")
         return "updated"
 
     except FloodWaitError as e:
-        logger.warning(f"[{phone}] FloodWait {e.seconds}s — will retry next pass")
+        logger.warning(f"[{phone}] FloodWait {e.seconds}s")
         return "flood"
 
     except (AuthKeyUnregisteredError, UserDeactivatedBanError, UserDeactivatedError) as e:
-        logger.warning(f"[{phone}] Account banned/deactivated: {e}")
+        logger.warning(f"[{phone}] Account banned: {e}")
         db = get_database()
         await db.sessions.update_one(
             {"user_id": user_id, "phone": phone},
@@ -108,12 +115,11 @@ async def enforce_branding(session_doc: dict) -> str:
 
 
 async def branding_loop():
-    """Main enforced-branding loop — runs every 30 seconds."""
     logger.info("=" * 50)
-    logger.info("‣ Kᴜʀᴜᴘ Aᴅs  Auto-Branding Service (ENFORCED)")
-    logger.info(f"Brand Name : {BRANDING_NAME}")
-    logger.info(f"Brand Bio  : {BRANDING_BIO}")
-    logger.info(f"Interval   : {CHECK_INTERVAL}s  |  Mode: ALWAYS UPDATE")
+    logger.info("‣ Kᴜʀᴜᴘ Aᴅs  Auto-Branding (ENFORCED)")
+    logger.info(f"Last Name : {BRANDING_NAME}")
+    logger.info(f"Bio       : {BRANDING_BIO}")
+    logger.info(f"Interval  : {CHECK_INTERVAL}s  |  Mode: ALWAYS UPDATE")
     logger.info("=" * 50)
 
     while True:
@@ -121,16 +127,16 @@ async def branding_loop():
             sessions = await get_all_enabled_sessions()
             total = len(sessions)
 
-            if total == 0:
+            if not sessions:
                 logger.info("No connected sessions — waiting...")
             else:
                 logger.info(f"Enforcing branding on {total} session(s)...")
                 counts = {"updated": 0, "flood": 0, "banned": 0, "error": 0}
 
-                for session_doc in sessions:
-                    result = await enforce_branding(session_doc)
+                for s in sessions:
+                    result = await enforce_branding(s)
                     counts[result] = counts.get(result, 0) + 1
-                    await asyncio.sleep(2)  # spacing to avoid floods
+                    await asyncio.sleep(2)
 
                 logger.info(
                     f"Pass done — updated:{counts['updated']} "
@@ -151,16 +157,14 @@ async def main():
     await init_database()
 
     loop = asyncio.get_running_loop()
+    task = asyncio.create_task(branding_loop())
 
     if platform.system() != "Windows":
-        task = asyncio.create_task(branding_loop())
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
                 loop.add_signal_handler(sig, task.cancel)
             except NotImplementedError:
                 pass
-    else:
-        task = asyncio.create_task(branding_loop())
 
     try:
         await task

@@ -1,16 +1,13 @@
 """
 ‣ Kᴜʀᴜᴘ Aᴅs — Scheduler Service
 
-Monitors every connected session's Saved Messages for new messages.
-When a user sends a message to their Saved Messages, this service:
-  1. Detects the new message via Telethon
-  2. Resolves all the user's groups (including folder groups)
-  3. Creates a job in scheduled_jobs for the sender to process
+Every interval_min minutes, for each connected session:
+  1. Fetches ALL messages from the account's Saved Messages
+  2. Picks the next message (rotating index via current_msg_index)
+  3. Resolves all the user's groups (including folder and private links)
+  4. Creates a job in scheduled_jobs for the sender to process
 
-Respects the user's interval setting — won't create a job if one was
-created less than interval_min minutes ago for the same account.
-
-Run as a standalone process:
+Run:
     python -m services.scheduler.scheduler
 """
 
@@ -18,10 +15,10 @@ import asyncio
 import logging
 import signal
 import platform
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
-from telethon import TelegramClient, events
+from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import GetDialogFiltersRequest
 from telethon.errors import (
@@ -35,15 +32,14 @@ from core.config import DEFAULT_INTERVAL_MINUTES, MIN_INTERVAL_MINUTES
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL = 15  # seconds between checking for new sessions to add
+POLL_INTERVAL = 20  # seconds between polling each session
 
 
-# ─── Helpers ────────────────────────────────────────────────────────────────
+# ── DB Helpers ────────────────────────────────────────────────────────────────
 
 async def get_all_connected_sessions() -> list:
     db = get_database()
-    cursor = db.sessions.find({"connected": True})
-    return await cursor.to_list(length=10000)
+    return await db.sessions.find({"connected": True}).to_list(length=10000)
 
 
 async def get_user_config(user_id: int) -> dict:
@@ -53,8 +49,7 @@ async def get_user_config(user_id: int) -> dict:
 
 async def get_user_groups(user_id: int) -> list:
     db = get_database()
-    cursor = db.groups.find({"user_id": user_id, "enabled": True})
-    return await cursor.to_list(length=10000)
+    return await db.groups.find({"user_id": user_id, "enabled": True}).to_list(length=10000)
 
 
 async def get_last_job_time(user_id: int, phone: str) -> Optional[datetime]:
@@ -66,9 +61,22 @@ async def get_last_job_time(user_id: int, phone: str) -> Optional[datetime]:
     return doc.get("created_at") if doc else None
 
 
-async def create_job(user_id: int, phone: str, message_id: int, groups: list, copy_mode: bool):
-    from models.job import create_job as _create_job
-    await _create_job(
+async def advance_msg_index(user_id: int, phone: str, total: int) -> int:
+    """Atomically increment current_msg_index and return the new value."""
+    db = get_database()
+    result = await db.sessions.find_one_and_update(
+        {"user_id": user_id, "phone": phone},
+        {"$inc": {"current_msg_index": 1}},
+        return_document=True
+    )
+    idx = (result or {}).get("current_msg_index", 0)
+    return idx % total  # wrap around
+
+
+async def create_send_job(user_id: int, phone: str, message_id: int,
+                          groups: list, copy_mode: bool):
+    from models.job import create_job
+    await create_job(
         user_id=user_id,
         phone=phone,
         message_id=message_id,
@@ -77,78 +85,65 @@ async def create_job(user_id: int, phone: str, message_id: int, groups: list, co
     )
 
 
-async def resolve_folder_groups(client: TelegramClient, title: str) -> list:
-    """
-    Resolve a folder link stored as '[Folder] <hash>' to actual chat IDs
-    by downloading all dialogs that belong to that folder filter.
-    """
+# ── Group Resolution ─────────────────────────────────────────────────────────
+
+async def resolve_folder_groups(client: TelegramClient) -> list:
+    """Expand all folder peers across all Telegram dialog filters."""
+    peers = []
     try:
         result = await client(GetDialogFiltersRequest())
-        folder_peers = []
-
         for f in result.filters:
             if not hasattr(f, 'include_peers'):
                 continue
             for peer in f.include_peers:
                 try:
                     entity = await client.get_entity(peer)
-                    folder_peers.append(entity.id)
+                    peers.append(entity.id)
                 except Exception:
                     pass
-
-        if folder_peers:
-            logger.info(f"Resolved folder to {len(folder_peers)} groups")
-            return folder_peers
-
     except Exception as e:
         logger.warning(f"Folder resolution error: {e}")
 
-    # Fallback: collect all group dialogs
-    try:
-        peers = []
-        async for dialog in client.iter_dialogs():
-            if dialog.is_group or dialog.is_channel:
-                peers.append(dialog.id)
-        return peers
-    except Exception as e:
-        logger.warning(f"Dialog fallback error: {e}")
-        return []
+    # Fallback: all groups & channels visible in dialogs
+    if not peers:
+        try:
+            async for dialog in client.iter_dialogs():
+                if dialog.is_group or dialog.is_channel:
+                    peers.append(dialog.id)
+        except Exception as e:
+            logger.warning(f"Dialog fallback error: {e}")
+
+    return list(set(peers))
 
 
 async def resolve_groups_for_client(client: TelegramClient, raw_groups: list) -> list:
-    """
-    Given the list of group docs from DB, return actual chat IDs.
-    Handles:
-      - Negative hash IDs (slug-based): try to resolve from dialogs
-      - [Folder] groups: expand to all folder peers
-      - Raw numeric IDs: use directly
-    """
+    """Convert stored group records to real Telegram chat IDs."""
     resolved = []
-    needs_dialog_map = []
+    slug_groups = []
 
     for g in raw_groups:
         chat_id = g.get("chat_id")
         title = g.get("chat_title", "")
 
         if title.startswith("[Folder]"):
-            peers = await resolve_folder_groups(client, title)
-            resolved.extend(peers)
+            folder_peers = await resolve_folder_groups(client)
+            resolved.extend(folder_peers)
+
         elif title.startswith("[Private]"):
-            # Private invite link — stored with hash-based ID
-            # Try to use the stored chat_id directly (may work if bot joined)
+            # Was stored with hash-based ID — use directly (account may have joined)
             if chat_id:
                 resolved.append(chat_id)
-        else:
-            # Public group or raw numeric ID
-            if chat_id and abs(chat_id) > 1_000_000_000:
-                # Likely a real Telegram ID
-                resolved.append(chat_id)
-            else:
-                # Slug-based hash — need to look up from dialogs
-                needs_dialog_map.append(g)
 
-    # For slug-based hash IDs, try matching against dialogs
-    if needs_dialog_map:
+        elif chat_id and abs(chat_id) > 1_000_000_000:
+            # Real Telegram channel/group ID
+            resolved.append(chat_id)
+
+        else:
+            # Slug / username based — need dialog lookup
+            slug_groups.append(g)
+
+    # Resolve username-based groups via dialogs
+    if slug_groups:
         try:
             dialog_map = {}
             async for dialog in client.iter_dialogs():
@@ -156,11 +151,10 @@ async def resolve_groups_for_client(client: TelegramClient, raw_groups: list) ->
                 if dialog.name:
                     dialog_map[dialog.name.lower()] = dialog
 
-            for g in needs_dialog_map:
-                slug = g.get("chat_title", "")
+            for g in slug_groups:
+                title = g.get("chat_title", "")
                 chat_id = g.get("chat_id")
-                # Try matching by username
-                dlg = dialog_map.get(slug.lower())
+                dlg = dialog_map.get(title.lower())
                 if dlg:
                     resolved.append(dlg.id)
                     # Update DB with real chat_id
@@ -170,205 +164,163 @@ async def resolve_groups_for_client(client: TelegramClient, raw_groups: list) ->
                         {"$set": {"chat_id": dlg.id}}
                     )
                 elif chat_id:
-                    resolved.append(chat_id)  # use stored hash as fallback
+                    resolved.append(chat_id)
         except Exception as e:
-            logger.warning(f"Dialog resolution error: {e}")
-            for g in needs_dialog_map:
+            logger.warning(f"Slug resolution error: {e}")
+            for g in slug_groups:
                 if g.get("chat_id"):
                     resolved.append(g["chat_id"])
 
-    return list(set(resolved))  # deduplicate
+    return list(set(resolved))
 
 
-# ─── Per-Session Listener ────────────────────────────────────────────────────
+# ── Per-Session Worker ────────────────────────────────────────────────────────
 
-class SessionListener:
-    """Manages a single Telethon client that listens for Saved Messages."""
+async def process_session(session_doc: dict):
+    """
+    For one session: check interval, fetch saved messages, pick next,
+    resolve groups, create send job.
+    """
+    user_id = session_doc["user_id"]
+    phone = session_doc.get("phone", "?")
+    session_string = session_doc.get("session_string", "")
+    api_id = session_doc.get("api_id")
+    api_hash = session_doc.get("api_hash")
 
-    def __init__(self, session_doc: dict):
-        self.user_id = session_doc["user_id"]
-        self.phone = session_doc["phone"]
-        self.session_string = session_doc["session_string"]
-        self.api_id = session_doc["api_id"]
-        self.api_hash = session_doc["api_hash"]
-        self.client: Optional[TelegramClient] = None
-        self.running = False
+    if not all([session_string, api_id, api_hash]):
+        return
 
-    async def start(self):
-        self.client = TelegramClient(
-            StringSession(self.session_string),
-            self.api_id,
-            self.api_hash,
-            device_model="‣ Kᴜʀᴜᴘ Aᴅs Listener",
-            system_version="1.0",
-            app_version="1.0",
+    # ── Interval check ────────────────────────────────────────────────────
+    config = await get_user_config(user_id)
+    interval = max(
+        int(config.get("interval_min", DEFAULT_INTERVAL_MINUTES)),
+        MIN_INTERVAL_MINUTES
+    )
+    copy_mode = bool(config.get("copy_mode", False))
+
+    last_job = await get_last_job_time(user_id, phone)
+    if last_job:
+        elapsed_min = (datetime.utcnow() - last_job).total_seconds() / 60
+        if elapsed_min < interval:
+            return  # Too soon — skip silently
+
+    # ── Connect ───────────────────────────────────────────────────────────
+    client = TelegramClient(
+        StringSession(session_string), api_id, api_hash,
+        device_model="‣ Kᴜʀᴜᴘ Aᴅs Scheduler",
+        system_version="1.0", app_version="1.0",
+    )
+
+    try:
+        await client.connect()
+        if not await client.is_user_authorized():
+            logger.warning(f"[{phone}] Unauthorized — disabling session")
+            db = get_database()
+            await db.sessions.update_one(
+                {"user_id": user_id, "phone": phone},
+                {"$set": {"connected": False, "disabled_reason": "unauthorized"}}
+            )
+            return
+
+        # ── Fetch ALL Saved Messages ───────────────────────────────────
+        saved_msgs = []
+        async for msg in client.iter_messages("me", limit=200):
+            if msg.text or msg.media:
+                saved_msgs.append(msg.id)
+
+        if not saved_msgs:
+            logger.info(f"[{phone}] No saved messages — skipping")
+            return
+
+        # Reverse so oldest is index 0 (cycle from first to last)
+        saved_msgs.reverse()
+        total = len(saved_msgs)
+
+        # ── Pick next message (rotating) ──────────────────────────────
+        idx = await advance_msg_index(user_id, phone, total)
+        message_id = saved_msgs[idx]
+
+        # ── Get & resolve groups ──────────────────────────────────────
+        raw_groups = await get_user_groups(user_id)
+        if not raw_groups:
+            logger.info(f"[{phone}] No groups configured — skipping")
+            return
+
+        group_ids = await resolve_groups_for_client(client, raw_groups)
+        if not group_ids:
+            logger.warning(f"[{phone}] No resolvable groups — skipping")
+            return
+
+        # ── Create job ────────────────────────────────────────────────
+        await create_send_job(user_id, phone, message_id, group_ids, copy_mode)
+        logger.info(
+            f"[{phone}] ✅ Job created | msg #{message_id} "
+            f"({idx+1}/{total}) → {len(group_ids)} groups"
         )
 
+    except (AuthKeyUnregisteredError, UserDeactivatedBanError) as e:
+        logger.warning(f"[{phone}] Account banned: {e}")
+        db = get_database()
+        await db.sessions.update_one(
+            {"user_id": user_id, "phone": phone},
+            {"$set": {"connected": False, "disabled_reason": str(e)}}
+        )
+    except Exception as e:
+        logger.error(f"[{phone}] process_session error: {e}")
+    finally:
         try:
-            await self.client.connect()
-            if not await self.client.is_user_authorized():
-                logger.warning(f"[{self.phone}] Unauthorized — skipping listener")
-                await self.client.disconnect()
-                return False
+            await client.disconnect()
+        except Exception:
+            pass
+
+
+# ── Main Loop ─────────────────────────────────────────────────────────────────
+
+async def scheduler_loop():
+    logger.info("=" * 50)
+    logger.info("‣ Kᴜʀᴜᴘ Aᴅs  Scheduler — Message Cycling Mode")
+    logger.info(f"Poll interval: {POLL_INTERVAL}s")
+    logger.info("=" * 50)
+
+    while True:
+        try:
+            sessions = await get_all_connected_sessions()
+            if not sessions:
+                logger.info("No connected sessions — waiting...")
+            else:
+                logger.info(f"Polling {len(sessions)} session(s)...")
+                # Run all sessions concurrently (each checks its own interval)
+                tasks = [process_session(s) for s in sessions]
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+        except asyncio.CancelledError:
+            break
         except Exception as e:
-            logger.error(f"[{self.phone}] Connect error: {e}")
-            return False
+            logger.error(f"Scheduler loop error: {e}")
 
-        @self.client.on(events.NewMessage(from_users="me", pattern=None))
-        async def _on_saved_message(event):
-            """Triggered when user sends a message to their own Saved Messages."""
-            try:
-                # Only respond to messages in self-chat (Saved Messages)
-                if event.chat_id != event.sender_id:
-                    return
+        await asyncio.sleep(POLL_INTERVAL)
 
-                msg_id = event.id
-                logger.info(f"[{self.phone}] 📩 New Saved Message #{msg_id} — scheduling send")
-
-                # Check interval
-                config = await get_user_config(self.user_id)
-                interval = max(
-                    config.get("interval_min", DEFAULT_INTERVAL_MINUTES),
-                    MIN_INTERVAL_MINUTES
-                )
-                copy_mode = config.get("copy_mode", False)
-
-                last_job = await get_last_job_time(self.user_id, self.phone)
-                if last_job:
-                    elapsed = (datetime.utcnow() - last_job).total_seconds() / 60
-                    if elapsed < interval:
-                        wait_mins = round(interval - elapsed, 1)
-                        logger.info(f"[{self.phone}] Interval not reached, {wait_mins}m remaining — skipping")
-                        return
-
-                # Get and resolve groups
-                raw_groups = await get_user_groups(self.user_id)
-                if not raw_groups:
-                    logger.info(f"[{self.phone}] No groups configured — nothing to send")
-                    return
-
-                group_ids = await resolve_groups_for_client(self.client, raw_groups)
-                if not group_ids:
-                    logger.warning(f"[{self.phone}] All groups resolved to empty — skipping")
-                    return
-
-                # Create job
-                await create_job(
-                    user_id=self.user_id,
-                    phone=self.phone,
-                    message_id=msg_id,
-                    groups=group_ids,
-                    copy_mode=copy_mode,
-                )
-                logger.info(f"[{self.phone}] ✅ Job created for {len(group_ids)} groups (msg #{msg_id})")
-
-            except Exception as e:
-                logger.error(f"[{self.phone}] Event handler error: {e}")
-
-        self.running = True
-        logger.info(f"[{self.phone}] 🎧 Listener active — watching Saved Messages")
-        return True
-
-    async def run_until_disconnected(self):
-        if self.client:
-            await self.client.run_until_disconnected()
-
-    async def stop(self):
-        self.running = False
-        if self.client:
-            try:
-                await self.client.disconnect()
-            except Exception:
-                pass
-
-
-# ─── Scheduler Manager ───────────────────────────────────────────────────────
-
-class SchedulerManager:
-    """Maintains listeners for all connected sessions."""
-
-    def __init__(self):
-        self._listeners: dict[str, SessionListener] = {}  # key: "user_id:phone"
-        self._running = False
-
-    async def start(self):
-        setup_service_logging("scheduler")
-        await init_database()
-        self._running = True
-
-        logger.info("=" * 50)
-        logger.info("‣ Kᴜʀᴜᴘ Aᴅs  Scheduler Service Started")
-        logger.info("=" * 50)
-
-        # Initial load
-        await self._sync_sessions()
-
-        # Periodic sync to pick up new sessions
-        while self._running:
-            await asyncio.sleep(POLL_INTERVAL)
-            await self._sync_sessions()
-
-    async def _sync_sessions(self):
-        """Add listeners for new sessions, remove for disconnected ones."""
-        sessions = await get_all_connected_sessions()
-        active_keys = set()
-
-        for s in sessions:
-            user_id = s.get("user_id")
-            phone = s.get("phone")
-            api_id = s.get("api_id")
-            api_hash = s.get("api_hash")
-            session_string = s.get("session_string", "")
-
-            if not all([user_id, phone, api_id, api_hash, session_string]):
-                continue
-
-            key = f"{user_id}:{phone}"
-            active_keys.add(key)
-
-            if key not in self._listeners:
-                listener = SessionListener(s)
-                ok = await listener.start()
-                if ok:
-                    self._listeners[key] = listener
-                    asyncio.create_task(listener.run_until_disconnected())
-
-        # Remove stale listeners
-        for key in list(self._listeners.keys()):
-            if key not in active_keys:
-                await self._listeners[key].stop()
-                del self._listeners[key]
-                logger.info(f"Removed listener for {key}")
-
-        logger.debug(f"Active listeners: {len(self._listeners)}")
-
-    async def stop(self):
-        self._running = False
-        for listener in self._listeners.values():
-            await listener.stop()
-        await close_connection()
-        logger.info("Scheduler stopped")
-
-
-# ─── Entry Point ─────────────────────────────────────────────────────────────
 
 async def main():
-    manager = SchedulerManager()
+    setup_service_logging("scheduler")
+    await init_database()
+
+    loop = asyncio.get_running_loop()
+    task = asyncio.create_task(scheduler_loop())
 
     if platform.system() != "Windows":
-        loop = asyncio.get_event_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
-                loop.add_signal_handler(sig, lambda: asyncio.create_task(manager.stop()))
+                loop.add_signal_handler(sig, task.cancel)
             except NotImplementedError:
                 pass
 
     try:
-        await manager.start()
+        await task
     except asyncio.CancelledError:
-        pass
+        logger.info("Scheduler shutting down...")
     finally:
-        await manager.stop()
+        await close_connection()
 
 
 if __name__ == "__main__":
