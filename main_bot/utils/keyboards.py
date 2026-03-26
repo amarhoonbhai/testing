@@ -308,3 +308,16 @@ def get_manage_settings_keyboard(config: dict, is_branded: bool = True) -> Inlin
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_guide_keyboard() -> InlineKeyboardMarkup:
+    """Build keyboard for the main help screen — includes button to open the full guide."""
+    keyboard = [
+        [
+            InlineKeyboardButton("📖 Beginner's Guide", callback_data="guide"),
+        ],
+        [
+            InlineKeyboardButton("🏠 Back to Home", callback_data="home"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)

@@ -71,7 +71,7 @@ from main_bot.handlers.admin import (
     upgrade_command,
     WAITING_UPGRADE_USER_ID,
 )
-from main_bot.handlers.help import help_callback, help_command
+from main_bot.handlers.help import help_callback, help_command, guide_callback
 from main_bot.handlers.account import (
     accounts_list_callback,
     manage_account_callback,
@@ -187,6 +187,7 @@ def create_application() -> Application:
         ("^toggle_send_mode$", toggle_send_mode_callback),
         ("^add_account$", add_account_callback),
         ("^help$", help_callback),
+        ("^guide$", guide_callback),
         ("^my_plan$", my_plan_callback),
         ("^referral$", referral_callback),
         ("^profile$", profile_callback),

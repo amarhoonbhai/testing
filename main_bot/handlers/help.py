@@ -1,55 +1,94 @@
 """
-Help handler for Main Bot.
+Help & Guide handler for Main Bot — KURUP ADS.
 """
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from main_bot.utils.keyboards import get_back_home_keyboard
+from main_bot.utils.keyboards import get_back_home_keyboard, get_guide_keyboard
 
 
 HELP_TEXT = """
-📘 *HELP & DOCUMENTATION*
+📘 *HELP & COMMANDS — KURUP ADS*
 
-🚀 *QUICK START GUIDE*
-1️⃣ Go to Dashboard > Add Account
-2️⃣ Login securely via Login Bot
-3️⃣ Go to your *Saved Messages*
-4️⃣ Add target groups using `.addgroup`
-5️⃣ Send any message to Saved Messages!
-
-📝 *WORKER COMMANDS* (Use in Saved Messages)
-
-*Group Management:*
-🔸 `.addgroup <url>` — Add a new group
-🔸 `.rmgroup <url/number>` — Remove a group
-🔸 `.groups` — List your active groups
-
-*Settings & Controls:*
-🔸 `.interval <min>` — Set delay between loops
-🔸 `.shuffle on/off` — Randomize group sending order
-🔸 `.copymode on/off` — Send as new message (hides "Forwarded from")
-🔸 `.sendmode <seq/rot/rand>` — Change message distribution pattern
-🔸 `.responder <msg>` — Set auto-reply for incoming DMs
-🔸 `.status` — Check your live worker status
-
-*General:*
-🔸 `.help` — Show worker commands list
-
-🛡️ *SAFETY & LIMITS*
-
-✅ *Group Gap:* 10s between each group
-✅ *Message Gap:* 2m between different messages
-✅ *Night Mode:* Pauses automatically (12AM-6AM IST)
-✅ *Auto-Clean:* Invalid groups are removed automatically
-
-🤖 *BOT MANAGER COMMANDS*
-🔹 `/start` — Return home
-🔹 `/dashboard` — View live stats
-🔹 `/redeem <code>` — Apply premium code
+🤖 *BOT COMMANDS*
+🔹 `/start` — Return to home screen
+🔹 `/dashboard` — Open your live dashboard
+🔹 `/stats` — View your personal stats
+🔹 `/redeem <code>` — Apply a premium promo code
 🔹 `/help` — Show this menu
 
-👨‍💻 *SUPPORT & UPDATES:* @PHilobots
+👨‍💻 *SUPPORT:* @PHilobots
+"""
+
+
+GUIDE_TEXT = """
+📖 *BEGINNER'S GUIDE — KURUP ADS*
+_Step-by-step to start auto-forwarding in 5 minutes_
+
+━━━━━━━━━━━━━━━━━━━━━
+
+*STEP 1 — Get Your API Keys*
+
+1. Open [my.telegram.org](https://my.telegram.org) in a browser
+2. Log in with your phone number
+3. Go to *API Development Tools*
+4. Create a new app (any name/description)
+5. Copy your *API ID* and *API Hash*
+
+━━━━━━━━━━━━━━━━━━━━━
+
+*STEP 2 — Connect Your Account*
+
+1. Tap *Add Account* on the home screen
+2. You'll be sent to @kurupLoginBot
+3. Enter your *API ID*, then *API Hash*
+4. Enter your phone number with country code (e.g. `+91XXXXXXXXXX`)
+5. Enter the OTP sent to your Telegram
+6. Enter 2FA password if your account has it enabled
+
+✅ Done! Your account is now connected.
+
+━━━━━━━━━━━━━━━━━━━━━
+
+*STEP 3 — Add Groups*
+
+Go to your *Dashboard* → *Manage Groups* → *Add Group*
+Enter the group link or username:
+`https://t.me/yourgroupname` or `@yourgroupname`
+
+You can add up to 10,000 groups!
+
+━━━━━━━━━━━━━━━━━━━━━
+
+*STEP 4 — Start Sending*
+
+1. Open your *Saved Messages* (in Telegram)
+2. Send any message you want to forward
+3. KURUP ADS will automatically send it to all your groups!
+
+━━━━━━━━━━━━━━━━━━━━━
+
+*⚙️ SETTINGS YOU CAN CONFIGURE*
+
+🔹 *Interval* — Time (in minutes) between each round of sends
+🔹 *Send Mode* — Sequential / Rotate / Random
+🔹 *Shuffle* — Randomize which group gets the message first
+🔹 *Copy Mode* — Hide "Forwarded from" label
+🔹 *Auto Responder* — Auto-reply to DMs
+
+━━━━━━━━━━━━━━━━━━━━━
+
+*🛡️ BUILT-IN SAFETY*
+
+✅ 45-second gap between each group (Flood protection)
+✅ Smart auto-pause from 12AM–6AM IST (Night Mode)
+✅ Auto-removes invalid/banned groups
+✅ Your API keys are never shared or stored in plain text
+
+━━━━━━━━━━━━━━━━━━━━━
+
+👨‍💻 *Support & Updates:* @PHilobots
 """
 
 
@@ -61,7 +100,8 @@ async def help_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         HELP_TEXT,
         parse_mode="Markdown",
-        reply_markup=get_back_home_keyboard(),
+        reply_markup=get_guide_keyboard(),
+        disable_web_page_preview=True,
     )
 
 
@@ -70,5 +110,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         HELP_TEXT,
         parse_mode="Markdown",
+        reply_markup=get_guide_keyboard(),
+        disable_web_page_preview=True,
+    )
+
+
+async def guide_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show full beginner guide."""
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text(
+        GUIDE_TEXT,
+        parse_mode="Markdown",
         reply_markup=get_back_home_keyboard(),
+        disable_web_page_preview=True,
     )
