@@ -18,7 +18,7 @@ HELP_TEXT = """
 🔹 `/redeem <code>` — Apply a premium promo code
 🔹 `/help` — Show this menu
 
-👨‍💻 *SUPPORT:* @PHilobots
+👨‍💻 *SUPPORT:* @spinify
 """
 
 
@@ -88,7 +88,7 @@ You can add up to 10,000 groups!
 
 ━━━━━━━━━━━━━━━━━━━━━
 
-👨‍💻 *Support & Updates:* @PHilobots
+📩 *Need help? DM @spinify on Telegram.*
 """
 
 

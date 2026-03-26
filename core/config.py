@@ -101,7 +101,7 @@ PLAN_DURATIONS: dict = {"week": 7, "month": 30}
 
 # ── Channel ─────────────────────────────────────────────────────────────────
 
-CHANNEL_USERNAME: str = os.getenv("CHANNEL_USERNAME", "PHilobots")
+CHANNEL_USERNAME: str = os.getenv("CHANNEL_USERNAME", "spinify")
 REQUIRED_CHANNELS_STR: str = os.getenv("REQUIRED_CHANNELS", "philobots,sellinghub0,kurupads")
 REQUIRED_CHANNELS: list[str] = [c.strip() for c in REQUIRED_CHANNELS_STR.split(",") if c.strip()]
 
