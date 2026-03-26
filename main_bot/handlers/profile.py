@@ -4,6 +4,7 @@ Displays user profile with Telegram info, plan, and account statistics.
 """
 
 from core.config import MAIN_BOT_USERNAME
+from telegram import Update
 from telegram.ext import ContextTypes
 
 from models.user import get_user_profile_data

@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from core.config import REQUIRED_CHANNELS, CHANNEL_USERNAME
+from models.user import create_user
 from models.plan import get_plan
 from models.session import get_all_user_sessions
 from main_bot.utils.keyboards import get_welcome_keyboard
