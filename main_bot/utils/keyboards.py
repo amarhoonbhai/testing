@@ -179,6 +179,19 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_stats_keyboard() -> InlineKeyboardMarkup:
+    """Stats screen keyboard — includes a refresh button."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔄 Refresh", callback_data="admin_stats"),
+            InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
+        ],
+        [
+            InlineKeyboardButton("🔙 Admin Panel", callback_data="admin"),
+        ],
+    ])
+
+
 def get_broadcast_keyboard() -> InlineKeyboardMarkup:
     """Build broadcast target selection keyboard."""
     keyboard = [
@@ -258,22 +271,73 @@ def get_night_mode_settings_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_manage_groups_keyboard(groups: list) -> InlineKeyboardMarkup:
-    """Build keyboard for group management (list with delete buttons)."""
+GROUPS_PER_PAGE = 8
+
+
+def get_manage_groups_keyboard(groups: list, page: int = 0) -> InlineKeyboardMarkup:
+    """
+    Paginated group manager keyboard.
+    Shows GROUPS_PER_PAGE groups per page with:
+      - ✅/⛔ toggle (enable/disable)
+      - ❌ remove
+    Plus: prev/next page navigation and Add Group button.
+    """
     keyboard = []
-    
-    # List groups (limited to avoid massive keyboards)
-    for g in groups[:10]:
+    total = len(groups)
+    total_pages = max(1, (total + GROUPS_PER_PAGE - 1) // GROUPS_PER_PAGE)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * GROUPS_PER_PAGE
+    page_groups = groups[start: start + GROUPS_PER_PAGE]
+
+    # ── Group rows ──────────────────────────────────────────────────────────
+    for g in page_groups:
         title = g.get("chat_title", "Unknown")
         chat_id = g.get("chat_id")
+        enabled = g.get("enabled", True)
+        display = title[:22] + "…" if len(title) > 22 else title
+        toggle_icon = "✅" if enabled else "⛔"
+
         keyboard.append([
-            InlineKeyboardButton(f"❌ Remove: {title}", callback_data=f"remove_group_ui:{chat_id}")
+            InlineKeyboardButton(
+                f"{toggle_icon} {display}",
+                callback_data=f"group_toggle:{chat_id}:{page}"
+            ),
+            InlineKeyboardButton(
+                "🗑", callback_data=f"remove_group_ui:{chat_id}:{page}"
+            ),
         ])
-    
-    keyboard.append([InlineKeyboardButton("➕ Add Group", callback_data="add_group_prompt")])
-    keyboard.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="dashboard")])
-    
+
+    # ── Pagination row ──────────────────────────────────────────────────────
+    nav_row = []
+    if page > 0:
+        nav_row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"groups_page:{page-1}"))
+    nav_row.append(InlineKeyboardButton(f"📄 {page+1}/{total_pages}", callback_data="noop"))
+    if page < total_pages - 1:
+        nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"groups_page:{page+1}"))
+    if nav_row:
+        keyboard.append(nav_row)
+
+    # ── Action row ──────────────────────────────────────────────────────────
+    keyboard.append([
+        InlineKeyboardButton("➕ Add Groups", callback_data="add_group_prompt"),
+        InlineKeyboardButton("🗑 Clear All", callback_data="confirm_clear_groups"),
+    ])
+    keyboard.append([
+        InlineKeyboardButton(f"📊 {total} groups total", callback_data="noop"),
+    ])
+    keyboard.append([
+        InlineKeyboardButton("🔙 Dashboard", callback_data="dashboard"),
+    ])
+
     return InlineKeyboardMarkup(keyboard)
+
+
+def get_confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⚠️ YES, Remove All", callback_data="clear_groups_confirmed")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="manage_groups:0")],
+    ])
 
 
 def get_manage_settings_keyboard(config: dict, is_branded: bool = True) -> InlineKeyboardMarkup:

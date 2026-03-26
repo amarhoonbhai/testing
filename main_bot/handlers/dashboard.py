@@ -10,7 +10,7 @@ from models.user import (
     get_user_profile_data, get_all_users
 )
 from models.plan import get_plan
-from models.group import get_user_groups, add_group, remove_group, get_group_count
+from models.group import get_user_groups, add_group, remove_group, get_group_count, get_group_by_id, toggle_group
 from models.session import get_all_user_sessions
 from models.stats import get_account_stats
 from core.database import get_database
@@ -576,11 +576,104 @@ def _slug_to_id(slug: str) -> int:
 async def remove_group_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = update.effective_user.id
-    chat_id = int(query.data.split(":")[1])
-    
+    parts = query.data.split(":")
+    chat_id = int(parts[1])
+    page = int(parts[2]) if len(parts) > 2 else 0
+
     await remove_group(user_id, chat_id)
     await query.answer("✅ Group removed")
-    await manage_groups_callback(update, context)
+
+    groups = await get_user_groups(user_id)
+    from main_bot.utils.keyboards import get_manage_groups_keyboard, GROUPS_PER_PAGE
+    total_pages = max(1, (len(groups) + GROUPS_PER_PAGE - 1) // GROUPS_PER_PAGE)
+    page = min(page, total_pages - 1)
+    await query.edit_message_text(
+        f"👥 *GROUP MANAGER* — {len(groups)} groups\n\n"
+        "Tap a group to toggle it on/off. Tap 🗑 to remove.",
+        parse_mode="Markdown",
+        reply_markup=get_manage_groups_keyboard(groups, page)
+    )
+
+
+async def groups_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle pagination — switch to requested page."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    page = int(query.data.split(":")[1])
+    await query.answer()
+
+    groups = await get_user_groups(user_id)
+    from main_bot.utils.keyboards import get_manage_groups_keyboard
+    await query.edit_message_text(
+        f"👥 *GROUP MANAGER* — {len(groups)} groups\n\n"
+        "Tap a group to toggle it on/off. Tap 🗑 to remove.",
+        parse_mode="Markdown",
+        reply_markup=get_manage_groups_keyboard(groups, page)
+    )
+
+
+async def group_toggle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Toggle a group enabled/disabled."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    parts = query.data.split(":")
+    chat_id = int(parts[1])
+    page = int(parts[2]) if len(parts) > 2 else 0
+
+    # Toggle
+    db_group = await get_group_by_id(user_id, chat_id)
+    if db_group:
+        new_val = not db_group.get("enabled", True)
+        await toggle_group(user_id, chat_id, new_val)
+        status = "✅ Enabled" if new_val else "⛔ Disabled"
+    else:
+        status = "⚠️ Group not found"
+
+    await query.answer(status)
+
+    groups = await get_user_groups(user_id)
+    from main_bot.utils.keyboards import get_manage_groups_keyboard
+    await query.edit_message_text(
+        f"👥 *GROUP MANAGER* — {len(groups)} groups\n\n"
+        "Tap a group to toggle it on/off. Tap 🗑 to remove.",
+        parse_mode="Markdown",
+        reply_markup=get_manage_groups_keyboard(groups, page)
+    )
+
+
+async def confirm_clear_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show clear all confirmation."""
+    query = update.callback_query
+    await query.answer()
+    from main_bot.utils.keyboards import get_confirm_clear_groups_keyboard
+    await query.edit_message_text(
+        "⚠️ *REMOVE ALL GROUPS?*\n\nThis will delete all your groups. This cannot be undone.",
+        parse_mode="Markdown",
+        reply_markup=get_confirm_clear_groups_keyboard()
+    )
+
+
+async def clear_groups_confirmed_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Delete all groups."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    await query.answer("🗑 All groups cleared")
+
+    from core.database import get_database
+    db = get_database()
+    await db.groups.delete_many({"user_id": user_id})
+
+    from main_bot.utils.keyboards import get_manage_groups_keyboard
+    await query.edit_message_text(
+        "✅ All groups removed.\n\nTap ➕ Add Groups to add new ones.",
+        parse_mode="Markdown",
+        reply_markup=get_manage_groups_keyboard([], 0)
+    )
+
+
+async def noop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """No-operation callback for display-only buttons."""
+    await update.callback_query.answer()
 
 
 async def set_interval_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):

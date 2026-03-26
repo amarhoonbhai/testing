@@ -14,7 +14,8 @@ import logging
 from typing import Tuple
 
 from telethon import TelegramClient
-from telethon.tl.types import InputPeerSelf
+
+
 from telethon.errors import (
     FloodWaitError,
     PeerFloodError,
@@ -53,11 +54,11 @@ async def send_message_to_group(
         status is one of: "sent", "failed", "flood", "removed", "paused", "deactivated"
         flood_wait_seconds > 0 if a FloodWaitError was encountered.
     """
-    try:
-        # ── 1. Pre-validate entity ──────────────────────────────────────
+    try:        # ── 1. Pre-validate / resolve entity ─────────────────────
         entity = None
         try:
             entity = await client.get_entity(group_id)
+
         except (ChannelInvalidError, UsernameNotOccupiedError,
                 UsernameInvalidError, InviteHashExpiredError) as e:
             logger.warning(f"❌ Group {group_id} invalid ({type(e).__name__}). Removing.")
@@ -68,72 +69,97 @@ async def send_message_to_group(
 
         except (ChatWriteForbiddenError, ChannelPrivateError,
                 ChatAdminRequiredError, UserBannedInChannelError) as e:
-            logger.warning(f"⚠️ Group {group_id} restricted ({type(e).__name__}). Marking as failing.")
+            logger.warning(f"⚠️ Group {group_id} restricted ({type(e).__name__}). Marking failing.")
             asyncio.create_task(mark_group_failing(user_id, group_id, f"Pre-check: {type(e).__name__}"))
             await log_job_event(job_id, user_id, phone, group_id, message_id,
                                 "failing", f"Pre-check: {type(e).__name__}")
             return ("failing", 0)
 
-        except ValueError as e:
-            logger.info(f"Entity not in cache for {group_id}, trying to fetch from dialogs...")
+        except (ValueError, Exception) as e:
+            # Entity not in cache — try full dialog scan
+            logger.info(f"Entity not cached for {group_id} — scanning dialogs...")
             try:
-                # Fetch recent dialogs to populate cache
-                async for dialog in client.iter_dialogs(limit=200):
+                async for dialog in client.iter_dialogs():
                     if dialog.id == group_id:
                         entity = dialog.entity
                         break
-                if not entity:
-                    raise ValueError(f"Could not find entity {group_id} in dialogs either.")
-            except Exception as dialog_e:
-                logger.warning(f"Entity not found for {group_id} despite dialogs fallback: {dialog_e}")
+            except Exception:
+                pass
+
+            # Still not found — try to look up from DB (stored invite hash)
+            if not entity:
+                try:
+                    from core.database import get_database
+                    db = get_database()
+                    group_doc = await db.groups.find_one({"user_id": user_id, "chat_id": group_id})
+                    title = (group_doc or {}).get("chat_title", "")
+
+                    if "[Private]" in title:
+                        # Extract invite hash from title like "[Private] +AbCdEf123456"
+                        import re
+                        m = re.search(r'\+([A-Za-z0-9_\-]+)', title)
+                        if m:
+                            invite_hash = m.group(1)
+                            logger.info(f"Trying to join private group via hash +{invite_hash}")
+                            try:
+                                from telethon.tl.functions.messages import ImportChatInviteRequest
+                                result = await client(ImportChatInviteRequest(invite_hash))
+                                if hasattr(result, 'chats') and result.chats:
+                                    entity = result.chats[0]
+                                    # Update stored chat_id with real ID
+                                    await db.groups.update_one(
+                                        {"user_id": user_id, "chat_id": group_id},
+                                        {"$set": {"chat_id": entity.id}}
+                                    )
+                                    logger.info(f"Joined private group {entity.id} via invite")
+                            except Exception as join_e:
+                                logger.warning(f"Failed to join via invite hash: {join_e}")
+                except Exception:
+                    pass
+
+            if not entity:
+                logger.warning(f"Cannot resolve entity for group_id={group_id} — skipping")
                 asyncio.create_task(mark_group_failing(user_id, group_id, "Entity Not Found"))
                 await log_job_event(job_id, user_id, phone, group_id, message_id,
                                     "failing", "Entity Not Found")
                 return ("failing", 0)
 
-        except Exception as e:
-            logger.warning(f"Entity resolve error for {group_id}: {e}")
-            await log_job_event(job_id, user_id, phone, group_id, message_id,
-                                "failed", f"Entity error: {e}")
-            return ("failed", 0)
-
-        # ── 2. Human-like typing ────────────────────────────────────────
-        if random.random() > 0.1:
+        # ── 2. Human-like typing (short) ────────────────────────────────
+        if random.random() > 0.3:  # 70% chance
             try:
-                typing_duration = random.uniform(3, 8)
                 async with client.action(entity, "typing"):
-                    await asyncio.sleep(typing_duration)
+                    await asyncio.sleep(random.uniform(1.0, 2.5))
             except Exception:
-                pass  # Typing failure is harmless
+                pass
 
         # ── 3. Micro-delay ──────────────────────────────────────────────
-        await asyncio.sleep(random.uniform(0.5, 2.5))
+        await asyncio.sleep(random.uniform(0.3, 1.0))
 
         # ── 4. Send the message ─────────────────────────────────────────
-        # Load the message from Saved Messages
-        saved_msg = await client.get_messages("me", ids=message_id)
-        if not saved_msg:
-            await log_job_event(job_id, user_id, phone, group_id, message_id,
-                                "failed", "Message not found in Saved Messages")
-            return ("failed", 0)
-
         if copy_mode:
+            # Copy mode: sends without "Forwarded from" tag
+            saved_msg = await client.get_messages("me", ids=message_id)
+            if not saved_msg:
+                await log_job_event(job_id, user_id, phone, group_id, message_id,
+                                    "failed", "Message not found in Saved Messages")
+                return ("failed", 0)
             if not saved_msg.text and not saved_msg.media:
                 await log_job_event(job_id, user_id, phone, group_id, message_id,
                                     "skipped", "Empty message")
                 return ("failed", 0)
-
             await client.send_message(
                 entity=entity,
-                message=saved_msg.text or None,
-                file=saved_msg.media,
+                message=saved_msg.text or "",
+                file=saved_msg.media or None,
                 formatting_entities=saved_msg.entities if saved_msg.text else None,
+                link_preview=False,
             )
         else:
+            # Forward mode — NOTE: from_peer must be "me", NOT InputPeerSelf()
             await client.forward_messages(
                 entity=entity,
-                messages=message_id,
-                from_peer=InputPeerSelf(),
+                messages=[message_id],
+                from_peer="me",
             )
 
         await log_job_event(job_id, user_id, phone, group_id, message_id, "sent")

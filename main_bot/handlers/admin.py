@@ -11,7 +11,7 @@ from models.user import get_all_users_for_broadcast
 from models.settings import get_global_settings, update_global_settings
 from main_bot.utils.keyboards import (
     get_admin_keyboard, get_broadcast_keyboard, get_back_home_keyboard,
-    get_night_mode_settings_keyboard, get_admin_upgrade_keyboard
+    get_night_mode_settings_keyboard, get_admin_upgrade_keyboard, get_stats_keyboard
 )
 from core.config import (
     PLAN_PRICES, PLAN_DURATIONS, TRIAL_DAYS, OWNER_ID,
@@ -53,7 +53,7 @@ Manage users, track live statistics, and broadcast announcements directly below.
     await query.edit_message_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 
 
@@ -77,7 +77,7 @@ broadcast announcements directly below.
     await update.message.reply_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 
 
@@ -155,7 +155,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 
 
@@ -198,7 +198,7 @@ async def admin_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 
 async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,7 +248,7 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.edit_message_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 
 
@@ -457,7 +457,7 @@ async def gen_code_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 
 
@@ -525,7 +525,7 @@ _Pro Tip: Use the Broadcast system to target specific segments._
     await query.edit_message_text(
         text,
         parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
+        reply_markup=get_stats_keyboard(),
     )
 async def admin_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show global night mode settings."""

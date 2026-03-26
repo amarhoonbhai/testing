@@ -91,6 +91,12 @@ async def get_group_count(user_id: int) -> int:
     return await db.groups.count_documents({"user_id": user_id})
 
 
+async def get_group_by_id(user_id: int, chat_id: int) -> Optional[dict]:
+    """Get a single group document by user_id + chat_id."""
+    db = get_database()
+    return await db.groups.find_one({"user_id": user_id, "chat_id": chat_id})
+
+
 async def mark_group_failing(user_id: int, chat_id: int, reason: str):
     """
     Mark a group as failing. Sets `first_fail_at` only if not already set,

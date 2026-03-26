@@ -67,16 +67,16 @@ RETRY_BASE_DELAY_SECONDS: int = _safe_int(os.getenv("RETRY_BASE_DELAY_SECONDS", 
 
 # ── Scheduling Rules ───────────────────────────────────────────────────────
 
-GROUP_GAP_SECONDS: int = _safe_int(os.getenv("GROUP_GAP_SECONDS", "45"), 45)
-MESSAGE_GAP_SECONDS: int = _safe_int(os.getenv("MESSAGE_GAP_SECONDS", "210"), 210)
+GROUP_GAP_SECONDS: int = _safe_int(os.getenv("GROUP_GAP_SECONDS", "5"), 5)
+MESSAGE_GAP_SECONDS: int = _safe_int(os.getenv("MESSAGE_GAP_SECONDS", "120"), 120)
 MIN_INTERVAL_MINUTES: int = 15
 DEFAULT_INTERVAL_MINUTES: int = 15
 MAX_GROUPS_PER_USER: int = 10000
 
 # ── Rate-limit protection ──────────────────────────────────────────────────
 
-SEND_DELAY_MIN: int = _safe_int(os.getenv("SEND_DELAY_MIN", "10"), 10)
-SEND_DELAY_MAX: int = _safe_int(os.getenv("SEND_DELAY_MAX", "20"), 20)
+SEND_DELAY_MIN: int = _safe_int(os.getenv("SEND_DELAY_MIN", "3"), 3)
+SEND_DELAY_MAX: int = _safe_int(os.getenv("SEND_DELAY_MAX", "7"), 7)
 
 # ── Night Mode (IST) ───────────────────────────────────────────────────────
 
