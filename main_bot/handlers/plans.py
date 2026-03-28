@@ -136,11 +136,12 @@ async def buy_plan_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⏳ *Validity:* {"7" if plan_type == "week" else "30"} Days
 
 🚀 *HOW TO ACTIVATE:*
-1. Send ₹{price} via UPI to: `spinify@ybl`
-2. Take a screenshot of the transaction.
-3. Send the screenshot to @spinify along with your User ID: `{update.effective_user.id}`
+To activate your premium subscription, please contact our support team.
 
-_Your plan will be activated within 30 minutes of verification._
+📩 *Support:* @spinify
+👤 *Your User ID:* `{update.effective_user.id}`
+
+_Your plan will be activated immediately after verification._
 """
     await query.edit_message_text(
         text,
