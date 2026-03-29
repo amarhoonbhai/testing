@@ -79,23 +79,48 @@ async def send_message_to_group(
             # Entity not in cache — try full dialog scan
             logger.info(f"Entity not cached for {group_id} — scanning dialogs...")
             try:
-                async for dialog in client.iter_dialogs():
-                    if dialog.id == group_id:
-                        entity = dialog.entity
-                        break
+                # Optimized dialog scan: only if it looks like a real ID
+                if group_id < -1000000000: # Typical real group ID range
+                    async for dialog in client.iter_dialogs():
+                        if dialog.id == group_id:
+                            entity = dialog.entity
+                            break
             except Exception:
                 pass
 
-            # Still not found — try to look up from DB (stored invite hash)
+            # Still not found — try to look up from DB (stored username or invite hash)
             if not entity:
                 try:
                     from core.database import get_database
                     db = get_database()
                     group_doc = await db.groups.find_one({"user_id": user_id, "chat_id": group_id})
-                    title = (group_doc or {}).get("chat_title", "")
+                    if not group_doc:
+                        return ("failed", 0)
+                        
+                    title = group_doc.get("chat_title", "")
+                    username = group_doc.get("chat_username")
 
-                    if "[Private]" in title:
-                        # Extract invite hash from title like "[Private] +AbCdEf123456"
+                    # 1. Try public username resolution
+                    if not username and title and re.match(r'^[a-zA-Z0-9_]{4,32}$', title):
+                        # Fallback for old groups: title might be the slug
+                        username = title
+
+                    if username:
+                        logger.info(f"Attempting to resolve public group: @{username}")
+                        try:
+                            entity = await client.get_entity(username)
+                            if entity:
+                                # Update stored chat_id with real ID for future
+                                await db.groups.update_one(
+                                    {"user_id": user_id, "chat_id": group_id},
+                                    {"$set": {"chat_id": entity.id}}
+                                )
+                                logger.info(f"Successfully resolved @{username} to {entity.id}")
+                        except Exception as res_e:
+                            logger.warning(f"Failed to resolve @{username}: {res_e}")
+
+                    # 2. Try private invite join
+                    if not entity and "[Private]" in title:
                         import re
                         m = re.search(r'\+([A-Za-z0-9_\-]+)', title)
                         if m:
@@ -106,13 +131,16 @@ async def send_message_to_group(
                                 result = await client(ImportChatInviteRequest(invite_hash))
                                 if hasattr(result, 'chats') and result.chats:
                                     entity = result.chats[0]
-                                    # Update stored chat_id with real ID
                                     await db.groups.update_one(
                                         {"user_id": user_id, "chat_id": group_id},
                                         {"$set": {"chat_id": entity.id}}
                                     )
                                     logger.info(f"Joined private group {entity.id} via invite")
                             except Exception as join_e:
+                                if "USER_ALREADY_PARTICLE" in str(join_e).upper():
+                                    # Already in, get entity by hash? Telethon doesn't easily support this.
+                                    # Fallback: maybe it's in dialogs now?
+                                    pass
                                 logger.warning(f"Failed to join via invite hash: {join_e}")
                 except Exception:
                     pass

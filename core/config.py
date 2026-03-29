@@ -69,8 +69,8 @@ RETRY_BASE_DELAY_SECONDS: int = _safe_int(os.getenv("RETRY_BASE_DELAY_SECONDS", 
 
 GROUP_GAP_SECONDS: int = _safe_int(os.getenv("GROUP_GAP_SECONDS", "5"), 5)
 MESSAGE_GAP_SECONDS: int = _safe_int(os.getenv("MESSAGE_GAP_SECONDS", "120"), 120)
-MIN_INTERVAL_MINUTES: int = 15
-DEFAULT_INTERVAL_MINUTES: int = 15
+MIN_INTERVAL_MINUTES: int = 20
+DEFAULT_INTERVAL_MINUTES: int = 20
 MAX_GROUPS_PER_USER: int = 10000
 
 # ── Rate-limit protection ──────────────────────────────────────────────────

@@ -337,16 +337,17 @@ async def handle_addgroup(client: TelegramClient, user_id: int, message, text: s
             # Get the entity (group/channel)
             entity = await client.get_entity(group_identifier)
             chat_id = entity.id
-            chat_title = getattr(entity, 'title', None) or getattr(entity, 'username', str(chat_id))
+            chat_username = getattr(entity, 'username', None)
+            chat_title = getattr(entity, 'title', None) or chat_username or str(chat_id)
             
             # Save to database
             # Link to the current account's phone for multi-account support
-            success = await add_group(user_id, chat_id, chat_title, account_phone=getattr(client, 'phone', None))
+            success = await add_group(user_id, chat_id, chat_title, chat_username=chat_username, account_phone=getattr(client, 'phone', None))
             
             if success:
                 added.append(chat_title)
             else:
-                failed.append((group_input, "Already exists or limit reached"))
+                failed.append((group_input, "Limit reached or DB error"))
                 
         except (UsernameNotOccupiedError, UsernameInvalidError):
             failed.append((group_input, "Not found"))

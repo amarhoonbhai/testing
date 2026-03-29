@@ -11,7 +11,7 @@ import secrets
 from core.database import get_database
 from core.config import (
     TRIAL_DAYS, REFERRAL_BONUS_DAYS, REFERRALS_NEEDED,
-    BRANDING_NAME, BRANDING_BIO
+    BRANDING_NAME, BRANDING_BIO, DEFAULT_INTERVAL_MINUTES
 )
 
 
@@ -77,7 +77,7 @@ async def get_user_config(user_id: int) -> dict:
         # Return defaults
         return {
             "user_id": user_id,
-            "interval_min": 60,
+            "interval_min": DEFAULT_INTERVAL_MINUTES,
             "shuffle_mode": False,
             "copy_mode": False,
             "send_mode": "sequential",

@@ -478,14 +478,14 @@ async def receive_group_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for entry in lines:
         try:
-            chat_id, title = _parse_group_entry(entry)
-            result = await add_group(user_id, chat_id, title)
+            chat_id, chat_username, title = _parse_group_entry(entry)
+            result = await add_group(user_id, chat_id, title, chat_username=chat_username)
             if result is not None:
                 added.append(title)
             else:
                 skipped.append(entry)
         except Exception as e:
-            errors.append(f"`{entry[:40]}` — {e}")
+            errors.append(f"`{entry[:40]}` — {str(e)}")
 
     # Build result message
     lines_out = []
@@ -509,7 +509,7 @@ async def receive_group_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def _parse_group_entry(entry: str):
     """
-    Parse any supported group link format and return (chat_id, title).
+    Parse any supported group link format and return (chat_id, chat_username, title).
 
     Supported:
     - https://t.me/username          -> public group
@@ -526,39 +526,39 @@ def _parse_group_entry(entry: str):
     # Raw numeric ID (e.g. -1001234567890)
     if re.match(r'^-?\d+$', entry):
         chat_id = int(entry)
-        return chat_id, str(chat_id)
+        return chat_id, None, str(chat_id)
 
     # @username
     if entry.startswith("@"):
-        slug = entry[1:]
+        slug = entry[1:].split('?')[0].strip()
         chat_id = _slug_to_id(slug)
-        return chat_id, slug
+        return chat_id, slug, slug
 
     # tg://resolve?domain=name
     tg_match = re.match(r'tg://resolve\?domain=([\w_]+)', entry)
     if tg_match:
         slug = tg_match.group(1)
-        return _slug_to_id(slug), slug
+        return _slug_to_id(slug), slug, slug
 
     # https://t.me/addlist/... (folder links)
     if 't.me/addlist/' in entry:
         slug = entry.split('addlist/')[-1].split('?')[0].strip('/')
         # Store folder links with a recognisable fake numeric ID
         chat_id = abs(hash(f"folder:{slug}")) % 10**12 * -1
-        return chat_id, f"[Folder] {slug}"
+        return chat_id, None, f"[Folder] {slug}"
 
     # https://t.me/+Hash (private invite)
     plus_match = re.search(r't\.me/\+([A-Za-z0-9_\-]+)', entry)
     if plus_match:
         invite_hash = plus_match.group(1)
         chat_id = abs(hash(f"invite:{invite_hash}")) % 10**12 * -1
-        return chat_id, f"[Private] +{invite_hash[:12]}"
+        return chat_id, None, f"[Private] +{invite_hash[:12]}"
 
     # https://t.me/username (public)
     public_match = re.search(r't\.me/([A-Za-z][\w_]{3,})', entry)
     if public_match:
         slug = public_match.group(1)
-        return _slug_to_id(slug), slug
+        return _slug_to_id(slug), slug, slug
 
     raise ValueError("Unrecognized link format")
 
