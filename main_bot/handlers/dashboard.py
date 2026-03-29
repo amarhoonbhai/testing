@@ -440,8 +440,9 @@ async def toggle_responder_ui_callback(update: Update, context: ContextTypes.DEF
 async def add_group_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(
-        """
+    try:
+        await query.edit_message_text(
+            """
 ➕ *ADD GROUPS*
 
 Send one or multiple group links, one per line.
@@ -461,8 +462,10 @@ https://t.me/+AbcPrivate
 ```
 ⚠️ For private groups, the bot will join them automatically using your connected account.
 """,
-        parse_mode="Markdown"
-    )
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
     return WAITING_GROUP_URL
 
 
@@ -679,10 +682,13 @@ async def noop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_interval_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text(
-        f"⏱️ *SET INTERVAL*\n\nPlease send the interval in minutes (Min: {MIN_INTERVAL_MINUTES}).",
-        parse_mode="Markdown"
-    )
+    try:
+        await query.edit_message_text(
+            f"⏱️ *SET INTERVAL*\n\nPlease send the interval in minutes (Min: {MIN_INTERVAL_MINUTES}).",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
     return WAITING_INTERVAL
 
 
@@ -711,10 +717,13 @@ async def set_responder_text_prompt(update: Update, context: ContextTypes.DEFAUL
         return
         
     await query.answer()
-    await query.edit_message_text(
-        "🤖 *SET RESPONDER TEXT*\n\nPlease send the message you want the bot to reply with.",
-        parse_mode="Markdown"
-    )
+    try:
+        await query.edit_message_text(
+            "🤖 *SET RESPONDER TEXT*\n\nPlease send the message you want the bot to reply with.",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
     return WAITING_RESPONDER_TEXT
 
 

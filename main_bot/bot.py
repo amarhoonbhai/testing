@@ -227,6 +227,11 @@ def create_application() -> Application:
         ("^admin_retry_failing$", admin_retry_failing_callback),
         ("^adm_upgr:", admin_upgrade_perform_callback),
         ("^buy_plan:", buy_plan_callback),
+        ("^add_group_prompt$", add_group_prompt),
+        ("^set_interval_prompt$", set_interval_prompt),
+        ("^set_responder_text_prompt$", set_responder_text_prompt),
+        ("^redeem_code$", redeem_code_callback),
+        ("^admin_upgrade_init$", admin_upgrade_init_callback),
     ]
     
     for pattern, callback in patterns:
