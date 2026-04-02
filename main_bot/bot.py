@@ -205,7 +205,6 @@ def create_application() -> Application:
         ("^my_plan$", my_plan_callback),
         ("^referral$", referral_callback),
         ("^profile$", profile_callback),
-        ("^manage_groups$", manage_groups_callback),
         ("^manage_settings$", manage_settings_callback),
         ("^user_stats$", user_stats_callback),
         ("^toggle_shuffle_ui$", toggle_shuffle_ui_callback),
