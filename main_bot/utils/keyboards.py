@@ -125,6 +125,21 @@ def get_back_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
+def get_add_account_keyboard() -> InlineKeyboardMarkup:
+    """Build keyboard for adding an account."""
+    from core.config import LOGIN_BOT_USERNAME
+    url = f"https://t.me/{LOGIN_BOT_USERNAME}?start=login"
+    keyboard = [
+        [
+            InlineKeyboardButton("🔗 Connect via Login Bot", url=url),
+        ],
+        [
+            InlineKeyboardButton("🔙 Back to Accounts", callback_data="accounts_list"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
 def get_home_keyboard() -> InlineKeyboardMarkup:
     """Just home button."""
     keyboard = [
