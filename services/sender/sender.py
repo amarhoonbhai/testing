@@ -90,8 +90,8 @@ class UnifiedSender:
         try:
             # 2. Check individual account status
             session = await get_session(user_id, phone)
-            if not session or not session.get("is_active", True):
-                await fail_job(job_id, "Account ads are paused/inactive")
+            if not session:
+                await fail_job(job_id, "Account session not found")
                 return
 
             if await is_session_paused(user_id, phone):

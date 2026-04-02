@@ -25,10 +25,7 @@ def get_welcome_keyboard() -> InlineKeyboardMarkup:
 
 def get_dashboard_keyboard(is_active: bool = True) -> InlineKeyboardMarkup:
     """Build dashboard keyboard with Start/Stop toggle."""
-    status_btn = InlineKeyboardButton("⏸ Stop Ads", callback_data="stop_ads") if is_active else InlineKeyboardButton("▶️ Start Ads", callback_data="start_ads")
-    
     keyboard = [
-        [status_btn],
         [
             InlineKeyboardButton("⚙️ Settings", callback_data="manage_settings"),
             InlineKeyboardButton("📱 Manage Accounts", callback_data="accounts_list"),
@@ -54,10 +51,6 @@ def get_account_selection_keyboard(sessions: list) -> InlineKeyboardMarkup:
         status = "🟢" if s.get("connected") else "🔴"
         keyboard.append([InlineKeyboardButton(f"{status} {phone}", callback_data=f"manage_account:{phone}")])
     
-    keyboard.append([
-        InlineKeyboardButton("▶️ Start All", callback_data="start_all_accounts"),
-        InlineKeyboardButton("⏸ Stop All", callback_data="stop_all_accounts"),
-    ])
     keyboard.append([InlineKeyboardButton("➕ Add Another Account", callback_data="add_account")])
     keyboard.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="dashboard")])
     
@@ -233,11 +226,8 @@ def get_broadcast_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_manage_account_keyboard(phone: str, is_active: bool = True) -> InlineKeyboardMarkup:
-    """Build manage account keyboard with individual Start/Stop ads toggle and group management."""
-    status_btn = InlineKeyboardButton("⏸ Stop Account Ads", callback_data=f"stop_acc_ads:{phone}") if is_active else InlineKeyboardButton("▶️ Start Account Ads", callback_data=f"start_acc_ads:{phone}")
-    
+    """Build manage account keyboard."""
     keyboard = [
-        [status_btn],
         [
             InlineKeyboardButton("👥 Manage Groups", callback_data=f"manage_groups_acc:{phone}"),
             InlineKeyboardButton("➕ Add Groups", callback_data=f"add_groups_acc:{phone}"),
