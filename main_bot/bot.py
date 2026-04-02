@@ -25,7 +25,6 @@ from main_bot.handlers.dashboard import (
     # manage_groups_callback, # Removed
     manage_settings_callback,
     user_stats_callback,
-    stats_command,
     toggle_shuffle_ui_callback,
     toggle_copy_ui_callback,
     toggle_responder_ui_callback,
@@ -52,6 +51,7 @@ from main_bot.handlers.admin import (
     admin_command,
     # stats_command,  # Now handled in dashboard.py for both
     broadcast_command,
+    stats_command,
     admin_stats_callback,
     admin_broadcast_callback,
     broadcast_target_callback,
