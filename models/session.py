@@ -158,3 +158,10 @@ async def reset_session_auth_fails(user_id: int, phone: str):
             "$unset": {"last_auth_fail": ""},
         },
     )
+
+
+async def get_session_paused_until(user_id: int, phone: str) -> Optional[datetime]:
+    """Get the cooldown expiration timestamp."""
+    db = get_database()
+    doc = await db.sessions.find_one({"user_id": user_id, "phone": phone})
+    return doc.get("paused_until") if doc else None

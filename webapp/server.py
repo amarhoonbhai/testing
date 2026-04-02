@@ -123,6 +123,40 @@ async def get_dashboard(user: dict = Depends(get_current_user)):
         "has_api_hash": bool(config.get('api_hash'))
     }
 
+# --- Simple API endpoints for the front‑end ---
+
+@app.get("/api/user")
+async def get_user(user: dict = Depends(get_current_user)):
+    """Return basic Telegram user information."""
+    return {
+        "id": user.get("id"),
+        "first_name": user.get("first_name"),
+        "last_name": user.get("last_name"),
+        "username": user.get("username"),
+        "language_code": user.get("language_code"),
+    }
+
+@app.get("/api/plan")
+async def get_plan(user: dict = Depends(get_current_user)):
+    """Return the user's current plan and remaining days."""
+    from models.plan import get_plan as fetch_plan
+    plan = await fetch_plan(user["id"])
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    expires = plan.get("expires_at")
+    days_left = (expires - datetime.utcnow()).days if expires else None
+    return {
+        "plan_type": plan.get("plan_type"),
+        "status": plan.get("status"),
+        "days_left": days_left,
+    }
+
+@app.get("/api/sessions")
+async def get_sessions(user: dict = Depends(get_current_user)):
+    """List all Telegram sessions (accounts) for the user."""
+    sessions = await get_all_user_sessions(user["id"])
+    return sessions
+
 @app.get("/api/groups")
 async def list_groups(user: dict = Depends(get_current_user)):
     return await get_user_groups(user['id'])
@@ -160,6 +194,63 @@ async def toggle_active_api(data: dict, user: dict = Depends(get_current_user)):
     is_active = data.get('is_active', True)
     await update_user_config(user['id'], is_active=is_active)
     return {"status": "ok", "is_active": is_active}
+
+# --- Additional API endpoints for Web App ---
+
+@app.get("/api/profile")
+async def get_profile(user: dict = Depends(get_current_user)):
+    """Return rebranded user profile info (display name, avatar)."""
+    # Assume branding fields are stored in user config
+    config = await get_user_config(user['id'])
+    display_name = config.get('branding_name', 'Kurup Ads Bot')
+    avatar_url = config.get('branding_avatar', '/static/img/avatar.png')
+    return {"display_name": display_name, "avatar_url": avatar_url}
+
+@app.get("/api/settings/nightmode")
+async def get_nightmode(user: dict = Depends(get_current_user)):
+    config = await get_user_config(user['id'])
+    return {"night_mode_force": config.get('night_mode_force', 'auto')}
+
+@app.post("/api/settings/nightmode")
+async def set_nightmode(data: dict, user: dict = Depends(get_current_user)):
+    force = data.get('night_mode_force')
+    if force not in ('auto', 'on', 'off'):
+        raise HTTPException(status_code=400, detail="Invalid night_mode_force value")
+    await update_user_config(user['id'], night_mode_force=force)
+    return {"status": "ok", "night_mode_force": force}
+
+@app.post("/api/account/disconnect")
+async def disconnect_account(data: dict, user: dict = Depends(get_current_user)):
+    phone = data.get('phone')
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone required")
+    await disconnect_session(user['id'], phone)
+    return {"status": "ok"}
+
+@app.post("/api/account/pause")
+async def pause_account(data: dict, user: dict = Depends(get_current_user)):
+    phone = data.get('phone')
+    until_ts = data.get('until')  # ISO datetime string
+    if not phone or not until_ts:
+        raise HTTPException(status_code=400, detail="Phone and until required")
+    from datetime import datetime
+    try:
+        until_dt = datetime.fromisoformat(until_ts)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid datetime format")
+    # Store pause until in session config
+    await update_user_config(user['id'], **{f"pause_{phone}": until_dt.isoformat()})
+    return {"status": "ok", "paused_until": until_dt.isoformat()}
+
+@app.post("/api/account/resume")
+async def resume_account(data: dict, user: dict = Depends(get_current_user)):
+    phone = data.get('phone')
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone required")
+    # Remove pause field
+    await update_user_config(user['id'], **{f"pause_{phone}": None})
+    return {"status": "ok"}
+
 
 # --- Login Flow ---
 

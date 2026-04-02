@@ -2,8 +2,8 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 
 // DOM Elements
-const loader = document.getElementById('loader');
-const userName = document.getElementById('user-name');
+// const loader = document.getElementById('loader');
+const displayNameEl = document.getElementById('displayName');
 const tabBtns = document.querySelectorAll('.tab-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 
@@ -19,9 +19,9 @@ let currentState = {
 
 // --- Initialization ---
 async function init() {
-    userName.innerText = currentState.user.first_name || 'User';
-    
-    // Setup Navigation
+    displayNameEl.innerText = currentState.user.first_name || 'User';
+    // Hide loader if present
+    // if (loader) loader.style.display = 'none';
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             const tab = btn.getAttribute('data-tab');
