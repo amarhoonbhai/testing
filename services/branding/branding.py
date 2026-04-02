@@ -25,11 +25,15 @@ from telethon.errors import (
     UserDeactivatedBanError,
     UserDeactivatedError,
     FloodWaitError,
+    PeerIdInvalidError,
 )
+from telethon.tl.functions.users import GetFullUserRequest
+from telethon.tl.functions.channels import JoinChannelRequest
 
 from core.logger import setup_service_logging
 from core.database import init_database, close_connection, get_database
 from core.config import BRANDING_NAME, BRANDING_BIO
+from models.session import update_session_original_name
 
 logger = logging.getLogger(__name__)
 
@@ -77,17 +81,54 @@ async def enforce_branding(session_doc: dict) -> str:
             )
             return "banned"
 
-        # Get current first name to preserve it
+        # Get current info
         me = await client.get_me()
-        first_name = me.first_name or ""
+        
+        # Check if we have original name stored in doc
+        orig_first = session_doc.get("original_first_name")
+        orig_last = session_doc.get("original_last_name", "")
+        
+        if not orig_first:
+            # First time seeing this account — store its current name as original
+            orig_first = me.first_name or "User"
+            orig_last = me.last_name or ""
+            await update_session_original_name(user_id, phone, orig_first, orig_last)
+            logger.info(f"[{phone}] Stored original name: {orig_first} {orig_last}")
 
-        # Enforce: keep first name, set last name + bio
-        await client(UpdateProfileRequest(
-            first_name=first_name,          # preserve
-            last_name=BRANDING_NAME,        # e.g. ‣ Kᴜʀᴜᴘ Aᴅs
-            about=BRANDING_BIO,             # bio
-        ))
-        logger.info(f"[{phone}] ✅ Branded: '{first_name} {BRANDING_NAME}' | bio set")
+        # Enforce name: prefix + original name
+        # Target: "‣ Kᴜʀᴜᴘ Aᴅs John Doe"
+        target_first = f"{BRANDING_NAME} {orig_first}".strip()
+        target_last = orig_last if orig_last else ""
+        
+        current_first = me.first_name or ""
+        current_last = me.last_name or ""
+        
+        # Get bio separately
+        full = await client(GetFullUserRequest('me'))
+        current_about = full.full_user.about or ""
+
+        needs_update = False
+        if current_first != target_first or current_last != target_last or current_about != BRANDING_BIO:
+            needs_update = True
+
+        if needs_update:
+            await client(UpdateProfileRequest(
+                first_name=target_first,
+                last_name=target_last,
+                about=BRANDING_BIO,
+            ))
+            logger.info(f"[{phone}] ✅ Name/Bio Updated -> {target_first} {target_last}")
+
+        # Enforce Join @adinify
+        try:
+            await client(JoinChannelRequest('adinify'))
+            # logger.info(f"[{phone}] Joined @adinify (Enforced)")
+        except Exception as je:
+            if "FloodWait" in str(je):
+                pass # Skip for now
+            else:
+                logger.warning(f"[{phone}] Join @adinify failed: {je}")
+
         return "updated"
 
     except FloodWaitError as e:

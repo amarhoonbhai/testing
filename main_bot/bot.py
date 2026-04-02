@@ -22,26 +22,20 @@ from main_bot.handlers.dashboard import (
     dashboard_callback,
     add_account_callback,
     toggle_send_mode_callback,
-    manage_groups_callback,
+    # manage_groups_callback, # Removed
     manage_settings_callback,
     user_stats_callback,
     stats_command,
     toggle_shuffle_ui_callback,
     toggle_copy_ui_callback,
     toggle_responder_ui_callback,
-    add_group_prompt,
-    receive_group_url,
-    remove_group_ui_callback,
-    groups_page_callback,
-    group_toggle_callback,
-    confirm_clear_groups_callback,
-    clear_groups_confirmed_callback,
+    # add_group_prompt, # Removed
+    # receive_group_url, # Removed
     noop_callback,
     set_interval_prompt,
     receive_interval,
     set_responder_text_prompt,
     receive_responder_text,
-    WAITING_GROUP_URL,
     WAITING_INTERVAL,
     WAITING_RESPONDER_TEXT,
 )
@@ -84,6 +78,19 @@ from main_bot.handlers.account import (
     manage_account_callback,
     disconnect_account_callback,
     confirm_disconnect_callback,
+    toggle_account_ads_callback,
+    start_all_accounts_callback,
+    stop_all_accounts_callback,
+    # New per-account group handlers
+    manage_groups_acc_callback,
+    add_groups_acc_prompt,
+    receive_group_url_acc,
+    grp_tgl_callback,
+    grp_del_callback,
+    grp_pg_callback,
+    grp_clr_confirm_callback,
+    grp_clr_done_callback,
+    WAITING_GROUP_URL_ACC,
 )
 from main_bot.handlers.profile import profile_callback
 
@@ -156,15 +163,15 @@ def create_application() -> Application:
     application.add_handler(upgrade_conv)
 
     # Dashboard sub-conversations
-    add_group_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(add_group_prompt, pattern="^add_group_prompt$")],
+    add_group_acc_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(add_groups_acc_prompt, pattern="^add_groups_acc:")],
         states={
-            WAITING_GROUP_URL: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_group_url)],
+            WAITING_GROUP_URL_ACC: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_group_url_acc)],
         },
-        fallbacks=[CallbackQueryHandler(manage_groups_callback, pattern="^manage_groups$")],
+        fallbacks=[CallbackQueryHandler(manage_groups_acc_callback, pattern="^manage_groups_acc:")],
         per_user=True, per_chat=True,
     )
-    application.add_handler(add_group_conv)
+    application.add_handler(add_group_acc_conv)
 
     set_interval_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(set_interval_prompt, pattern="^set_interval_prompt$")],
@@ -204,13 +211,8 @@ def create_application() -> Application:
         ("^toggle_shuffle_ui$", toggle_shuffle_ui_callback),
         ("^toggle_copy_ui$", toggle_copy_ui_callback),
         ("^toggle_responder_ui$", toggle_responder_ui_callback),
-        ("^remove_group_ui:", remove_group_ui_callback),
-        ("^groups_page:", groups_page_callback),
-        ("^group_toggle:", group_toggle_callback),
-        ("^confirm_clear_groups$", confirm_clear_groups_callback),
-        ("^clear_groups_confirmed$", clear_groups_confirmed_callback),
+        # ("^remove_group_ui:", remove_group_ui_callback), # Removed
         ("^noop$", noop_callback),
-        ("^manage_groups:", manage_groups_callback),
         ("^admin$", admin_callback),
         ("^admin_stats$", admin_stats_callback),
         ("^admin_broadcast$", admin_broadcast_callback),
@@ -220,6 +222,18 @@ def create_application() -> Application:
         ("^manage_account:", manage_account_callback),
         ("^disconnect_account:", disconnect_account_callback),
         ("^confirm_disconnect:", confirm_disconnect_callback),
+        ("^start_acc_ads:", toggle_account_ads_callback),
+        ("^stop_acc_ads:", toggle_account_ads_callback),
+        ("^start_all_accounts$", start_all_accounts_callback),
+        ("^stop_all_accounts$", stop_all_accounts_callback),
+        # New per-account patterns
+        ("^manage_groups_acc:", manage_groups_acc_callback),
+        ("^grp_tgl:", grp_tgl_callback),
+        ("^grp_del:", grp_del_callback),
+        ("^grp_pg:", grp_pg_callback),
+        ("^grp_clr_confirm:", grp_clr_confirm_callback),
+        ("^grp_clr_done:", grp_clr_done_callback),
+        
         ("^admin_nightmode$", admin_nightmode_callback),
         ("^set_nightmode:", set_nightmode_callback),
         ("^admin_health$", admin_health_callback),
@@ -227,7 +241,6 @@ def create_application() -> Application:
         ("^admin_retry_failing$", admin_retry_failing_callback),
         ("^adm_upgr:", admin_upgrade_perform_callback),
         ("^buy_plan:", buy_plan_callback),
-        ("^add_group_prompt$", add_group_prompt),
         ("^set_interval_prompt$", set_interval_prompt),
         ("^set_responder_text_prompt$", set_responder_text_prompt),
         ("^redeem_code$", redeem_code_callback),

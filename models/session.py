@@ -35,6 +35,7 @@ async def create_session(
             "phone": phone,
             "created_at": now,
             "current_msg_index": 0,
+            "is_active": True,
         },
     }
 
@@ -165,3 +166,21 @@ async def get_session_paused_until(user_id: int, phone: str) -> Optional[datetim
     db = get_database()
     doc = await db.sessions.find_one({"user_id": user_id, "phone": phone})
     return doc.get("paused_until") if doc else None
+
+
+async def toggle_session_ads(user_id: int, phone: str, is_active: bool):
+    """Toggle ads for a specific account."""
+    db = get_database()
+    await db.sessions.update_one(
+        {"user_id": user_id, "phone": phone},
+        {"$set": {"is_active": is_active}}
+    )
+
+
+async def update_session_original_name(user_id: int, phone: str, first: str, last: str = ""):
+    """Store the original name of the account if not already stored."""
+    db = get_database()
+    await db.sessions.update_one(
+        {"user_id": user_id, "phone": phone, "original_first_name": {"$exists": False}},
+        {"$set": {"original_first_name": first, "original_last_name": last}},
+    )

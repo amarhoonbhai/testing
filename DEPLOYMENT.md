@@ -83,9 +83,9 @@ pm2 logs
 
 ## 5. Troubleshooting
 
-- **WebApp URL**: Ensure `WEBAPP_URL` in `.env` matches the actual URL you are using.
-- **MongoDB connection**: Ensure your VPS IP is whitelisted in MongoDB Atlas.
-- **Environment**: Always ensure `venv` is activated before running.
+- **MongoDB connection**: Ensure your IP is whitelisted in MongoDB Atlas.
+- **Bot Tokens**: Verify `MAIN_BOT_TOKEN` and `LOGIN_BOT_TOKEN` are unique.
+- **Environment**: Always ensure `venv` is activated (`source venv/bin/activate`).
 
 ---
 

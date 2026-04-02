@@ -2,15 +2,15 @@
 Inline keyboard builders for Main Bot.
 """
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
-from core.config import MAIN_BOT_USERNAME, CHANNEL_USERNAME, WEBAPP_URL
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from core.config import MAIN_BOT_USERNAME, CHANNEL_USERNAME
 
 
 def get_welcome_keyboard() -> InlineKeyboardMarkup:
     """Build welcome screen keyboard."""
     keyboard = [
         [
-            InlineKeyboardButton("🚀 OPEN KURUP ADS BOT", web_app=WebAppInfo(url=WEBAPP_URL)),
+            InlineKeyboardButton("🚀 Go to Dashboard", callback_data="dashboard"),
         ],
         [
             InlineKeyboardButton("📌 Join Community", url=f"https://t.me/{CHANNEL_USERNAME}"),
@@ -23,11 +23,19 @@ def get_welcome_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_dashboard_keyboard() -> InlineKeyboardMarkup:
-    """Build dashboard keyboard."""
+def get_dashboard_keyboard(is_active: bool = True) -> InlineKeyboardMarkup:
+    """Build dashboard keyboard with Start/Stop toggle."""
+    status_btn = InlineKeyboardButton("⏸ Stop Ads", callback_data="stop_ads") if is_active else InlineKeyboardButton("▶️ Start Ads", callback_data="start_ads")
+    
     keyboard = [
+        [status_btn],
         [
-            InlineKeyboardButton("🚀 OPEN KURUP ADS BOT", web_app=WebAppInfo(url=WEBAPP_URL)),
+            InlineKeyboardButton("⚙️ Settings", callback_data="manage_settings"),
+            InlineKeyboardButton("📱 Manage Accounts", callback_data="accounts_list"),
+        ],
+        [
+            InlineKeyboardButton("📊 My Stats", callback_data="user_stats"),
+            InlineKeyboardButton("🤝 Referrals", callback_data="referral"),
         ],
         [
             InlineKeyboardButton("🎁 My Plan", callback_data="my_plan"),
@@ -46,6 +54,10 @@ def get_account_selection_keyboard(sessions: list) -> InlineKeyboardMarkup:
         status = "🟢" if s.get("connected") else "🔴"
         keyboard.append([InlineKeyboardButton(f"{status} {phone}", callback_data=f"manage_account:{phone}")])
     
+    keyboard.append([
+        InlineKeyboardButton("▶️ Start All", callback_data="start_all_accounts"),
+        InlineKeyboardButton("⏸ Stop All", callback_data="stop_all_accounts"),
+    ])
     keyboard.append([InlineKeyboardButton("➕ Add Another Account", callback_data="add_account")])
     keyboard.append([InlineKeyboardButton("🔙 Back to Dashboard", callback_data="dashboard")])
     
@@ -146,6 +158,10 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🌙 Night Mode", callback_data="admin_nightmode"),
         ],
         [
+            InlineKeyboardButton("🛑 STOP ALL BOTS", callback_data="admin_stop_all"),
+            InlineKeyboardButton("▶️ START ALL BOTS", callback_data="admin_start_all"),
+        ],
+        [
             InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
         ],
     ]
@@ -201,14 +217,21 @@ def get_broadcast_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_manage_account_keyboard(phone: str) -> InlineKeyboardMarkup:
-    """Build manage account keyboard."""
+def get_manage_account_keyboard(phone: str, is_active: bool = True) -> InlineKeyboardMarkup:
+    """Build manage account keyboard with individual Start/Stop ads toggle and group management."""
+    status_btn = InlineKeyboardButton("⏸ Stop Account Ads", callback_data=f"stop_acc_ads:{phone}") if is_active else InlineKeyboardButton("▶️ Start Account Ads", callback_data=f"start_acc_ads:{phone}")
+    
     keyboard = [
+        [status_btn],
+        [
+            InlineKeyboardButton("👥 Manage Groups", callback_data=f"manage_groups_acc:{phone}"),
+            InlineKeyboardButton("➕ Add Groups", callback_data=f"add_groups_acc:{phone}"),
+        ],
         [
             InlineKeyboardButton("🔌 Disconnect Session", callback_data=f"disconnect_account:{phone}"),
         ],
         [
-            InlineKeyboardButton("🔙 Back", callback_data="accounts_list"),
+            InlineKeyboardButton("🔙 Back to Accounts", callback_data="accounts_list"),
             InlineKeyboardButton("🏠 Home", callback_data="home"),
         ],
     ]
@@ -264,13 +287,9 @@ def get_night_mode_settings_keyboard() -> InlineKeyboardMarkup:
 GROUPS_PER_PAGE = 8
 
 
-def get_manage_groups_keyboard(groups: list, page: int = 0) -> InlineKeyboardMarkup:
+def get_manage_groups_acc_keyboard(groups: list, phone: str, page: int = 0) -> InlineKeyboardMarkup:
     """
-    Paginated group manager keyboard.
-    Shows GROUPS_PER_PAGE groups per page with:
-      - ✅/⛔ toggle (enable/disable)
-      - ❌ remove
-    Plus: prev/next page navigation and Add Group button.
+    Paginated group manager keyboard for a specific account.
     """
     keyboard = []
     total = len(groups)
@@ -280,7 +299,6 @@ def get_manage_groups_keyboard(groups: list, page: int = 0) -> InlineKeyboardMar
     start = page * GROUPS_PER_PAGE
     page_groups = groups[start: start + GROUPS_PER_PAGE]
 
-    # ── Group rows ──────────────────────────────────────────────────────────
     for g in page_groups:
         title = g.get("chat_title", "Unknown")
         chat_id = g.get("chat_id")
@@ -291,42 +309,37 @@ def get_manage_groups_keyboard(groups: list, page: int = 0) -> InlineKeyboardMar
         keyboard.append([
             InlineKeyboardButton(
                 f"{toggle_icon} {display}",
-                callback_data=f"group_toggle:{chat_id}:{page}"
+                callback_data=f"grp_tgl:{chat_id}:{phone}:{page}"
             ),
             InlineKeyboardButton(
-                "🗑", callback_data=f"remove_group_ui:{chat_id}:{page}"
+                "🗑", callback_data=f"grp_del:{chat_id}:{phone}:{page}"
             ),
         ])
 
-    # ── Pagination row ──────────────────────────────────────────────────────
     nav_row = []
     if page > 0:
-        nav_row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"groups_page:{page-1}"))
+        nav_row.append(InlineKeyboardButton("◀️ Prev", callback_data=f"grp_pg:{phone}:{page-1}"))
     nav_row.append(InlineKeyboardButton(f"📄 {page+1}/{total_pages}", callback_data="noop"))
     if page < total_pages - 1:
-        nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"groups_page:{page+1}"))
+        nav_row.append(InlineKeyboardButton("Next ▶️", callback_data=f"grp_pg:{phone}:{page+1}"))
     if nav_row:
         keyboard.append(nav_row)
 
-    # ── Action row ──────────────────────────────────────────────────────────
     keyboard.append([
-        InlineKeyboardButton("➕ Add Groups", callback_data="add_group_prompt"),
-        InlineKeyboardButton("🗑 Clear All", callback_data="confirm_clear_groups"),
+        InlineKeyboardButton("➕ Add Groups", callback_data=f"add_groups_acc:{phone}"),
+        InlineKeyboardButton("🗑 Clear All", callback_data=f"grp_clr_confirm:{phone}"),
     ])
     keyboard.append([
-        InlineKeyboardButton(f"📊 {total} groups total", callback_data="noop"),
-    ])
-    keyboard.append([
-        InlineKeyboardButton("🔙 Dashboard", callback_data="dashboard"),
+        InlineKeyboardButton("🔙 Back to Account", callback_data=f"manage_account:{phone}"),
     ])
 
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
+def get_confirm_clear_groups_acc_keyboard(phone: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚠️ YES, Remove All", callback_data="clear_groups_confirmed")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="manage_groups:0")],
+        [InlineKeyboardButton("⚠️ YES, Remove All", callback_data=f"grp_clr_done:{phone}")],
+        [InlineKeyboardButton("❌ Cancel", callback_data=f"manage_groups_acc:{phone}")],
     ])
 
 
@@ -336,7 +349,6 @@ def get_manage_settings_keyboard(config: dict, is_branded: bool = True) -> Inlin
     copy_status = "🟢 ON" if config.get("copy_mode") else "⚫ OFF"
     responder_status = "🟢 ON" if config.get("auto_reply_enabled") else "⚫ OFF"
     
-    # Add lock icons if not branded
     s_lock = "" if is_branded else " 🔒"
     c_lock = "" if is_branded else " 🔒"
     r_lock = "" if is_branded else " 🔒"
@@ -365,7 +377,7 @@ def get_manage_settings_keyboard(config: dict, is_branded: bool = True) -> Inlin
 
 
 def get_guide_keyboard() -> InlineKeyboardMarkup:
-    """Build keyboard for the main help screen — includes button to open the full guide."""
+    """Build keyboard for the main help screen."""
     keyboard = [
         [
             InlineKeyboardButton("📖 Beginner's Guide", callback_data="guide"),

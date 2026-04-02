@@ -54,48 +54,50 @@ def build_connection_success_text(phone: str, plan: dict) -> str:
 def parse_group_entry(entry: str):
     """
     Parse any supported group link format and return (chat_id, chat_username, title).
+    Handles:
+    - @username
+    - https://t.me/username
+    - https://t.me/+Hash (Private)
+    - https://t.me/joinchat/Hash (Private Legacy)
+    - -100123456789 (Numeric ID)
+    - https://t.me/c/12345678/1 (Private with ID)
     """
     import hashlib
     entry = entry.strip()
 
-    # Raw numeric ID (e.g. -1001234567890)
+    # 1. Raw numeric ID (e.g. -1001234567890)
     if re.match(r'^-?\d+$', entry):
         chat_id = int(entry)
-        return chat_id, None, str(chat_id)
+        return chat_id, None, f"Group {chat_id}"
 
-    # @username
-    if entry.startswith("@"):
-        slug = entry[1:].split('?')[0].strip()
-        chat_id = slug_to_id(slug)
-        return chat_id, slug, slug
-
-    # tg://resolve?domain=name
-    tg_match = re.match(r'tg://resolve\?domain=([\w_]+)', entry)
-    if tg_match:
-        slug = tg_match.group(1)
-        return slug_to_id(slug), slug, slug
-
-    # https://t.me/addlist/... (folder links)
-    if 't.me/addlist/' in entry:
-        slug = entry.split('addlist/')[-1].split('?')[0].strip('/')
-        # Store folder links with a recognisable fake numeric ID
-        chat_id = abs(hash(f"folder:{slug}")) % 10**12 * -1
-        return chat_id, None, f"[Folder] {slug}"
-
-    # https://t.me/+Hash (private invite)
-    plus_match = re.search(r't\.me/\+([A-Za-z0-9_\-]+)', entry)
-    if plus_match:
-        invite_hash = plus_match.group(1)
+    # 2. Private Invite Links (t.me/+Hash or t.me/joinchat/Hash)
+    private_match = re.search(r'(t\.me/|tg://join\?invite=)(\+?|joinchat/)([A-Za-z0-9_\-]+)', entry)
+    if private_match:
+        invite_hash = private_match.group(3)
+        # We store a deterministic fake ID for internal tracking if it's not a join link that gives us the ID
         chat_id = abs(hash(f"invite:{invite_hash}")) % 10**12 * -1
-        return chat_id, None, f"[Private] +{invite_hash[:12]}"
+        return chat_id, None, f"[Private] +{invite_hash[:10]}"
 
-    # https://t.me/username (public)
-    public_match = re.search(r't\.me/([A-Za-z][\w_]{3,})', entry)
-    if public_match:
-        slug = public_match.group(1)
-        return slug_to_id(slug), slug, slug
+    # 3. Private Link with ID (https://t.me/c/123456789/1)
+    cid_match = re.search(r't\.me/c/(\d+)', entry)
+    if cid_match:
+        chat_id = -int(f"100{cid_match.group(1)}") # Format for channel/supergroup IDs
+        return chat_id, None, f"Group {chat_id}"
 
-    raise ValueError("Unrecognized link format")
+    # 4. Public @username or t.me/username
+    # Strip protocols and domain
+    slug = entry
+    if 't.me/' in slug:
+        slug = slug.split('t.me/')[-1]
+    if 'tg://resolve?domain=' in slug:
+        slug = slug.split('domain=')[-1]
+    slug = slug.lstrip('@').split('?')[0].split('/')[0].strip()
+
+    if re.match(r'^[A-Za-z][\w_]{3,}$', slug):
+        chat_id = slug_to_id(slug)
+        return chat_id, slug, f"@{slug}"
+
+    raise ValueError(f"Unrecognized link format: {entry}")
 
 
 def slug_to_id(slug: str) -> int:

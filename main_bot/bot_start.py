@@ -1,7 +1,7 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from core.config import MAIN_BOT_TOKEN, WEBAPP_URL
+from core.config import MAIN_BOT_TOKEN
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -10,21 +10,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /start command – send a welcome message with a Web App button."""
+    """Handle /start command – send a welcome message."""
     welcome_text = (
-        "🚀 *Welcome to Kurup Ads Bot!*\n"
-        "Manage your accounts, plans, and settings via our Web App.\n"
-        "Click the button below to open it."
+        "🚀 *Welcome to Kurup Ads Bot!*\n\n"
+        "The bot is currently being updated to the classic version.\n"
+        "Please wait a moment while we restore the full interface."
     )
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(
-                "Open Web App",
-                web_app=WebAppInfo(url=WEBAPP_URL),
-            )
-        ]
-    ])
-    await update.message.reply_text(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
+    await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 async def main() -> None:
     app = ApplicationBuilder().token(MAIN_BOT_TOKEN).build()

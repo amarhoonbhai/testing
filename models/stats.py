@@ -97,3 +97,54 @@ async def get_account_stats(user_id: int, phone: str) -> Dict[str, Any]:
         "success_rate": rate,
         "total_sent": total_sent
     }
+
+async def get_user_profile_data(user_id: int) -> Dict[str, Any]:
+    """Aggregate all user data for the dashboard with extended metrics."""
+    db = get_database()
+    cutoff_24h = datetime.utcnow() - timedelta(days=1)
+    
+    # Basic counts
+    total_groups = await db.groups.count_documents({"user_id": user_id})
+    active_groups = await db.groups.count_documents({"user_id": user_id, "enabled": True})
+    
+    # Sends in last 24h
+    sent_24h = await db.job_logs.count_documents({
+        "user_id": user_id, "status": "sent", "timestamp": {"$gt": cutoff_24h}
+    })
+    
+    # Success rate in last 24h
+    total_24h = await db.job_logs.count_documents({
+        "user_id": user_id, "timestamp": {"$gt": cutoff_24h}
+    })
+    success_rate_24h = int((sent_24h / total_24h * 100)) if total_24h > 0 else 100
+    
+    # Total sent ever
+    total_sent = await db.sessions.aggregate([
+        {"$match": {"user_id": user_id}},
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$total_sent", 0]}}}}
+    ]).to_list(length=1)
+    total_sum = total_sent[0]["total"] if total_sent else 0
+
+    sessions = await db.sessions.find({"user_id": user_id}).to_list(length=100)
+    user = await db.users.find_one({"user_id": user_id})
+    config = await db.user_configs.find_one({"user_id": user_id})
+    
+    return {
+        "user_id": user_id,
+        "user": user,
+        "config": config,
+        "sessions": sessions,
+        "total_groups": total_groups,
+        "active_groups": active_groups,
+        "sent_24h": sent_24h,
+        "success_rate": success_rate_24h,
+        "total_sent": total_sum,
+        "success_rate_24h": success_rate_24h
+    }
+
+async def get_active_workers() -> List[Dict[str, Any]]:
+    """Get list of active workers that reported heartbeat in the last 2 minutes."""
+    db = get_database()
+    cutoff = datetime.utcnow() - timedelta(minutes=2)
+    cursor = db.worker_status.find({"last_seen": {"$gt": cutoff}})
+    return await cursor.to_list(length=100)

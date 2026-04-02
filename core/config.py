@@ -30,7 +30,6 @@ def _safe_float(value: str, default: float = 1.0) -> float:
 # ── Bot Tokens ──────────────────────────────────────────────────────────────
 
 MAIN_BOT_TOKEN: str = os.getenv("MAIN_BOT_TOKEN", "")
-WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://cinetimetv.store")
 
 # ── Bot Usernames ───────────────────────────────────────────────────────────
 
