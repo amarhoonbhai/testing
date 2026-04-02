@@ -10,9 +10,9 @@ start "Main Bot" cmd /k "python -m main_bot.bot"
 :: Wait a moment
 timeout /t 2 /nobreak > nul
 
-:: Start Login Bot
-echo Starting Login Bot...
-start "Login Bot" cmd /k "python -m login_bot.bot"
+:: Start WebApp
+echo Starting KURUP ADS WebApp...
+start "WebApp" cmd /k "python webapp/server.py"
 
 :: Wait a moment
 timeout /t 2 /nobreak > nul

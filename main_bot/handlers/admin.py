@@ -16,7 +16,7 @@ from main_bot.utils.keyboards import (
 )
 from core.config import (
     PLAN_PRICES, PLAN_DURATIONS, TRIAL_DAYS, OWNER_ID,
-    MAIN_BOT_TOKEN, LOGIN_BOT_TOKEN
+    MAIN_BOT_TOKEN
 )
 from shared.utils import escape_markdown
 from models.plan import extend_plan, activate_plan, get_plan

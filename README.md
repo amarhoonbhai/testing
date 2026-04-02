@@ -1,30 +1,30 @@
-# Group Message Scheduler V3.3
+# KURUP ADS BOT 🚀
+The ultimate premium Telegram ad automation system. 
 
-A premium Telegram system that auto-forwards Saved Messages to up to 15 groups with safe delays and fixed night mode.
+A unified platform to manage multiple Telegram accounts, target groups, and automated ad campaigns through a powerful **Telegram WebApp**.
 
-## Features
+## ✨ Features
+- 🚀 **Unified WebApp** - Manage groups, accounts, and settings in one place.
+- 🛡️ **Anti-Freeze Algorithm** - Human-like behavior, spintax, and auto-pauses to prevent bans.
+- ⏳ **Master Control** - Global Start/Stop toggle for all your campaigns.
+- 💎 **Premium Dashboard** - Real-time stats and live session monitor.
+- 🔐 **Secure Login** - Interactive OTP & 2FA linking directly in the WebApp.
 
-- ✨ **Main Bot** - Rich Dashboard, Plans, Referral, Admin
-- 🔐 **Login Bot** - Secure Account linking via OTP + 2FA
-- 🚀 **Worker Service** - Premium Auto-forward with safety rules
+## 🛠️ Quick Start (One-Click Deploy)
 
-## Quick Start
-
-### 1. Install Dependencies
-
+**Linux (VPS):**
 ```bash
-pip install -r requirements.txt
+chmod +x setup.sh && ./setup.sh
 ```
 
-### 2. Configure Environment
+**Windows (Local):**
+Double-click `setup.bat`.
 
-Copy `.env.example` to `.env` and fill in your values:
+### Manual Configuration
+1. Install dependencies: `pip install -r requirements.txt`
+2. Configure `.env` with your `MAIN_BOT_TOKEN`, `WEBAPP_URL`, and `MONGODB_URI`.
 
-```bash
-cp .env.example .env
-```
-
-### 3. Run the Bots
+### 3. Run the Services
 
 **Windows:**
 ```bash
@@ -37,43 +37,19 @@ chmod +x scripts/start_all.sh
 ./scripts/start_all.sh
 ```
 
-Or run each component separately:
+## 🏗️ Architecture
+- **Main Bot**: Gateway to the WebApp dashboard.
+- **WebApp**: Central command center for management.
+- **Worker Service**: High-performance background message dispatcher.
+- **Sender**: Heartbeat service managing job execution and flood-waits.
 
-```bash
-# Terminal 1 - Main Bot
-python -m main_bot.bot
-
-# Terminal 2 - Login Bot
-python -m login_bot.bot
-
-# Terminal 3 - Worker
-python -m worker.worker
-```
-
-## Configuration
-
+## ⚙️ Configuration
 | Variable | Description |
 |----------|-------------|
-| `MAIN_BOT_TOKEN` | Main Bot API token from @BotFather |
-| `LOGIN_BOT_TOKEN` | Login Bot API token |
-| `MAIN_BOT_USERNAME` | Main Bot username (without @) |
-| `LOGIN_BOT_USERNAME` | Login Bot username |
-| `API_ID` | Telegram API ID from my.telegram.org |
-| `API_HASH` | Telegram API Hash |
+| `MAIN_BOT_TOKEN` | Token for your KURUP ADS HUB bot |
+| `WEBAPP_URL` | URL for the Telegram Mini App |
 | `OWNER_ID` | Your Telegram user ID |
 | `MONGODB_URI` | MongoDB Atlas connection string |
 
-## Scheduling Rules
-
-| Rule | Value |
-|------|-------|
-| Max groups per user | 15 |
-| Group gap | 10 seconds |
-| Message gap | 120 seconds |
-| Min user interval | 15 minutes |
-| Default interval | 15 minutes |
-| Night mode | 00:00–06:00 IST (fixed) |
-
-## License
-
+## ⚖️ License
 MIT

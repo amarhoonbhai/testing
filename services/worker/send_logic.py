@@ -33,8 +33,14 @@ from telethon.errors import (
 
 from models.group import remove_group, toggle_group, mark_group_failing, clear_group_fail
 from models.job import log_job_event
+from models.session import pause_session
+from shared.spintax import parse_spintax
 
 logger = logging.getLogger(__name__)
+
+def make_unique(text: str) -> str:
+    """Appends a random number of zero-width spaces to make message hash unique."""
+    return text + ("\u200b" * random.randint(1, 4))
 
 
 async def send_message_to_group(
@@ -152,16 +158,24 @@ async def send_message_to_group(
                                     "failing", "Entity Not Found")
                 return ("failing", 0)
 
-        # ── 2. Human-like typing (short) ────────────────────────────────
-        if random.random() > 0.3:  # 70% chance
+        # ── 2. Human-like interactions ──────────────────────────────────
+        # 2a. Mark as read (looks like a person opened the chat)
+        try:
+            await client.send_read_acknowledge(entity)
+            await asyncio.sleep(random.uniform(1.0, 3.0))
+        except Exception:
+            pass
+
+        # 2b. Human-like typing
+        if random.random() > 0.1:  # 90% chance
             try:
                 async with client.action(entity, "typing"):
-                    await asyncio.sleep(random.uniform(1.0, 2.5))
+                    await asyncio.sleep(random.uniform(2.5, 6.0))
             except Exception:
                 pass
 
-        # ── 3. Micro-delay ──────────────────────────────────────────────
-        await asyncio.sleep(random.uniform(0.3, 1.0))
+        # ── 3. Micro-delay (Human thinking time) ────────────────────────
+        await asyncio.sleep(random.uniform(0.5, 2.0))
 
         # ── 4. Send the message ─────────────────────────────────────────
         if copy_mode:
@@ -175,9 +189,12 @@ async def send_message_to_group(
                 await log_job_event(job_id, user_id, phone, group_id, message_id,
                                     "skipped", "Empty message")
                 return ("failed", 0)
+            msg_text = parse_spintax(saved_msg.text or "")
+            msg_text = make_unique(msg_text)
+            
             await client.send_message(
                 entity=entity,
-                message=saved_msg.text or "",
+                message=msg_text,
                 file=saved_msg.media or None,
                 formatting_entities=saved_msg.entities if saved_msg.text else None,
                 link_preview=False,
@@ -202,10 +219,11 @@ async def send_message_to_group(
         return ("flood", e.seconds)
 
     except PeerFloodError:
-        logger.error(f"🚨 PeerFlood on group {group_id} — account restricted!")
+        logger.error(f"🚨 PeerFlood on group {group_id} — account restricted! Pausing for 24h.")
+        asyncio.create_task(pause_session(user_id, phone, duration_hours=24))
         await log_job_event(job_id, user_id, phone, group_id, message_id,
-                            "flood", "PeerFlood")
-        return ("flood", 7200)  # 2-hour cooldown
+                            "flood", "PeerFlood (Auto-Paused 24h)")
+        return ("flood", 7200)  # 2-hour cooldown for this specific worker loop
 
     except (ChannelInvalidError, UsernameNotOccupiedError,
             UsernameInvalidError, InviteHashExpiredError) as e:

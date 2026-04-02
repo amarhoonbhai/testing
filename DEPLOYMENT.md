@@ -1,11 +1,12 @@
-# Deployment Guide (Standard Setup)
+# Deployment Guide (Standard Setup): KURUP ADS BOT 🚀
 
-This guide walks you through deploying the Group Message Scheduler directly on your system (VPS or local machine) using **Python**.
+This guide walks you through deploying the premium KURUP ADS system directly on your local machine or VPS using **Python**.
 
 ## Prerequisites
 - **Python 3.10+**
-- **MongoDB Atlas** URI (or local MongoDB)
+- **MongoDB Atlas** URI
 - **API ID** & **API Hash** (from [my.telegram.org](https://my.telegram.org))
+- **A Domain or Public IP** (for the WebApp)
 
 ---
 
@@ -18,7 +19,7 @@ cd message
 
 # Create a virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\\Scripts\\activate
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -33,10 +34,10 @@ pip install -r requirements.txt
    cp .env.example .env
    ```
 2. Edit `.env` and fill in your details:
-   - `MAIN_BOT_TOKEN`, `LOGIN_BOT_TOKEN`
-   - `API_ID`, `API_HASH`
-   - `MONGODB_URI`
-   - `OWNER_ID`
+   - `MAIN_BOT_TOKEN`: Your primary bot token.
+   - `WEBAPP_URL`: The URL where your WebApp will be accessible.
+   - `MONGODB_URI`: Your MongoDB Atlas connection string.
+   - `OWNER_ID`: Your Telegram user ID.
 
 ---
 
@@ -44,14 +45,14 @@ pip install -r requirements.txt
 
 You need to run **three separate processes**. It is recommended to use `screen`, `tmux`, or `pm2` to keep them running in the background.
 
-### Term 1: Main Bot (User Dashboard)
+### Term 1: Main Bot (Gateway)
 ```bash
 python -m main_bot.bot
 ```
 
-### Term 2: Login Bot (Account Connection)
+### Term 2: WebApp API (Command Center)
 ```bash
-python -m login_bot.bot
+python webapp/server.py
 ```
 
 ### Term 3: Sender Service (Heartbeat & Execution)
@@ -70,9 +71,9 @@ If you have `Node.js` installed, you can use `pm2` to manage the processes:
 npm install -g pm2
 
 # Start all services
-pm2 start "python -m main_bot.bot" --name main_bot
-pm2 start "python -m login_bot.bot" --name login_bot
-pm2 start "python -m services.sender.sender" --name sender
+pm2 start "python -m main_bot.bot" --name kurup_bot
+pm2 start "python webapp/server.py" --name kurup_webapp
+pm2 start "python -m services.sender.sender" --name kurup_sender
 
 # Monitor logs
 pm2 logs
@@ -82,6 +83,11 @@ pm2 logs
 
 ## 5. Troubleshooting
 
+- **WebApp URL**: Ensure `WEBAPP_URL` in `.env` matches the actual URL you are using.
 - **MongoDB connection**: Ensure your VPS IP is whitelisted in MongoDB Atlas.
-- **Port issues**: Ensure the machine has access to necessary ports (default MongoDB/HTTPS).
 - **Environment**: Always ensure `venv` is activated before running.
+
+---
+
+## Support
+Join [@PHilobots](https://t.me/PHilobots) on Telegram for updates and assistance.

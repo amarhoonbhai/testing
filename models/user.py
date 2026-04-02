@@ -80,7 +80,7 @@ async def get_user_config(user_id: int) -> dict:
             "interval_min": DEFAULT_INTERVAL_MINUTES,
             "shuffle_mode": False,
             "copy_mode": False,
-            "send_mode": "sequential",
+            "is_active": True,
             "auto_reply_enabled": False,
             "auto_reply_text": "Hello! I am currently away. (Auto-reply)",
         }

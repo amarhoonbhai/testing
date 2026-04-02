@@ -8,9 +8,9 @@ if [ -f logs/main_bot.pid ]; then
     kill $MAIN_BOT_PID 2>/dev/null && echo "Stopped Main Bot (PID: $MAIN_BOT_PID)"
 fi
 
-if [ -f logs/login_bot.pid ]; then
-    LOGIN_BOT_PID=$(cat logs/login_bot.pid)
-    kill $LOGIN_BOT_PID 2>/dev/null && echo "Stopped Login Bot (PID: $LOGIN_BOT_PID)"
+if [ -f logs/webapp.pid ]; then
+    WEBAPP_PID=$(cat logs/webapp.pid)
+    kill $WEBAPP_PID 2>/dev/null && echo "Stopped WebApp (PID: $WEBAPP_PID)"
 fi
 
 if [ -f logs/worker.pid ]; then

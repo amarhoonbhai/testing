@@ -128,6 +128,26 @@ async def mark_session_disabled(user_id: int, phone: str, reason: str):
     )
 
 
+
+async def pause_session(user_id: int, phone: str, duration_hours: int = 24):
+    """Temporarily pause a session (auto-cooldown)."""
+    db = get_database()
+    paused_until = datetime.utcnow() + timedelta(hours=duration_hours)
+    await db.sessions.update_one(
+        {"user_id": user_id, "phone": phone},
+        {"$set": {"paused_until": paused_until}}
+    )
+
+
+async def is_session_paused(user_id: int, phone: str) -> bool:
+    """Check if session is currently in cooldown."""
+    db = get_database()
+    doc = await db.sessions.find_one({"user_id": user_id, "phone": phone})
+    if not doc or "paused_until" not in doc:
+        return False
+    return datetime.utcnow() < doc["paused_until"]
+
+
 async def reset_session_auth_fails(user_id: int, phone: str):
     """Clear auth failure counter after successful connection."""
     db = get_database()

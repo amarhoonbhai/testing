@@ -15,11 +15,11 @@ echo "  PID: $MAIN_BOT_PID"
 
 sleep 1
 
-# 2. Start Login Bot
-echo "Starting Login Bot..."
-python -m login_bot.bot > logs/login_bot.log 2>&1 &
-LOGIN_BOT_PID=$!
-echo "  PID: $LOGIN_BOT_PID"
+# 2. Start WebApp
+echo "Starting KURUP ADS WebApp..."
+python webapp/server.py > logs/webapp.log 2>&1 &
+WEBAPP_PID=$!
+echo "  PID: $WEBAPP_PID"
 
 sleep 1
 
@@ -53,7 +53,7 @@ echo "Press Ctrl+C at any time to stop them all."
 echo ""
 
 # Wait for all background processes (keeps terminal open)
-wait $MAIN_BOT_PID $LOGIN_BOT_PID $SCHEDULER_PID $WORKER_PID $LISTENER_PID
+wait $MAIN_BOT_PID $WEBAPP_PID $SCHEDULER_PID $WORKER_PID $LISTENER_PID
 
 # Cleanup hook when Ctrl+C is pressed
-trap "echo 'Stopping all services...'; kill -SIGINT $MAIN_BOT_PID $LOGIN_BOT_PID $SCHEDULER_PID $WORKER_PID $LISTENER_PID" SIGINT SIGTERM
+trap "echo 'Stopping all services...'; kill -SIGINT $MAIN_BOT_PID $WEBAPP_PID $SCHEDULER_PID $WORKER_PID $LISTENER_PID" SIGINT SIGTERM

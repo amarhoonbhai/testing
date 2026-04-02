@@ -16,11 +16,13 @@ import platform
 
 from core.logger import setup_service_logging
 from core.database import init_database, close_connection
+from models.user import get_user_config
 from core.config import SCHEDULER_POLL_INTERVAL, SEND_DELAY_MIN, SEND_DELAY_MAX
 from models.job import (
     get_pending_jobs, claim_job, complete_job, fail_job, 
     upsert_worker_heartbeat
 )
+from models.session import is_session_paused
 from services.worker.session_pool import SessionPool
 from services.worker.send_logic import send_message_to_group
 
@@ -109,6 +111,19 @@ class UnifiedSender:
         logger.info(f"\u2023 K\u1d1c\u0280\u1d1c\u1d18 A\u1d05s \u2502 Processing job {job_id} for {phone} ({len(groups)} groups)")
 
         try:
+            # Check if global ads are enabled
+            config = await get_user_config(user_id)
+            if not config.get('is_active', True):
+                logger.warning(f"⏸ Skipping job {job_id} for {phone}: Ads are globally STOPPED by user.")
+                await fail_job(job_id, "Campaign Stopped (Manual)")
+                return
+
+            # Check if session is paused (auto-cooldown)
+            if await is_session_paused(user_id, phone):
+                logger.warning(f"⏩ Skipping job {job_id} for {phone}: Account is in cooldown/paused.")
+                await fail_job(job_id, "Account in Cooldown (Auto-Paused)")
+                return
+
             client = await self._session_pool.acquire(user_id, phone)
 
             sent_count = 0

@@ -2,37 +2,22 @@
 Inline keyboard builders for Main Bot.
 """
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from core.config import MAIN_BOT_USERNAME, CHANNEL_USERNAME, LOGIN_BOT_USERNAME
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from core.config import MAIN_BOT_USERNAME, CHANNEL_USERNAME, WEBAPP_URL
 
 
 def get_welcome_keyboard() -> InlineKeyboardMarkup:
     """Build welcome screen keyboard."""
     keyboard = [
         [
-            InlineKeyboardButton("➕ Add Account", callback_data="add_account"),
-            InlineKeyboardButton("📊 Open Dashboard", callback_data="dashboard"),
-        ],
-        [
-            InlineKeyboardButton("🎁 My Plan", callback_data="my_plan"),
-            InlineKeyboardButton("🤝 Refer & Earn", callback_data="referral"),
+            InlineKeyboardButton("🚀 OPEN KURUP ADS BOT", web_app=WebAppInfo(url=WEBAPP_URL)),
         ],
         [
             InlineKeyboardButton("📌 Join Community", url=f"https://t.me/{CHANNEL_USERNAME}"),
+            InlineKeyboardButton("📊 Stats", callback_data="user_stats"),
+        ],
+        [
             InlineKeyboardButton("📘 Help & Docs", callback_data="help"),
-        ],
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-
-def get_add_account_keyboard() -> InlineKeyboardMarkup:
-    """Build add account screen keyboard."""
-    keyboard = [
-        [
-            InlineKeyboardButton("🚀 Continue to Login Bot", url=f"https://t.me/{LOGIN_BOT_USERNAME}"),
-        ],
-        [
-            InlineKeyboardButton("🏠 Back to Home", callback_data="home"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -42,24 +27,11 @@ def get_dashboard_keyboard() -> InlineKeyboardMarkup:
     """Build dashboard keyboard."""
     keyboard = [
         [
-            InlineKeyboardButton("➕ Add Account", callback_data="add_account"),
-            InlineKeyboardButton("⚙️ Manage Accounts", callback_data="accounts_list"),
+            InlineKeyboardButton("🚀 OPEN KURUP ADS BOT", web_app=WebAppInfo(url=WEBAPP_URL)),
         ],
         [
-            InlineKeyboardButton("👥 Manage Groups", callback_data="manage_groups"),
-            InlineKeyboardButton("🛠️ Manage Settings", callback_data="manage_settings"),
-        ],
-        [
-            InlineKeyboardButton("🎁 My Plan / Status", callback_data="my_plan"),
-            InlineKeyboardButton("🤝 Refer & Earn", callback_data="referral"),
-        ],
-        [
-            InlineKeyboardButton("🧾 Redeem Promo Code", callback_data="redeem_code"),
-            InlineKeyboardButton("📘 Help & Docs", callback_data="help"),
-        ],
-        [
-            InlineKeyboardButton("📊 My Stats", callback_data="user_stats"),
-            InlineKeyboardButton("🏠 Back to Home", callback_data="home"),
+            InlineKeyboardButton("🎁 My Plan", callback_data="my_plan"),
+            InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
         ],
     ]
     return InlineKeyboardMarkup(keyboard)

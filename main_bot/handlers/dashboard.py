@@ -22,7 +22,7 @@ from core.config import (
     MIN_INTERVAL_MINUTES, MAX_GROUPS_PER_USER,
     BRANDING_NAME, BRANDING_BIO, OWNER_ID
 )
-from shared.utils import escape_markdown
+from shared.utils import escape_markdown, parse_group_entry
 
 # Conversation states
 WAITING_GROUP_URL = 10
@@ -481,7 +481,7 @@ async def receive_group_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     for entry in lines:
         try:
-            chat_id, chat_username, title = _parse_group_entry(entry)
+            chat_id, chat_username, title = parse_group_entry(entry)
             result = await add_group(user_id, chat_id, title, chat_username=chat_username)
             if result is not None:
                 added.append(title)
@@ -510,70 +510,6 @@ async def receive_group_url(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-def _parse_group_entry(entry: str):
-    """
-    Parse any supported group link format and return (chat_id, chat_username, title).
-
-    Supported:
-    - https://t.me/username          -> public group
-    - https://t.me/+HashAbc123       -> private group invite
-    - https://t.me/addlist/HashAbc   -> folder link (stored as folder)
-    - @username                      -> public group
-    - -1001234567890                 -> raw numeric chat ID
-    - tg://resolve?domain=name       -> tg deep link
-    """
-    import re
-
-    entry = entry.strip()
-
-    # Raw numeric ID (e.g. -1001234567890)
-    if re.match(r'^-?\d+$', entry):
-        chat_id = int(entry)
-        return chat_id, None, str(chat_id)
-
-    # @username
-    if entry.startswith("@"):
-        slug = entry[1:].split('?')[0].strip()
-        chat_id = _slug_to_id(slug)
-        return chat_id, slug, slug
-
-    # tg://resolve?domain=name
-    tg_match = re.match(r'tg://resolve\?domain=([\w_]+)', entry)
-    if tg_match:
-        slug = tg_match.group(1)
-        return _slug_to_id(slug), slug, slug
-
-    # https://t.me/addlist/... (folder links)
-    if 't.me/addlist/' in entry:
-        slug = entry.split('addlist/')[-1].split('?')[0].strip('/')
-        # Store folder links with a recognisable fake numeric ID
-        chat_id = abs(hash(f"folder:{slug}")) % 10**12 * -1
-        return chat_id, None, f"[Folder] {slug}"
-
-    # https://t.me/+Hash (private invite)
-    plus_match = re.search(r't\.me/\+([A-Za-z0-9_\-]+)', entry)
-    if plus_match:
-        invite_hash = plus_match.group(1)
-        chat_id = abs(hash(f"invite:{invite_hash}")) % 10**12 * -1
-        return chat_id, None, f"[Private] +{invite_hash[:12]}"
-
-    # https://t.me/username (public)
-    public_match = re.search(r't\.me/([A-Za-z][\w_]{3,})', entry)
-    if public_match:
-        slug = public_match.group(1)
-        return _slug_to_id(slug), slug, slug
-
-    raise ValueError("Unrecognized link format")
-
-
-def _slug_to_id(slug: str) -> int:
-    """Convert a public username/slug to a stable numeric ID.
-    The real ID requires a Telegram API call; we use a negative hash as
-    a placeholder that the sender service will resolve later.
-    """
-    import hashlib
-    h = int(hashlib.md5(slug.lower().encode()).hexdigest(), 16) % 10**9
-    return -int(h)  # negative = group namespace
 
 
 async def remove_group_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
