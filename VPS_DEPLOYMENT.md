@@ -115,6 +115,42 @@ sudo systemctl status kurup-bot kurup-webapp kurup-sender
 
 ---
 
+## Step 6: Public Access (Nginx Reverse Proxy)
+Since the WebApp runs on **port 8000**, you need Nginx to point your domain (`cinetimetv.store`) to the app.
+
+1. **Install Nginx:**
+   ```bash
+   sudo apt install nginx -y
+   ```
+2. **Create Config:**
+   `sudo nano /etc/nginx/sites-available/kurup`
+   ```nginx
+   server {
+       listen 80;
+       server_name cinetimetv.store;
+
+       location / {
+           proxy_pass http://127.0.0.1:8000;
+           proxy_set_header Host $host;
+           proxy_set_header X-Real-IP $remote_addr;
+       }
+   }
+   ```
+3. **Enable & Reload:**
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/kurup /etc/nginx/sites-enabled/
+   sudo nginx -t
+   sudo systemctl restart nginx
+   ```
+
+4. **SSL (REQUIRED by Telegram):**
+   ```bash
+   sudo apt install certbot python3-certbot-nginx -y
+   sudo certbot --nginx -d cinetimetv.store
+   ```
+
+---
+
 ## Useful Commands
 ```bash
 # View Live Logs

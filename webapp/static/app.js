@@ -179,7 +179,7 @@ async function refreshGroups() {
 
 async function addGroup() {
     const input = document.getElementById('group-url');
-    const url = input.value.strip();
+    const url = input.value.trim();
     if (!url) return;
 
     const res = await apiRequest('/groups/add', 'POST', { url });
