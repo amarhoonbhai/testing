@@ -15,6 +15,7 @@ async def get_global_settings() -> Dict[str, Any]:
     if not settings:
         settings = {
             "key": "global",
+            "all_bots_active": True,
             "night_mode_force": "auto",  # auto, on, off
             "updated_at": datetime.utcnow()
         }

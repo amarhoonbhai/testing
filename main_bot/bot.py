@@ -71,6 +71,8 @@ from main_bot.handlers.admin import (
     WAITING_UPGRADE_USER_ID,
     admin_group_stats_callback,
     admin_retry_failing_callback,
+    admin_stop_all_callback,
+    admin_start_all_callback,
 )
 from main_bot.handlers.help import help_callback, help_command, guide_callback
 from main_bot.handlers.account import (
@@ -238,6 +240,8 @@ def create_application() -> Application:
         ("^admin_health$", admin_health_callback),
         ("^admin_group_stats$", admin_group_stats_callback),
         ("^admin_retry_failing$", admin_retry_failing_callback),
+        ("^admin_stop_all$", admin_stop_all_callback),
+        ("^admin_start_all$", admin_start_all_callback),
         ("^adm_upgr:", admin_upgrade_perform_callback),
         ("^buy_plan:", buy_plan_callback),
         ("^set_interval_prompt$", set_interval_prompt),

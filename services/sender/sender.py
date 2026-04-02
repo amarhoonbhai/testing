@@ -49,7 +49,8 @@ class UnifiedSender:
             try:
                 # 1. Check Global Killswitch
                 global_settings = await get_global_settings()
-                if not global_settings.get("is_active", True):
+                if not global_settings.get("all_bots_active", True):
+                    logger.info("⏸ Global Killswitch ACTIVE — Sender Paused")
                     await asyncio.sleep(10)
                     continue
 
