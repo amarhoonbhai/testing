@@ -30,6 +30,7 @@ def _safe_float(value: str, default: float = 1.0) -> float:
 # ── Bot Tokens ──────────────────────────────────────────────────────────────
 
 MAIN_BOT_TOKEN: str = os.getenv("MAIN_BOT_TOKEN", "")
+LOGIN_BOT_TOKEN: str = os.getenv("LOGIN_BOT_TOKEN", "")
 
 # ── Bot Usernames ───────────────────────────────────────────────────────────
 
@@ -120,6 +121,8 @@ def validate_config(require_bots: bool = True, require_redis: bool = False):
     if require_bots:
         if not MAIN_BOT_TOKEN or "main_bot_token" in MAIN_BOT_TOKEN.lower():
             missing.append("MAIN_BOT_TOKEN")
+        if not LOGIN_BOT_TOKEN or "login_bot_token" in LOGIN_BOT_TOKEN.lower():
+            missing.append("LOGIN_BOT_TOKEN")
 
     if "username:password" in MONGODB_URI:
         missing.append("MONGODB_URI (looks like a placeholder)")
