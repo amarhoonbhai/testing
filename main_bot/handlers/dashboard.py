@@ -174,7 +174,10 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💡 *TIP:* Manage groups per account in 'Manage Accounts'!
 """
     
-    kb = get_dashboard_keyboard(is_active=config.get("is_active", True))
+    kb = get_dashboard_keyboard(
+        is_active=config.get("is_active", True),
+        include_add=(not sessions)
+    )
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.edit_message_text(dashboard_text, parse_mode="Markdown", reply_markup=kb)

@@ -15,6 +15,7 @@ from main_bot.utils.keyboards import (
     get_manage_account_keyboard, 
     get_confirm_disconnect_keyboard,
     get_back_home_keyboard,
+    get_no_accounts_keyboard,
     get_manage_groups_acc_keyboard,
     get_confirm_clear_groups_acc_keyboard
 )
@@ -52,7 +53,7 @@ async def accounts_list_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(
             text,
             parse_mode="Markdown",
-            reply_markup=get_back_home_keyboard(),
+            reply_markup=get_no_accounts_keyboard(),
         )
         return
     

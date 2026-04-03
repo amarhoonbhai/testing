@@ -23,7 +23,7 @@ def get_welcome_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_dashboard_keyboard(is_active: bool = True) -> InlineKeyboardMarkup:
+def get_dashboard_keyboard(is_active: bool = True, include_add: bool = False) -> InlineKeyboardMarkup:
     """Build dashboard keyboard with Start/Stop toggle."""
     keyboard = [
         [
@@ -39,6 +39,10 @@ def get_dashboard_keyboard(is_active: bool = True) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
         ],
     ]
+    
+    if include_add:
+        keyboard.insert(0, [InlineKeyboardButton("➕ Add Account", callback_data="add_account")])
+        
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -110,6 +114,20 @@ def get_referral_keyboard(referral_link: str) -> InlineKeyboardMarkup:
 def get_back_home_keyboard() -> InlineKeyboardMarkup:
     """Simple back and home keyboard."""
     keyboard = [
+        [
+            InlineKeyboardButton("🔙 Go Back", callback_data="dashboard"),
+            InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
+        ],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_no_accounts_keyboard() -> InlineKeyboardMarkup:
+    """Keyboard for when no accounts are connected."""
+    keyboard = [
+        [
+            InlineKeyboardButton("➕ Add Account", callback_data="add_account"),
+        ],
         [
             InlineKeyboardButton("🔙 Go Back", callback_data="dashboard"),
             InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
