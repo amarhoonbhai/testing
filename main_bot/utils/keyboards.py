@@ -184,10 +184,6 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🌙 Night Mode", callback_data="admin_nightmode"),
         ],
         [
-            InlineKeyboardButton("🛑 STOP ALL BOTS", callback_data="admin_stop_all"),
-            InlineKeyboardButton("▶️ START ALL BOTS", callback_data="admin_start_all"),
-        ],
-        [
             InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
         ],
     ]
