@@ -11,7 +11,7 @@ from telethon.errors import PasswordHashInvalidError, FloodWaitError
 
 from login_bot.handlers.otp import _login_clients
 from login_bot.utils.keyboards import get_2fa_keyboard, get_cancel_keyboard, get_success_keyboard
-from shared.utils import escape_markdown, build_connection_success_text
+from core.utils import escape_markdown, build_connection_success_text
 from models.session import create_session
 from models.user import create_user
 
@@ -75,7 +75,7 @@ async def receive_2fa_password(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Fetch the user's current plan and build success text
         from models.plan import get_plan
-        from shared.utils import build_connection_success_text
+        from core.utils import build_connection_success_text
         plan = await get_plan(user_id)
         text = build_connection_success_text(phone, plan)
         

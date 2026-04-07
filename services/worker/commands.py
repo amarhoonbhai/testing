@@ -12,7 +12,7 @@ from telethon.tl.functions.messages import ImportChatInviteRequest, GetDialogFil
 from core.database import get_database
 from models.stats import get_account_stats
 from models.group import add_group, remove_group, get_user_groups
-from shared.utils import escape_markdown, parse_group_entry
+from core.utils import escape_markdown, parse_group_entry
 from core.config import OWNER_ID
 
 logger = logging.getLogger(__name__)

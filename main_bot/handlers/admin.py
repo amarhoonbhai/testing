@@ -18,7 +18,7 @@ from core.config import (
     PLAN_PRICES, PLAN_DURATIONS, TRIAL_DAYS, OWNER_ID,
     MAIN_BOT_TOKEN
 )
-from shared.utils import escape_markdown
+from core.utils import escape_markdown
 from models.plan import extend_plan, activate_plan, get_plan
 from models.session import get_all_connected_sessions
 from models.group import get_all_failing_groups, clear_group_fail

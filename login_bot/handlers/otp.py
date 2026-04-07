@@ -291,7 +291,7 @@ async def save_session_and_complete(
 
         # Fetch the user's current plan and build success text
         from models.plan import get_plan
-        from shared.utils import build_connection_success_text
+        from core.utils import build_connection_success_text
         plan = await get_plan(user_id)
         text = build_connection_success_text(phone, plan)
         
