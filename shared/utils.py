@@ -1,7 +1,3 @@
-"""
-Shared utility functions for Group Message Scheduler.
-"""
-
 import re
 
 def escape_markdown(text: str) -> str:

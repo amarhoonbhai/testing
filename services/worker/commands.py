@@ -8,7 +8,7 @@ import asyncio
 import logging
 from telethon import events, TelegramClient, types
 from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.functions.messages import ImportChatInviteRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest, GetDialogFiltersRequest
 from core.database import get_database
 from models.stats import get_account_stats
 from models.group import add_group, remove_group, get_user_groups
@@ -73,14 +73,15 @@ def register_userbot_handlers(client: TelegramClient):
         phone = getattr(client, 'phone', None)
         
         link_list = [l.strip() for l in links.split() if l.strip()]
-        await event.edit(f"⏳ **Processing {len(link_list)} links...**")
+        await event.edit(f"⏳ **Processing {len(link_list)} groups...**")
         
-        success, failed = 0, 0
+        success_names = []
+        failed = 0
         for link in link_list:
             try:
                 chat_id, chat_username, title = parse_group_entry(link)
                 
-                # Try joining if it looks like a hash or username
+                # Try joining
                 if "+ " in title or "@" in title:
                     if "+ " in title:
                         invite_hash = title.split("+")[1]
@@ -88,20 +89,28 @@ def register_userbot_handlers(client: TelegramClient):
                     elif chat_username:
                         await client(JoinChannelRequest(chat_username))
                 
-                # Get actual chat title after joining
+                # Get actual chat title
                 try:
                     chat = await client.get_entity(chat_id if chat_id else chat_username)
                     title = chat.title
                 except: pass
                 
                 await add_group(user_id, chat_id, title, phone, chat_username=chat_username)
-                success += 1
-                await asyncio.sleep(1) # Avoid flood
+                success_names.append(title)
+                await asyncio.sleep(1)
             except Exception as e:
                 logger.error(f"Failed to add {link}: {e}")
                 failed += 1
                 
-        msg = await event.edit(f"✅ **Done!**\nAdded: `{success}`\nFailed: `{failed}`")
+        # Build "Group Added" feedback
+        if success_names:
+            summary = "\n".join([f"✅ **Group Added:** {name}" for name in success_names])
+            if failed > 0:
+                summary += f"\n❌ **Failed:** `{failed}` groups"
+            msg = await event.edit(summary)
+        else:
+            msg = await event.edit(f"❌ **Failed to add groups.** (`{failed}` errors)")
+            
         asyncio.create_task(async_delete(event, msg))
 
     @client.on(events.NewMessage(pattern=r'\.rem_failed', outgoing=True))
@@ -144,18 +153,74 @@ def register_userbot_handlers(client: TelegramClient):
         user_id = getattr(client, 'user_id', None)
         phone = getattr(client, 'phone', None)
         
-        await event.edit("⏳ **Syncing all joined groups...**")
+        await event.edit("⏳ **Syncing all current groups & forums...**")
         count = 0
         async for dialog in client.iter_dialogs():
             if dialog.is_group:
                 try:
+                    # Check if we can post before syncing
+                    perms = await client.get_permissions(dialog.entity)
+                    if not perms.send_messages:
+                        continue
+
                     chat_username = getattr(dialog.entity, 'username', None)
                     await add_group(user_id, dialog.id, dialog.name, phone, chat_username=chat_username)
                     count += 1
                 except: pass
         
-        msg = await event.edit(f"✅ **Synced!** Registered `{count}` groups to your account.")
+        msg = await event.edit(f"✅ **Synced!** Registered `{count}` groups (where you can post) to your account.")
         asyncio.create_task(async_delete(event, msg))
+
+    @client.on(events.NewMessage(pattern=r'\.sync_folder(\s.+)?', outgoing=True))
+    async def sync_folder_handler(event):
+        folder_name = event.pattern_match.group(1)
+        if not folder_name:
+            await event.edit("❌ **Usage:** `.sync_folder <name>`")
+            return
+            
+        folder_name = folder_name.strip().lower()
+        user_id = getattr(client, 'user_id', None)
+        phone = getattr(client, 'phone', None)
+        
+        await event.edit(f"⏳ **Fetching folder '{folder_name}'...**")
+        
+        try:
+            filters = await client(GetDialogFiltersRequest())
+            target_filter = None
+            for f in filters:
+                if hasattr(f, 'title') and f.title.lower() == folder_name:
+                    target_filter = f
+                    break
+            
+            if not target_filter:
+                msg = await event.edit(f"❌ **Error:** Folder '{folder_name}' not found.")
+                asyncio.create_task(async_delete(event, msg))
+                return
+                
+            count = 0
+            await event.edit(f"⏳ **Importing groups from '{target_filter.title}'...**")
+            
+            for peer in target_filter.include_peers:
+                try:
+                    entity = await client.get_entity(peer)
+                    # Only add groups/channels
+                    if isinstance(entity, (types.Chat, types.Channel)):
+                        # Check permissions
+                        perms = await client.get_permissions(entity)
+                        if not perms.send_messages: continue
+                        
+                        chat_username = getattr(entity, 'username', None)
+                        await add_group(user_id, entity.id, entity.title, phone, chat_username=chat_username)
+                        count += 1
+                except: continue
+                
+            msg = await event.edit(f"✅ **Done!** Added `{count}` groups from folder `{target_filter.title}`.")
+            asyncio.create_task(async_delete(event, msg))
+            
+        except Exception as e:
+            logger.error(f"Folder sync error: {e}")
+            msg = await event.edit(f"❌ **Error:** {str(e)}")
+            asyncio.create_task(async_delete(event, msg))
 
     @client.on(events.NewMessage(pattern=r'\.alive', outgoing=True))
     async def alive_handler(event):

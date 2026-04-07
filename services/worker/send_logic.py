@@ -100,13 +100,6 @@ async def send_message_to_group(
 
     # 3. Perform Forwarding
     try:
-        # Default: Forward from the user's "Saved Messages" (me)
-        # Note: message_id is expected to be in the user's saved messages or specified source
-        # In this simplified architecture, users send messages TO the bot, and bot stores message_id?
-        # Actually, let's assume the user sent the message to the bot, and bot forwards it.
-        # But for 'sender.py' to work, it needs access to the source message.
-        # For now, we'll try to find the last message with that ID from 'me'.
-        
         await client(ForwardMessagesRequest(
             from_peer='me',
             id=[message_id],
@@ -127,12 +120,12 @@ async def send_message_to_group(
         return "flood", e.seconds
 
     except ChatWriteForbiddenError:
-        await remove_group(user_id, group_id, phone=phone)
-        logger.info(f"[{phone}] 🗑 Auto-Removed {group_id} (No permission to post)")
+        await mark_group_failing(user_id, group_id, "ChatWriteForbidden: No permission to post here")
+        logger.info(f"[{phone}] ⏸ Paused {group_id} (No permission to post)")
         return "failed", 0
 
     except UserPrivacyRestrictedError:
-        await mark_group_failing(user_id, group_id, "Privacy restriction on forwarding")
+        await mark_group_failing(user_id, group_id, "UserPrivacyRestricted: Cannot forward due to privacy")
         return "failed", 0
     
     except UserBannedInChannelError:
@@ -146,6 +139,7 @@ async def send_message_to_group(
         return "failed", 0
 
     except Exception as e:
-        logger.error(f"[{phone}] Error sending to {group_id}: {e}")
-        await mark_group_failing(user_id, group_id, str(e))
+        err_name = type(e).__name__
+        logger.error(f"[{phone}] {err_name} sending to {group_id}: {e}")
+        await mark_group_failing(user_id, group_id, f"{err_name}: {str(e)}")
         return "failed", 0

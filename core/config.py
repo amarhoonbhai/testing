@@ -43,11 +43,7 @@ OWNER_ID: int = _safe_int(os.getenv("OWNER_ID", "0"))
 
 # ── MongoDB ─────────────────────────────────────────────────────────────────
 
-MONGODB_URI: str = os.getenv(
-    "MONGODB_URI",
-    "mongodb+srv://Spinify:xKtH3qsMhOnTH2Pd@spinifybot.bxjgzoh.mongodb.net/spinify?retryWrites=true&w=majority&appName=SpinifyBot",
-)
-MONGODB_DB_NAME: str = os.getenv("MONGODB_DB_NAME", "spinify")
+MONGODB_URI: str = os.getenv("MONGODB_URI", "")
 
 # ── MongoDB ─────────────────────────────────────────────────────────────────
 
@@ -108,28 +104,52 @@ REQUIRED_CHANNELS: list[str] = [c.strip() for c in REQUIRED_CHANNELS_STR.split("
 
 # ── Validation ──────────────────────────────────────────────────────────────
 
-def validate_config(require_bots: bool = True, require_redis: bool = False):
+def validate_config(require_bots: bool = True, require_db: bool = True):
     """
-    Validate critical configuration on startup.
-
-    Args:
-        require_bots:  True when running a bot service (main/login).
-        require_redis: True when running scheduler or worker.
+    Validate critical configuration and database connectivity on startup.
     """
     missing: list[str] = []
 
     if require_bots:
-        if not MAIN_BOT_TOKEN or "main_bot_token" in MAIN_BOT_TOKEN.lower():
+        if not MAIN_BOT_TOKEN:
             missing.append("MAIN_BOT_TOKEN")
-        if not LOGIN_BOT_TOKEN or "login_bot_token" in LOGIN_BOT_TOKEN.lower():
+        if not LOGIN_BOT_TOKEN:
             missing.append("LOGIN_BOT_TOKEN")
 
-    if "username:password" in MONGODB_URI:
-        missing.append("MONGODB_URI (looks like a placeholder)")
+    if not MONGODB_URI:
+        missing.append("MONGODB_URI")
 
     if missing:
         print("\n" + "!" * 50)
-        print(f"CRITICAL ERROR: Missing or placeholder config:\n{', '.join(missing)}")
+        print(f"CRITICAL ERROR: Missing config:\n{', '.join(missing)}")
         print("Please check your .env file.")
         print("!" * 50 + "\n")
         sys.exit(1)
+
+    if require_db:
+        from pymongo import MongoClient
+        try:
+            client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=5000)
+            client.admin.command('ping')
+            print("🚀 Database connectivity: [CONNECTED]")
+        except Exception as e:
+            print("\n" + "!" * 50)
+            print(f"CRITICAL ERROR: Database Connection Failed!\n{e}")
+            print("Please check your IP whitelist on MongoDB Atlas.")
+            print("!" * 50 + "\n")
+            sys.exit(1)
+
+def _safe_int(value: str, default: int = 0) -> int:
+    """Safely parse integer from string."""
+    try:
+        if not value: return default
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+def _safe_float(value: str, default: float = 1.0) -> float:
+    try:
+        if not value: return default
+        return float(value)
+    except (ValueError, TypeError):
+        return default

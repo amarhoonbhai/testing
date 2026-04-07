@@ -120,12 +120,28 @@ class UnifiedSender:
             if status == "sent":
                 await complete_job(job_id)
                 self._batch_counts[phone] = count + 1
-                # Inter-message delay (60-120s)
-                delay = random.randint(60, 120)
-                logger.info(f"[{phone}] Message sent to {group_id}. Waiting {delay}s...")
-                await asyncio.sleep(delay)
+                
+                # ADAPTIVE DELAY: Scale delay based on total sent
+                total_sent = session.get("total_sent", 0)
+                if total_sent < 50:
+                    base_delay = random.randint(120, 240) # Very slow for new accounts
+                elif total_sent < 500:
+                    base_delay = random.randint(60, 120)  # Standard
+                else:
+                    base_delay = random.randint(45, 90)   # Faster for established accounts
+                
+                logger.info(f"[{phone}] Message sent (Total: {total_sent}). Next in {base_delay}s...")
+                await asyncio.sleep(base_delay)
+
             elif status == "flood":
+                # Reschedule job and pause session
+                pause_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=flood_sec)
+                await db.sessions.update_one(
+                    {"user_id": user_id, "phone": phone},
+                    {"$set": {"paused_until": pause_until, "pause_reason": f"FloodWait: {flood_sec}s"}}
+                )
                 await fail_job(job_id, f"FloodWait for {flood_sec}s")
+                logger.warning(f"[{phone}] ⏸ Session paused until {pause_until}")
             else:
                 await fail_job(job_id, f"Send failed: {status}")
 
