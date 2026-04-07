@@ -44,6 +44,7 @@ OWNER_ID: int = _safe_int(os.getenv("OWNER_ID", "0"))
 # ── MongoDB ─────────────────────────────────────────────────────────────────
 
 MONGODB_URI: str = os.getenv("MONGODB_URI", "")
+MONGODB_DB_NAME: str = os.getenv("MONGODB_DB_NAME", "spinify")
 
 # ── MongoDB ─────────────────────────────────────────────────────────────────
 
