@@ -84,6 +84,9 @@ class SessionPool:
                     )
                     raise ValueError(f"Account {phone} is unauthorized")
                 
+                client.user_id = user_id
+                client.phone = phone
+                
                 self._clients[key] = client
                 return client
 

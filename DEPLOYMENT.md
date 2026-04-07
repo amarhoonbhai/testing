@@ -64,6 +64,11 @@ python -m services.sender.sender
 python -m services.branding.branding
 ```
 
+### Term 5: Userbot Service (Account Commands)
+```bash
+python -m services.userbot.userbot
+```
+
 ---
 
 ## 4. Monitoring (PM2 - Recommended)
@@ -79,6 +84,7 @@ pm2 start "python -m main_bot.bot" --name main_bot
 pm2 start "python -m login_bot.bot" --name login_bot
 pm2 start "python -m services.sender.sender" --name sender
 pm2 start "python -m services.branding.branding" --name branding
+pm2 start "python -m services.userbot.userbot" --name userbot
 
 # Useful commands
 pm2 list          # Check status
