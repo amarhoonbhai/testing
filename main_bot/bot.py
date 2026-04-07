@@ -6,6 +6,7 @@ import logging
 import asyncio
 from telegram.ext import (
     Application,
+    ApplicationBuilder,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
@@ -14,7 +15,8 @@ from telegram.ext import (
 )
 
 from core.config import MAIN_BOT_TOKEN
-from shared.bot_init import setup_logging, create_base_application, run_bot_gracefully
+from core.base_service import BaseService
+from shared.bot_init import setup_logging
 
 # Import handlers
 from main_bot.handlers.start import start_handler, home_callback, check_join_callback
@@ -22,14 +24,11 @@ from main_bot.handlers.dashboard import (
     dashboard_callback,
     add_account_callback,
     toggle_send_mode_callback,
-    # manage_groups_callback, # Removed
     manage_settings_callback,
     user_stats_callback,
     toggle_shuffle_ui_callback,
     toggle_copy_ui_callback,
     toggle_responder_ui_callback,
-    # add_group_prompt, # Removed
-    # receive_group_url, # Removed
     noop_callback,
     set_interval_prompt,
     receive_interval,

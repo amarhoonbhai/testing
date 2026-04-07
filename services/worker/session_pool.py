@@ -16,28 +16,37 @@ from core.database import get_database
 
 logger = logging.getLogger(__name__)
 
-class SessionPool:
+class SessionManager:
+    """
+    V5 Elite Session Manager.
+    Handles TelegramClient lifecycle, proactive health checks, and auto-recovery.
+    """
     def __init__(self):
         self._clients = {} # (user_id, phone) -> TelegramClient
         self._lock = asyncio.Lock()
+        self._health_task = None
 
     async def start(self):
-        """Startup cleanup or pre-loading if needed."""
-        logger.info("Session Pool initialized")
+        """Initialize the manager and start background health monitoring."""
+        logger.info("🛡️ SessionManager: Initializing Elite Pool...")
+        self._health_task = asyncio.create_task(self._health_check_loop())
 
     async def stop(self):
-        """Disconnect all active clients."""
+        """Gracefully disconnect all active clients."""
+        if self._health_task:
+            self._health_task.cancel()
+            
         async with self._lock:
-            for client in self._clients.values():
+            for key, client in self._clients.items():
                 try:
                     await client.disconnect()
-                except Exception:
-                    pass
+                    logger.info(f"[{key[1]}] Disconnected from pool")
+                except: pass
             self._clients.clear()
-            logger.info("Session Pool stopped")
+        logger.info("🛡️ SessionManager: Pool shut down.")
 
     async def acquire(self, user_id: int, phone: str) -> TelegramClient:
-        """Get a connected and authorized TelegramClient for the given account."""
+        """Get a connected and authorized TelegramClient."""
         key = (user_id, phone)
         
         async with self._lock:
@@ -45,63 +54,74 @@ class SessionPool:
                 client = self._clients[key]
                 if client.is_connected() and await client.is_user_authorized():
                     return client
-                # Client disconnected or unauthorized — try reconnecting/recreating
-                try:
-                    await client.disconnect()
-                except Exception:
-                    pass
+                # Stale client — cleaning up
+                try: await client.disconnect()
+                except: pass
                 del self._clients[key]
 
-            # Create new client
+            # Re-fetch session from DB
             db = get_database()
-            session_doc = await db.sessions.find_one({"user_id": user_id, "phone": phone, "connected": True})
-            if not session_doc:
-                raise ValueError(f"No connected session found for {phone}")
-
-            session_string = session_doc.get("session_string")
-            api_id = session_doc.get("api_id")
-            api_hash = session_doc.get("api_hash")
-
-            if not session_string or not api_id or not api_hash:
-                raise ValueError(f"Missing API credentials for {phone}")
+            doc = await db.sessions.find_one({"user_id": user_id, "phone": phone, "connected": True})
+            if not doc:
+                raise ValueError(f"Account {phone} not found or disconnected in DB")
 
             client = TelegramClient(
-                StringSession(session_string),
-                api_id,
-                api_hash,
-                device_model="K\u0280\u1d1c\u1d18 A\u1d05s",
-                system_version="1.0",
-                app_version="3.3",
+                StringSession(doc["session_string"]),
+                doc["api_id"],
+                doc["api_hash"],
+                device_model="KURUP V5 ELITE",
+                system_version="Windows 10",
+                app_version="5.0",
             )
 
             try:
                 await client.connect()
                 if not await client.is_user_authorized():
-                    # Account likely banned or session revoked
-                    await db.sessions.update_one(
-                        {"user_id": user_id, "phone": phone},
-                        {"$set": {"connected": False, "disabled_reason": "session_revoked"}}
-                    )
-                    raise ValueError(f"Account {phone} is unauthorized")
+                    await self._mark_unauthorized(user_id, phone, "Session Revoked")
+                    raise ValueError(f"Account {phone} unauthorized")
                 
+                # Attach metadata
                 client.user_id = user_id
                 client.phone = phone
+                client._last_check = asyncio.get_event_loop().time()
                 
                 self._clients[key] = client
                 return client
-
+                
             except (AuthKeyUnregisteredError, UserDeactivatedBanError, UserDeactivatedError) as e:
-                logger.error(f"Account {phone} is deactivated or banned: {e}")
-                await db.sessions.update_one(
-                    {"user_id": user_id, "phone": phone},
-                    {"$set": {"connected": False, "disabled_reason": str(e)}}
-                )
+                await self._mark_unauthorized(user_id, phone, str(e))
                 raise
-
             except Exception as e:
-                logger.error(f"Error acquiring client for {phone}: {e}")
+                logger.error(f"[{phone}] Error during connection: {e}")
                 raise
 
-    def release(self, user_id: int, phone: str):
-        """Keep the client connected in the pool (no-op unless we want to disconnect)."""
-        pass
+    async def _health_check_loop(self):
+        """Background loop to periodically verify session health."""
+        while True:
+            await asyncio.sleep(300) # Every 5 minutes
+            async with self._lock:
+                to_check = list(self._clients.items())
+            
+            for key, client in to_check:
+                try:
+                    # Ping Telegram to keep connection alive
+                    await client.get_me()
+                    client._last_check = asyncio.get_event_loop().time()
+                except Exception as e:
+                    logger.warning(f"[{key[1]}] Health check failed: {e}. Dropping from pool.")
+                    async with self._lock:
+                        if key in self._clients:
+                            try: await self._clients[key].disconnect()
+                            except: pass
+                            del self._clients[key]
+
+    async def _mark_unauthorized(self, user_id: int, phone: str, reason: str):
+        db = get_database()
+        await db.sessions.update_one(
+            {"user_id": user_id, "phone": phone},
+            {"$set": {"connected": False, "disabled_reason": reason}}
+        )
+        logger.error(f"[{phone}] Marked as DISCONNECTED: {reason}")
+
+# Backwards compatibility alias
+SessionPool = SessionManager

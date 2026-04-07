@@ -15,100 +15,92 @@ import platform
 import datetime
 import random
 
-from core.logger import setup_service_logging
-from core.database import init_database, close_connection, get_database
+from core.base_service import BaseService
+from core.database import get_database
 from models.user import get_user_config
-from core.config import SCHEDULER_POLL_INTERVAL, SEND_DELAY_MIN, SEND_DELAY_MAX
+from core.config import SCHEDULER_POLL_INTERVAL
 from models.job import (
     get_pending_jobs, claim_job, complete_job, fail_job, 
     upsert_worker_heartbeat
 )
 from models.session import is_session_paused, get_session
 from models.settings import get_global_settings
-from services.worker.session_pool import SessionPool
+from services.worker.session_pool import SessionManager
 from services.worker.send_logic import send_message_to_group
 
 logger = logging.getLogger(__name__)
 
-class UnifiedSender:
+class UnifiedSender(BaseService):
     def __init__(self):
-        self.running = False
+        super().__init__("Sender")
         self.worker_id = f"worker_{platform.node()}_{os.getpid()}"
-        self.pool = SessionPool()
+        self.pool = SessionManager()
         self._batch_counts = {} # phone -> count
 
-    async def start(self):
-        self.running = True
+    async def on_start(self):
+        """Startup logic for the Sender service."""
         await self.pool.start()
-        logger.info(f"🚀 Unified Sender started (ID: {self.worker_id})")
-        
-        # Start heartbeat task
-        asyncio.create_async_task(self._heartbeat_loop())
-        
-        while self.running:
-            try:
-                # 1. Check Global Killswitch
-                global_settings = await get_global_settings()
-                if not global_settings.get("all_bots_active", True):
-                    logger.info("⏸ Global Killswitch ACTIVE — Sender Paused")
-                    await asyncio.sleep(10)
-                    continue
+        # Start heartbeat and main processing loop as background tasks
+        asyncio.create_task(self._heartbeat_loop())
+        asyncio.create_task(self._main_processing_loop())
 
-                # 2. Poll for jobs
-                jobs = await get_pending_jobs(limit=10)
-                if not jobs:
-                    await asyncio.sleep(SCHEDULER_POLL_INTERVAL)
-                    continue
-
-                # 3. Process jobs concurrently
-                tasks = [self._process_job(job) for job in jobs]
-                await asyncio.gather(*tasks)
-
-            except Exception as e:
-                logger.error(f"Error in main sender loop: {e}")
-                await asyncio.sleep(5)
+    async def on_stop(self):
+        """Cleanup logic for the Sender service."""
+        await self.pool.stop()
 
     async def _heartbeat_loop(self):
         while self.running:
             try:
                 await upsert_worker_heartbeat(self.worker_id)
-            except Exception:
-                pass
+            except: pass
             await asyncio.sleep(30)
+
+    async def _main_processing_loop(self):
+        """Standardized processing loop."""
+        while self.running:
+            try:
+                # 1. Killswitch
+                settings = await get_global_settings()
+                if not settings.get("all_bots_active", True):
+                    await asyncio.sleep(10)
+                    continue
+
+                # 2. Get Jobs
+                jobs = await get_pending_jobs(limit=5)
+                if not jobs:
+                    await asyncio.sleep(SCHEDULER_POLL_INTERVAL)
+                    continue
+
+                # 3. Process
+                await asyncio.gather(*[self._process_job(j) for j in jobs])
+                
+            except Exception as e:
+                logger.error(f"Error in sender loop: {e}")
+                await asyncio.sleep(5)
 
     async def _process_job(self, job):
         job_id = job["_id"]
         user_id = job["user_id"]
-        phone = job["phone"] # In V4, jobs are strictly per-account phone
+        phone = job["phone"]
         group_id = job["group_id"]
         message_id = job["message_id"]
 
-        # 1. Claim the job
         if not await claim_job(job_id, self.worker_id):
             return
 
         try:
-            # 2. Check individual account status
             session = await get_session(user_id, phone)
-            if not session:
-                await fail_job(job_id, "Account session not found")
+            if not session or await is_session_paused(user_id, phone):
+                await fail_job(job_id, "Session unavailable/paused")
                 return
 
-            if await is_session_paused(user_id, phone):
-                await fail_job(job_id, "Session in cooldown/paused")
-                return
-
-            # 3. Apply Anti-Freeze batch logic
+            # Batch Logic
             count = self._batch_counts.get(phone, 0)
             if count >= 5:
-                # Every 5 messages, take a longer break (5-10 mins)
-                break_sec = random.randint(300, 600)
-                logger.info(f"[{phone}] Batch break (5 messages done) — pausing for {break_sec}s")
                 self._batch_counts[phone] = 0
-                await fail_job(job_id, f"Batch break active ({break_sec}s)")
+                await fail_job(job_id, "Batch break (5/5)")
                 return
 
-            # 4. Acquire client and send
             client = await self.pool.acquire(user_id, phone)
             config = await get_user_config(user_id)
             
@@ -120,64 +112,29 @@ class UnifiedSender:
             if status == "sent":
                 await complete_job(job_id)
                 self._batch_counts[phone] = count + 1
-                
-                # ADAPTIVE DELAY: Scale delay based on total sent
-                total_sent = session.get("total_sent", 0)
-                if total_sent < 50:
-                    base_delay = random.randint(120, 240) # Very slow for new accounts
-                elif total_sent < 500:
-                    base_delay = random.randint(60, 120)  # Standard
-                else:
-                    base_delay = random.randint(45, 90)   # Faster for established accounts
-                
-                logger.info(f"[{phone}] Message sent (Total: {total_sent}). Next in {base_delay}s...")
-                await asyncio.sleep(base_delay)
-
+                await self._apply_adaptive_delay(session)
             elif status == "flood":
-                # Reschedule job and pause session
-                pause_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=flood_sec)
-                await db.sessions.update_one(
-                    {"user_id": user_id, "phone": phone},
-                    {"$set": {"paused_until": pause_until, "pause_reason": f"FloodWait: {flood_sec}s"}}
-                )
-                await fail_job(job_id, f"FloodWait for {flood_sec}s")
-                logger.warning(f"[{phone}] ⏸ Session paused until {pause_until}")
+                await self._handle_flood(user_id, phone, flood_sec, job_id)
             else:
                 await fail_job(job_id, f"Send failed: {status}")
 
         except Exception as e:
-            logger.error(f"Error processing job {job_id}: {e}")
+            logger.error(f"Job {job_id} error: {e}")
             await fail_job(job_id, str(e))
 
-    async def stop(self):
-        self.running = False
-        await self.pool.stop()
-        logger.info("Unified Sender shut down.")
+    async def _apply_adaptive_delay(self, session):
+        total = session.get("total_sent", 0)
+        delay = random.randint(120, 240) if total < 50 else random.randint(60, 120)
+        await asyncio.sleep(delay)
 
-# To support 'asyncio.create_async_task' or similar
-if not hasattr(asyncio, "create_async_task"):
-    asyncio.create_async_task = asyncio.create_task
-
-async def main():
-    setup_service_logging("sender")
-    await init_database()
-    sender = UnifiedSender()
-    
-    # Handle signals
-    loop = asyncio.get_event_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, lambda: asyncio.create_task(sender.stop()))
-        except NotImplementedError:
-            pass # Windows
-
-    try:
-        await sender.start()
-    finally:
-        await close_connection()
+    async def _handle_flood(self, user_id, phone, sec, job_id):
+        db = get_database()
+        pause_until = datetime.datetime.utcnow() + datetime.timedelta(seconds=sec)
+        await db.sessions.update_one(
+            {"user_id": user_id, "phone": phone},
+            {"$set": {"paused_until": pause_until, "pause_reason": f"FloodWait: {sec}s"}}
+        )
+        await fail_job(job_id, f"FloodWait {sec}s")
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    asyncio.run(UnifiedSender().run_forever())

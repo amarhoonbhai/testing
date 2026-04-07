@@ -67,38 +67,32 @@ def create_application() -> Application:
     for pattern, callback in patterns:
         application.add_handler(CallbackQueryHandler(callback, pattern=pattern))
 
-    # ============== Message Handlers ==============
-    async def handle_text_message(update, context):
-        """Route text messages based on state."""
-        if not update.message or not update.message.text:
-            return
+from login_bot.handlers.login import login_conversation_handler
 
-        state = context.user_data.get("state")
+logger = logging.getLogger(__name__)
 
-        if state == "waiting_api_id":
-            await receive_api_id(update, context)
-        elif state == "waiting_api_hash":
-            await receive_api_hash(update, context)
-        elif state == "waiting_phone":
-            await receive_phone_number(update, context)
-        elif state == "waiting_2fa":
-            await receive_2fa_password(update, context)
+class LoginBotService(BaseService):
+    def __init__(self):
+        super().__init__("LoginBot")
+        self.application = None
 
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_message))
+    async def on_start(self):
+        """Startup logic for the Login Bot."""
+        self.application = ApplicationBuilder().token(LOGIN_BOT_TOKEN).build()
+        self.application.add_handler(start_handler)
+        self.application.add_handler(login_conversation_handler)
+        
+        await self.application.initialize()
+        await self.application.start()
+        await self.application.updater.start_polling()
+        logger.info("Login Bot V5 Elite started polling.")
 
-    return application
-
-async def main():
-    """Start the bot."""
-    print("=" * 50)
-    print("Group Message Scheduler - Login Bot V3.3")
-    print("=" * 50)
-
-    application = create_application()
-    await run_bot_gracefully(application, "Login Bot")
+    async def on_stop(self):
+        """Cleanup logic for the Login Bot."""
+        if self.application:
+            await self.application.updater.stop()
+            await self.application.stop()
+            await self.application.shutdown()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    asyncio.run(LoginBotService().run_forever())
