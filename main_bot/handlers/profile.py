@@ -11,7 +11,7 @@ import datetime
 from models.user import get_user_profile_data
 from models.plan import get_plan
 from main_bot.utils.keyboards import get_profile_keyboard
-from shared.utils import escape_markdown
+from core.utils import escape_markdown
 
 
 async def profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

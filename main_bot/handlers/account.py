@@ -19,7 +19,7 @@ from main_bot.utils.keyboards import (
     get_manage_groups_acc_keyboard,
     get_confirm_clear_groups_acc_keyboard
 )
-from shared.utils import escape_markdown, parse_group_entry
+from core.utils import escape_markdown, parse_group_entry
 
 # Shared conversation states
 WAITING_GROUP_URL_ACC = 110

@@ -12,7 +12,7 @@ from models.session import get_all_user_sessions
 from main_bot.utils.keyboards import get_welcome_keyboard
 
 
-from shared.utils import escape_markdown
+from core.utils import escape_markdown
 from main_bot.utils.force_join import force_join_check
 
 

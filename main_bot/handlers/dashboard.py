@@ -21,7 +21,7 @@ from main_bot.utils.keyboards import (
 from core.config import (
     MIN_INTERVAL_MINUTES, BRANDING_NAME, BRANDING_BIO, OWNER_ID
 )
-from shared.utils import escape_markdown
+from core.utils import escape_markdown
 
 # Conversation states
 WAITING_INTERVAL = 11
