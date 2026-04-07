@@ -19,7 +19,8 @@ class UserbotService:
     def __init__(self):
         self.running = False
         self.pool = SessionPool()
-        self._tasks = []
+        self._active_sessions = set() # (user_id, phone)
+        self._tasks = {} # (user_id, phone) -> Task
 
     async def get_all_connected_sessions(self) -> list:
         db = get_database()
@@ -27,38 +28,47 @@ class UserbotService:
 
     async def start(self):
         self.running = True
-        logger.info("🚀 Userbot Service starting...")
+        logger.info("🚀 Userbot Service starting with Dynamic Discovery...")
         
-        sessions = await self.get_all_connected_sessions()
-        if not sessions:
-            logger.info("No connected sessions found — waiting...")
-            # We skip the main loop for now and just wait
-            # Actually, let's just keep polling for new sessions every 60s
-            while self.running:
-                sessions = await self.get_all_connected_sessions()
-                if sessions:
-                    break
-                await asyncio.sleep(60)
-
-        for s in sessions:
-            user_id = s.get("user_id")
-            phone = s.get("phone")
+        while self.running:
             try:
-                client = await self.pool.acquire(user_id, phone)
-                register_userbot_handlers(client)
-                register_auto_responder(client)
-                task = asyncio.create_task(client.run_until_disconnected())
-                self._tasks.append(task)
-                logger.info(f"[{phone}] Commands listener ACTIVE")
-            except Exception as e:
-                logger.error(f"[{phone}] Failed to start listener: {e}")
+                sessions = await self.get_all_connected_sessions()
+                
+                for s in sessions:
+                    user_id = s.get("user_id")
+                    phone = s.get("phone")
+                    sid = (user_id, phone)
+                    
+                    if sid in self._active_sessions:
+                        continue
+                        
+                    try:
+                        logger.info(f"[{phone}] New session detected — starting listener...")
+                        client = await self.pool.acquire(user_id, phone)
+                        
+                        # Register handlers (protected against duplicates internally)
+                        register_userbot_handlers(client)
+                        register_auto_responder(client)
+                        
+                        # Start background listener
+                        task = asyncio.create_task(client.run_until_disconnected())
+                        self._tasks[sid] = task
+                        self._active_sessions.add(sid)
+                        logger.info(f"[{phone}] Commands listener ACTIVE")
+                        
+                    except Exception as e:
+                        logger.error(f"[{phone}] Failed to start listener: {e}")
 
-        if self._tasks:
-            await asyncio.gather(*self._tasks)
+                # Wait 60s before next discovery sweep
+                await asyncio.sleep(60)
+                
+            except Exception as e:
+                logger.error(f"Error in discovery loop: {e}")
+                await asyncio.sleep(10)
 
     async def stop(self):
         self.running = False
-        for task in self._tasks:
+        for task in self._tasks.values():
             task.cancel()
         await self.pool.stop()
         logger.info("Userbot Service shut down.")
