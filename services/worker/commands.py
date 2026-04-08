@@ -60,6 +60,8 @@ def register_userbot_handlers(client: TelegramClient):
         user_id = getattr(client, 'user_id', 0)
         
         debug_logger.critical(f"[{phone}] ⚡ MASTER CMD: .{cmd} | Args: {args[:50]}...")
+        # General logger for standard output
+        logger.info(f"[{phone}] Command detected: .{cmd}")
 
         response = None
         try:
@@ -319,7 +321,7 @@ def register_userbot_handlers(client: TelegramClient):
             await client.delete_dialog(event.chat_id)
         except: pass
 
-    logger.info(f"[{phone}] MASTER COMMAND SUITE LOADED SUCCESSFULLY")
+    logger.info(f"[{getattr(client, 'phone', 'unknown')}] MASTER COMMAND SUITE LOADED SUCCESSFULLY")
 
 def register_auto_responder(client: TelegramClient):
     """Registers the auto-reply listener."""
