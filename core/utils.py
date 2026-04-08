@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 def parse_group_entry(entry: str):
     """
-    Ultimate parser for Telegram links. Returns (chat_id, chat_username, title, type).
-    Handles: @username, t.me/slug, t.me/addlist/slug, telegram.dog/slug, t.me/c/id/msg.
+    Bulletproof Universal Parser for Telegram links.
+    Returns: (target, slug, display_title, link_type)
     """
     entry = entry.strip()
 
@@ -27,36 +27,38 @@ def parse_group_entry(entry: str):
 
     # 2. Chatlist (addlist) Folder Links
     if "/addlist/" in entry:
-        match = re.search(r't\.me/addlist/([A-Za-z0-9_-]+)', entry)
+        match = re.search(r'(?:t\.me|telegram\.me|telegram\.dog)/addlist/([A-Za-z0-9_-]+)', entry)
         if match:
             slug = match.group(1)
-            return None, slug, f"Chatlist: {slug}", "addlist"
+            return slug, slug, f"Chatlist: {slug}", "addlist"
 
     # 3. Private Invite Links (t.me/+Hash or t.me/joinchat/Hash)
-    private_match = re.search(r'(?:t\.me|telegram\.me|telegram\.dog|tg://join\?invite=)(?:/|\+?|joinchat/)([A-Za-z0-9_\-]+)', entry)
-    if private_match and (("/+" in entry) or ("joinchat/" in entry) or ("invite=" in entry)):
-        invite_hash = private_match.group(1)
-        chat_id = abs(hash(f"invite:{invite_hash}")) % 10**12 * -1
-        return chat_id, None, f"[Private] +{invite_hash[:10]}", "invite"
+    # MUST CAPTURE FULL HASH
+    private_match = re.search(r'(?:t\.me|telegram\.me|telegram\.dog|tg://join\?invite=)(?:\/|\+?|joinchat\/)([A-Za-z0-9_\-]+)', entry)
+    if private_match:
+        # Extra check to ensure it's not a public slug
+        if "/+" in entry or "joinchat/" in entry or "invite=" in entry:
+            invite_hash = private_match.group(1)
+            # Use a deterministic ID for storage, but return the FULL hash for joining
+            chat_id = abs(hash(f"invite:{invite_hash}")) % 10**12 * -1
+            return invite_hash, None, f"[Private] +{invite_hash[:8]}...", "private"
 
     # 4. Message/Channel Links with Numeric IDs (https://t.me/c/12345/1)
-    # Extracts the numeric part and adds -100 prefix
-    cid_match = re.search(r't\.me/c/(\d+)', entry)
+    cid_match = re.search(r'(?:t\.me|telegram\.me|telegram\.dog)/c/(\d+)', entry)
     if cid_match:
         chat_id = int(f"-100{cid_match.group(1)}")
         return chat_id, None, f"ID: {chat_id}", "id"
 
     # 5. Public Links (@username, t.me/username, telegram.dog/username)
-    # Remove protocol and domain variations
     clean = re.sub(r'https?://(t\.me|telegram\.me|telegram\.dog)/', '', entry)
     clean = re.sub(r'tg://resolve\?domain=', '', clean)
     slug = clean.lstrip('@').split('?')[0].split('/')[0].strip()
 
     if re.match(r'^[A-Za-z][\w_]{3,}$', slug):
         chat_id = slug_to_id(slug)
-        return chat_id, slug, f"@{slug}", "public"
+        return slug, slug, f"@{slug}", "public"
 
-    raise ValueError(f"X Unrecognized link format: {entry}")
+    raise ValueError(f"Unrecognized link format: {entry}")
 
 def slug_to_id(slug: str) -> int:
     """Deterministic hash for placeholder IDs before Telegram resolution."""

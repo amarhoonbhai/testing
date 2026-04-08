@@ -178,39 +178,43 @@ def register_userbot_handlers(client: TelegramClient):
         user_id, phone = getattr(client, 'user_id', 0), getattr(client, 'phone', None)
         msg = await safe_respond(event, f"⏳ **Adding {len(links)} groups...**")
         success, failed = 0, 0
+        
         for link in links:
             try:
-                # Catch Chatlists in addgroup too for convenience
-                if "/addlist/" in link: 
+                # 1. PARSE
+                target, slug, title, link_type = parse_group_entry(link)
+                
+                # 2. ROUTE BY TYPE
+                if link_type == "addlist":
                     await handle_addlist(event, link, internal=True)
                     success += 1; continue
                 
-                parsed = parse_group_entry(link)
-                chat_id, chat_username, title = parsed[0], parsed[1], parsed[2]
-                
-                # Check if already joined to avoid flood/errors
-                already_in = False
+                chat = None
+                # Check if already accessible
                 try:
-                    chat = await client.get_entity(chat_id if chat_id else chat_username)
-                    already_in = True
+                    chat = await client.get_entity(target)
                 except: pass
 
-                if not already_in:
-                    if chat_username: 
-                        await client(JoinChannelRequest(chat_username))
-                    elif "[Private] +" in title:
-                        from telethon.tl.functions.messages import ImportChatInviteRequest
-                        invite_hash = title.split("[Private] +")[1]
-                        await client(ImportChatInviteRequest(invite_hash))
+                if not chat:
+                    logger.info(f"[{phone}] Joining {link_type}: {target}")
+                    if link_type == "public":
+                        await client(JoinChannelRequest(target))
+                    elif link_type == "private":
+                        await client(ImportChatInviteRequest(target))
                     
-                    # Refresh entity after joining
-                    chat = await client.get_entity(chat_id if chat_id else chat_username)
-                
-                await add_group(user_id, chat.id, chat.title, phone, chat_username=getattr(chat, 'username', None))
-                success += 1
+                    # Resolve after join
+                    chat = await client.get_entity(target)
+
+                if chat:
+                    await add_group(user_id, chat.id, chat.title, phone, chat_username=getattr(chat, 'username', None))
+                    success += 1
+                else:
+                    raise ValueError("Could not resolve chat entity")
+
             except Exception as e: 
-                logger.warning(f"Addgroup failed for {link}: {e}")
+                logger.error(f"[{phone}] Addgroup failed for {link}: {e}")
                 failed += 1
+                
         await msg.edit(f"✅ **Import Complete!**\n📥 Added: `{success}`\n❌ Failed: `{failed}`")
         return msg
 
