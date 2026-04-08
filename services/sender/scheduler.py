@@ -23,6 +23,7 @@ class UnifiedScheduler(BaseService):
         super().__init__("Scheduler")
         self.poll_interval = 60  # Check every minute
         self._processing_users = set()  # Generation lock
+        self._last_gen_cache = {} # In-memory backup: user_id -> datetime
 
     async def on_start(self):
         """Startup logic for the Scheduler service."""
@@ -68,9 +69,11 @@ class UnifiedScheduler(BaseService):
         interval_min = config.get("interval_min", 20)
         now = datetime.datetime.utcnow()
 
-        # 1. ENFORCE STRICT INTERVAL FROM LAST START
-        # Prioritize config.last_job_gen_at to prevent "Fail -> Spam" loop
-        last_start = config.get("last_job_gen_at")
+        # 1. ENFORCE STRICT INTERVAL (Cache + DB)
+        # Check in-memory cache first (most reliable for preventing immediate spam)
+        last_start = self._last_gen_cache.get(user_id)
+        if not last_start:
+            last_start = config.get("last_job_gen_at")
         
         if last_start:
             # Handle potential string-from-db conversion issues
@@ -124,6 +127,7 @@ class UnifiedScheduler(BaseService):
             logger.info(f"🔄 [User {user_id}] Starting cycle | Accounts: {num_sessions} | Groups: {len(groups)}")
             
             # ATOMIC UPDATE: Mark START of cycle IMMEDIATELY to prevent spam if creation takes long
+            self._last_gen_cache[user_id] = now
             await update_user_config(user_id, last_job_gen_at=now)
             
             total_jobs = 0

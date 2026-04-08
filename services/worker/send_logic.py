@@ -47,10 +47,21 @@ async def send_message_to_group(
     # ── STEP 1: ROBUST ENTITY RESOLUTION ─────────────────────────────────
     try:
         # Normalize and try to get input entity from cache/ID
-        if str(group_id).startswith("-") and not str(group_id).startswith("-100"):
+        # Handle 10-digit IDs (positive or negative) which are likely supergroups missing -100
+        s_id = str(group_id)
+        is_potential_supergroup = (
+            (len(s_id) >= 10 and not s_id.startswith("-")) or
+            (s_id.startswith("-") and not s_id.startswith("-100") and len(s_id) >= 10)
+        )
+
+        if is_potential_supergroup:
             potential_id = int(f"-100{abs(group_id)}")
-            target_entity = await client.get_input_entity(potential_id)
-            group_id = potential_id # Update for future steps
+            try:
+                target_entity = await client.get_input_entity(potential_id)
+                group_id = potential_id
+            except:
+                # If -100 failed, try raw as fallback
+                target_entity = await client.get_input_entity(group_id)
         else:
             target_entity = await client.get_input_entity(group_id)
             
