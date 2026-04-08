@@ -240,12 +240,8 @@ def get_broadcast_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_manage_account_keyboard(phone: str, is_active: bool = True) -> InlineKeyboardMarkup:
-    """Build manage account keyboard."""
+    """Build manage account keyboard (Group Mgmt removed)."""
     keyboard = [
-        [
-            InlineKeyboardButton("👥 Manage Groups", callback_data=f"manage_groups_acc:{phone}"),
-            InlineKeyboardButton("➕ Add Groups", callback_data=f"add_groups_acc:{phone}"),
-        ],
         [
             InlineKeyboardButton("🔌 Disconnect Session", callback_data=f"disconnect_account:{phone}"),
         ],

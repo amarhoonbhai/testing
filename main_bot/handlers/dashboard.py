@@ -171,7 +171,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
   🔄 Send Mode: {send_mode}
   {responder_icon} Responder: _{reply_preview}_
 
-💡 *TIP:* Manage groups per account in 'Manage Accounts'!
+
 """
     
     kb = get_dashboard_keyboard(
