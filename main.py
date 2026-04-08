@@ -10,6 +10,7 @@ import logging
 from core.base_service import BaseService
 from services.sender.sender import UnifiedSender
 from services.sender.scheduler import UnifiedScheduler
+from services.branding.branding import BrandingService
 from services.userbot.userbot import UserbotService
 from main_bot.bot import MainBotService
 from login_bot.bot import LoginBotService
@@ -49,7 +50,8 @@ def main():
         # This 'all' mode is perfect for development or low-to-medium load.
         services = [
             MainBotService(), LoginBotService(), 
-            UnifiedSender(), UnifiedScheduler(), UserbotService()
+            UnifiedSender(), UnifiedScheduler(), 
+            BrandingService(), UserbotService()
         ]
         try:
             asyncio.run(run_composite(services))

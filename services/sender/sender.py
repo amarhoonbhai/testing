@@ -23,7 +23,7 @@ from core.config import (
 )
 from models.job import (
     get_pending_jobs, claim_job, complete_job, fail_job, 
-    upsert_worker_heartbeat
+    upsert_worker_heartbeat, log_job_event
 )
 from models.session import is_session_paused, get_session
 from models.settings import get_global_settings
@@ -119,11 +119,22 @@ class UnifiedSender(BaseService):
                     copy_mode=config.get("copy_mode", False)
                 )
 
+                # LOG THE EVENT (This is crucial for stats!)
+                await log_job_event(
+                    job_id=job_id, user_id=user_id, phone=phone,
+                    group_id=group_id, message_id=message_id,
+                    status=status, error=None if status == "sent" else f"Status: {status}"
+                )
+
                 if status == "sent":
-                    await complete_job(job_id)
-                    # 2. Group Gap (Delay before next group for this same account)
-                    logger.info(f"[{phone}] Message SENT to {group_id}. Applying gap: {GROUP_GAP_SECONDS}s")
-                    await asyncio.sleep(GROUP_GAP_SECONDS)
+                    await complete_job(job_id, groups_sent=1)
+                    # 2. RANDOMIZED Group Gap (Delay before next group for this same account)
+                    # We target 210s (3.5m) but add +/- 15s of jitter for safety
+                    base_gap = config.get("group_gap", GROUP_GAP_SECONDS)
+                    jitter_gap = random.randint(max(10, base_gap - 15), base_gap + 15)
+                    
+                    logger.info(f"[{phone}] Message SENT to {group_id}. Applying randomized gap: {jitter_gap}s")
+                    await asyncio.sleep(jitter_gap)
                 elif status == "flood":
                     await self._handle_flood(user_id, phone, flood_sec, job_id)
                 else:
@@ -132,6 +143,11 @@ class UnifiedSender(BaseService):
             except Exception as e:
                 logger.error(f"Job {job_id} error: {e}")
                 await fail_job(job_id, str(e))
+                await log_job_event(
+                    job_id=job_id, user_id=user_id, phone=phone,
+                    group_id=group_id, message_id=message_id,
+                    status="failed", error=str(e)
+                )
 
     async def _handle_flood(self, user_id, phone, sec, job_id):
         db = get_database()

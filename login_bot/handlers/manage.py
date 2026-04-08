@@ -11,6 +11,7 @@ from login_bot.utils.keyboards import (
     get_disconnect_confirm_keyboard,
     get_login_welcome_keyboard,
 )
+from core.utils import escape_markdown_v2
 
 
 async def manage_accounts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -58,11 +59,12 @@ async def manage_acc_details_callback(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     phone = query.data.split(":")[1]
+    safe_phone = escape_markdown_v2(phone)
 
     text = (
         f"🔧 *Manage Account*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📱 Number: `{phone}`\n\n"
+        f"📱 Number: `{safe_phone}`\n\n"
         f"_Choose an action for this account:_"
     )
     await query.edit_message_text(
@@ -78,11 +80,12 @@ async def disconnect_acc_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
 
     phone = query.data.split(":")[1]
+    safe_phone = escape_markdown_v2(phone)
 
     text = (
         f"⚠️ *Confirm Disconnection*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📱 Account: `{phone}`\n\n"
+        f"📱 Account: `{safe_phone}`\n\n"
         f"This will *stop all active forwarding jobs* for this account\\.\n"
         f"Are you sure you want to proceed?"
     )
@@ -116,12 +119,13 @@ async def login_home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = update.effective_user
     user_id = user.id
     first_name = user.first_name or "User"
+    safe_name = escape_markdown_v2(first_name)
 
     accounts = await get_all_user_sessions(user_id)
     acc_count = len(accounts)
 
     await query.edit_message_text(
-        build_welcome_text(first_name, acc_count),
+        build_welcome_text(safe_name, acc_count), # Using safe_name which is already escaped
         parse_mode="MarkdownV2",
         reply_markup=get_login_welcome_keyboard(),
         disable_web_page_preview=True,

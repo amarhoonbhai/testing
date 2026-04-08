@@ -7,11 +7,17 @@ from telegram.ext import ContextTypes
 
 from models.user import upsert_user as create_user
 from models.session import get_all_user_sessions
+from models.user import upsert_user as create_user
+from models.session import get_all_user_sessions
 from login_bot.utils.keyboards import get_login_welcome_keyboard
+from core.utils import escape_markdown_v2
 
 
 def build_welcome_text(first_name: str, acc_count: int) -> str:
     """Build the full welcome message dynamically."""
+    
+    # Escape first name for V2
+    safe_name = escape_markdown_v2(first_name)
 
     # Account status badge
     if acc_count == 0:
@@ -25,7 +31,7 @@ def build_welcome_text(first_name: str, acc_count: int) -> str:
         status_hint = f"_You have {acc_count} active sessions on KURUP ADS._"
 
     return (
-        f"👋 *Hello, {first_name}\\!*\n"
+        f"👋 *Hello, {safe_name}\\!*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🔐 *KURUP ADS — SECURE LOGIN PORTAL*\n\n"
         f"📌 *Account Status:*\n"
@@ -33,6 +39,7 @@ def build_welcome_text(first_name: str, acc_count: int) -> str:
         f"{status_hint}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🛡️ *Why connect here?*\n\n"
+        f"  ✅ High-Volume: Auto-forward to 100+ groups\n"
         f"  ✅ Official Telegram API (not unofficial)\n"
         f"  ✅ Sessions encrypted — AES\\-256\n"
         f"  ✅ Complete control over your data\n"

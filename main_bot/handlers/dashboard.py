@@ -164,7 +164,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📤 *FORWARDING:* {fwd_status}
   ➤ Groups: {group_count} ▪ Total Sent: {total_sends}
   ➤ Status: {await get_group_status_summary(user_id)}
-  ➤ Interval: {interval} min ▪ Night: 12-6 AM
+  ➤ Interval: {interval}m (Cycle End) ▪ Gap: 3.5m
 
 ⚙️ *SETTINGS*
   {copy_icon} Copy Mode ▪ {shuffle_icon} Shuffle
@@ -249,8 +249,8 @@ async def manage_settings_callback(update: Update, context: ContextTypes.DEFAULT
 🛠️ *USER SETTINGS*
 ══════════════════════════════
 
-⏱️ *Interval:* {interval} minutes
-🔄 *Send Mode:* {send_mode}
+⏱️ *Interval:* {interval} minutes (Wait after cycle)
+🔄 *Group Gap:* 3.5 minutes (Pre-set)
 🤖 *Auto-Responder:* {"Enabled ✅" if config.get("auto_reply_enabled") else "Disabled ⚫"}
 
 _Toggle or update your preferences below._

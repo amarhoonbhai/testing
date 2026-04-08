@@ -88,6 +88,20 @@ class MainBotService(BaseService):
             per_user=True, per_chat=True
         ))
 
+        # Settings Conversations (Interval & Responder)
+        app.add_handler(ConversationHandler(
+            entry_points=[CallbackQueryHandler(set_interval_prompt, pattern="^set_interval$")],
+            states={WAITING_INTERVAL: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_interval)]},
+            fallbacks=[CallbackQueryHandler(manage_settings_callback, pattern="^manage_settings$")],
+            per_user=True, per_chat=True
+        ))
+        app.add_handler(ConversationHandler(
+            entry_points=[CallbackQueryHandler(set_responder_text_prompt, pattern="^set_responder_text$")],
+            states={WAITING_RESPONDER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_responder_text)]},
+            fallbacks=[CallbackQueryHandler(manage_settings_callback, pattern="^manage_settings$")],
+            per_user=True, per_chat=True
+        ))
+
         # Callback patterns
         patterns = [
             ("^home$", home_callback), ("^check_join$", check_join_callback),
@@ -95,7 +109,14 @@ class MainBotService(BaseService):
             ("^admin_stats$", admin_stats_callback), ("^admin_broadcast$", admin_broadcast_callback),
             ("^accounts_list$", accounts_list_callback), ("^manage_settings$", manage_settings_callback),
             ("^user_stats$", user_stats_callback), ("^profile$", profile_callback),
-            ("^help$", help_callback), ("^guide$", guide_callback)
+            ("^help$", help_callback), ("^guide$", guide_callback),
+            ("^buy_plan:", buy_plan_callback), ("^my_plan$", my_plan_callback),
+            ("^toggle_shuffle$", toggle_shuffle_ui_callback),
+            ("^toggle_copy$", toggle_copy_ui_callback),
+            ("^toggle_responder$", toggle_responder_ui_callback),
+            ("^toggle_send_mode$", toggle_send_mode_callback),
+            ("^start_ads$", start_all_accounts_callback),
+            ("^stop_ads$", stop_all_accounts_callback),
         ]
         # Adding more patterns for administrative and account actions (simplified)
         for p, cb in patterns:
@@ -106,9 +127,14 @@ class MainBotService(BaseService):
         app.add_handler(CallbackQueryHandler(disconnect_account_callback, pattern="^disconnect_account:"))
         app.add_handler(CallbackQueryHandler(confirm_disconnect_callback, pattern="^confirm_disconnect:"))
         app.add_handler(CallbackQueryHandler(manage_groups_acc_callback, pattern="^manage_groups_acc:"))
+        app.add_handler(CallbackQueryHandler(toggle_account_ads_callback, pattern="^tgl_ads_acc:")),
         app.add_handler(CallbackQueryHandler(grp_tgl_callback, pattern="^grp_tgl:"))
         app.add_handler(CallbackQueryHandler(grp_del_callback, pattern="^grp_del:"))
         app.add_handler(CallbackQueryHandler(grp_pg_callback, pattern="^grp_pg:"))
+        app.add_handler(CallbackQueryHandler(add_account_callback, pattern="^add_account$"))
+        app.add_handler(CallbackQueryHandler(admin_health_callback, pattern="^admin_health$"))
+        app.add_handler(CallbackQueryHandler(admin_group_stats_callback, pattern="^admin_group_stats$"))
+        app.add_handler(CallbackQueryHandler(admin_retry_failing_callback, pattern="^admin_retry_failing$"))
         
         return app
 

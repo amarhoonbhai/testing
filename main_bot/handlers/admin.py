@@ -228,10 +228,10 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
     text += "👷 *LIVE WORKERS*\n"
     if workers:
         for w in workers:
-            pid = w.get("pid", "???")
-            last = w.get("last_heartbeat")
+            wid = w.get("worker_id", "???")
+            last = w.get("last_seen")
             ago = int((datetime.utcnow() - last).total_seconds()) if last else "?"
-            text += f"  ├ PID: `{pid}` ▪ Heartbeat: {ago}s ago\n"
+            text += f"  ├ ID: `{wid}` ▪ Status: {ago}s ago\n"
         text += f"  └ Total Active: {len(workers)}\n\n"
     else:
         text += "  └ ⚠️ No active workers detected!\n\n"

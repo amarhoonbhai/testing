@@ -98,14 +98,39 @@ async def send_message_to_group(
             await mark_group_failing(user_id, group_id, "Cannot resolve group entity")
             return "failed", 0
 
-    # 3. Perform Forwarding
+    # 3. Perform Forwarding / Copying
     try:
-        await client(ForwardMessagesRequest(
-            from_peer='me',
-            id=[message_id],
-            to_peer=target_entity,
-            drop_author=not copy_mode, # True = 'Standard' (no author), False = 'Copy' (with author)
-        ))
+        # Resolve Actual Message ID if auto-fetch is requested
+        actual_message_id = message_id
+        if actual_message_id == -1:
+            # Fetch latest message from 'me' (Saved Messages)
+            latest_msgs = await client.get_messages('me', limit=1)
+            if not latest_msgs:
+                logger.warning(f"[{phone}] No messages found in Saved Messages")
+                return "failed", 0
+            actual_message_id = latest_msgs[0].id
+            logger.info(f"[{phone}] Auto-detected latest message ID: {actual_message_id}")
+
+        if copy_mode:
+            # TRUE COPY: Fetch content and send as a fresh message
+            msg_obj = await client.get_messages('me', ids=actual_message_id)
+            if not msg_obj:
+                return "failed", 0
+                
+            await client.send_message(
+                target_entity,
+                message=msg_obj
+            )
+            logger.info(f"[{phone}] SENT Copy to {group_id}")
+        else:
+            # STANDARD FORWARD
+            await client(ForwardMessagesRequest(
+                from_peer='me',
+                id=[actual_message_id],
+                to_peer=target_entity,
+                drop_author=True, # Note: Telethon's ForwardMessagesRequest still behaves like a forward
+            ))
+            logger.info(f"[{phone}] SENT Forward to {group_id}")
         
         # 4. Update Success Stats
         await clear_group_fail(user_id, group_id)

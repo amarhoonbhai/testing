@@ -19,6 +19,19 @@ def escape_markdown(text: str) -> str:
         return ""
     return re.sub(r'([_*\[\]])', r'\\\1', str(text))
 
+
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escape markdown characters for Telegram's MarkdownV2 parser.
+    Escapes: _, *, [, ], (, ), ~, >, #, +, -, =, |, {, }, ., !
+    """
+    if not text:
+        return ""
+    # List of characters to escape: \ _ * [ ] ( ) ~ ` > # + - = | { } . !
+    # We use a raw string for the regex
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
+
 def build_connection_success_text(phone: str, plan: dict) -> str:
     """
     Build standardized success message after account connection.

@@ -24,7 +24,7 @@ HELP_TEXT = """
 
 GUIDE_TEXT = """
 📖 *BEGINNER'S GUIDE — KURUP ADS*
-_Step-by-step to start auto-forwarding in 5 minutes_
+_Step-by-step to auto-forward to 100+ groups in 5 minutes_
 
 ━━━━━━━━━━━━━━━━━━━━━
 

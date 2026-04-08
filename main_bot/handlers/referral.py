@@ -64,7 +64,7 @@ Earn free premium days by inviting your friends to use Group Message Scheduler!
 2️⃣ They start the bot using your link
 3️⃣ You instantly get *+{REFERRAL_BONUS_DAYS} FREE DAYS* when {REFERRALS_NEEDED} friends join!
 
-🎁 *REWARD:* {REFERRAL_BONUS_DAYS} Days of Premium Auto-Forwarding!
+🎁 *REWARD:* {REFERRAL_BONUS_DAYS} Days of Premium High-Volume Forwarding!
 """
     
     await query.edit_message_text(
