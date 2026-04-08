@@ -71,11 +71,26 @@ class UnifiedScheduler(BaseService):
         # 1. ENFORCE STRICT INTERVAL FROM LAST START
         # Prioritize config.last_job_gen_at to prevent "Fail -> Spam" loop
         last_start = config.get("last_job_gen_at")
+        
         if last_start:
-            # If gen_at was more than 1 week ago, it might be stale/reset
-            if (now - last_start).total_seconds() < (interval_min * 60):
-                # TOO SOON!
-                return
+            # Handle potential string-from-db conversion issues
+            if isinstance(last_start, str):
+                try: last_start = datetime.datetime.fromisoformat(last_start)
+                except: last_start = None
+            
+            if last_start:
+                elapsed_sec = (now - last_start).total_seconds()
+                target_sec = interval_min * 60
+                
+                # VERBOSE DEBUG LOGGING
+                if elapsed_sec < target_sec:
+                    remaining = int(target_sec - elapsed_sec)
+                    # We log this sparingly (5% random) or if it's very close
+                    if random.random() < 0.05 or remaining < 60:
+                        logger.info(f"⏳ [User {user_id}] Interval Check: {int(elapsed_sec)}s elapsed / {target_sec}s target. {remaining}s remaining.")
+                    return
+                else:
+                    logger.info(f"🔔 [User {user_id}] Interval Target MET: {int(elapsed_sec)}s >= {target_sec}s. Generating next cycle.")
 
         # 2. Check for ANY active jobs (prevent overlapping cycles)
         active_count = await db.scheduled_jobs.count_documents({

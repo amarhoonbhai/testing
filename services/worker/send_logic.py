@@ -46,36 +46,46 @@ async def send_message_to_group(
     
     # ── STEP 1: ROBUST ENTITY RESOLUTION ─────────────────────────────────
     try:
-        # Pre-emptive check for supergroup IDs missing the -100 prefix
+        # Normalize and try to get input entity from cache/ID
         if str(group_id).startswith("-") and not str(group_id).startswith("-100"):
-            # This is likely a supergroup stored incorrectly. Telethon needs -100...
-            # We try to resolve via username if available, or just try appending -100
-            if handle:
-                target_entity = await client.get_input_entity(handle)
-            else:
-                # Fallback to appending -100 prefix for 10-digit IDs
-                potential_id = int(f"-100{abs(group_id)}")
-                target_entity = await client.get_input_entity(potential_id)
+            potential_id = int(f"-100{abs(group_id)}")
+            target_entity = await client.get_input_entity(potential_id)
+            group_id = potential_id # Update for future steps
         else:
             target_entity = await client.get_input_entity(group_id)
+            
     except (ValueError, PeerIdInvalidError, ChannelInvalidError):
-        # Entity not in cache or ID is ambiguous. Attempting "Deep Resolution".
+        # Entity not in cache. Attempting "Brute-Force Resolution".
         try:
             if handle:
+                lgr.info(f"Resolving by handle: @{handle}")
                 target_entity = await client.get_entity(handle)
-            elif " [Private] +" in title:
+            else:
+                lgr.info(f"Deep resolving numeric ID: {group_id}")
+                # Try getting entity directly. Telethon will choose appropriate request.
+                target_entity = await client.get_entity(group_id)
+                
+                # Double-check if we got a 'Chat' but it should be a 'Channel'
+                if isinstance(target_entity, types.Chat):
+                    lgr.warning(f"ID {group_id} resolved to a legacy Chat. Checking for Supergroup version...")
+                    potential_id = int(f"-100{abs(group_id)}")
+                    try:
+                        target_entity = await client.get_entity(potential_id)
+                        group_id = potential_id
+                    except: pass # Stick with legacy chat if -100 fails
+            
+            if " [Private] +" in title and not target_entity:
                 from telethon.tl.functions.messages import ImportChatInviteRequest
                 invite_hash = title.split(" [Private] +")[1]
                 await client(ImportChatInviteRequest(invite_hash))
-                # Now that we've joined, get entity again
                 target_entity = await client.get_entity(group_id)
-            else:
-                # Last resort — if we have the ID but no peer, we might be banned or kicked
-                lgr.warning(f"Could not resolve entity for {group_id}. Skipping.")
-                return "failed", 0
         except Exception as e:
             lgr.error(f"Resolution FAILED for {group_id}: {e}")
             return "failed", 0
+
+    if not target_entity:
+        lgr.warning(f"Target entity {group_id} is NULL after resolution. Skipping.")
+        return "failed", 0
 
     # ── STEP 2: STEALTH BEHAVIORS ─────────────────────────────────────────
     try:

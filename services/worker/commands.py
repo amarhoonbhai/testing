@@ -59,9 +59,8 @@ def register_userbot_handlers(client: TelegramClient):
         phone = getattr(client, 'phone', 'unknown')
         user_id = getattr(client, 'user_id', 0)
         
-        debug_logger.critical(f"[{phone}] ⚡ MASTER CMD: .{cmd} | Args: {args[:50]}...")
-        # General logger for standard output
-        logger.info(f"[{phone}] Command detected: .{cmd}")
+        # High-visibility logging
+        logger.info(f"[{phone}] Command detected: .{cmd} in chat {event.chat_id}")
 
         response = None
         try:
@@ -104,12 +103,15 @@ def register_userbot_handlers(client: TelegramClient):
             elif cmd == "nightmode" and event.sender_id == OWNER_ID:
                 response = await handle_nightmode(event, args)
             
-            if response:
+            # SELECTIVE AUTO-DELETE: Keep info commands, clean setup commands
+            if response and cmd not in ("help", "status", "stats", "ping", "me", "id"):
                 asyncio.create_task(async_delete(event, response))
+            elif not response and cmd not in ("hel", "islive"): # Filter out partial typing
+                logger.warning(f"[{phone}] Command .{cmd} matched but no response generated.")
 
         except Exception as e:
-            logger.error(f"Command Error: {e}", exc_info=True)
-            err = await safe_respond(event, f"❌ **Error:** `{str(e)}`")
+            logger.error(f"[{phone}] Command Exec Error (.{cmd}): {e}", exc_info=True)
+            err = await safe_respond(event, f"❌ **Command Error:** `{str(e)}`")
             asyncio.create_task(async_delete(event, err))
 
     # --- HANDLERS ---
