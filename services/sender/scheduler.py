@@ -29,6 +29,10 @@ class UnifiedScheduler(BaseService):
         asyncio.create_task(self._scheduling_loop())
         asyncio.create_task(self._cleanup_loop())
 
+    async def on_stop(self):
+        """Cleanup logic for the Scheduler service."""
+        pass
+
     async def _cleanup_loop(self):
         """Background task that automatically removes dead groups after 24h."""
         db = get_database()
