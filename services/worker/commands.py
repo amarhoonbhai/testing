@@ -1,6 +1,6 @@
 """
 Userbot command handlers for logged-in accounts.
-Finalized Suite: .addgroup, .interval, .remfailed, .ping, .id, .me, .alive, .setreply, .onreply, .offreply, .sync.
+Finalized Suite with Reliability Fix, Terminal Logging, and Explicit Verification.
 """
 
 import time
@@ -32,54 +32,71 @@ def register_userbot_handlers(client: TelegramClient):
         await asyncio.sleep(delay)
         try:
             await event.delete()
-            await response.delete()
+            if hasattr(response, 'delete'):
+                await response.delete()
         except:
             pass
 
+    async def safe_respond(event, text):
+        """Edit if outgoing (user account), Reply if incoming (Admin/Remote)."""
+        phone = getattr(client, 'phone', 'unknown')
+        cmd_name = event.pattern_match.group(0) if hasattr(event, 'pattern_match') else "Unknown"
+        sender_label = "OWNER" if event.sender_id == OWNER_ID else "SELF"
+        
+        logger.info(f"[{phone}] ⚡ COMMAND: {cmd_name} | From: {sender_label} ({event.sender_id})")
+        
+        try:
+            if event.out:
+                return await event.edit(text)
+            else:
+                return await event.reply(text)
+        except Exception as e:
+            logger.error(f"Response failed: {e}")
+            return await event.respond(text)
+
     # 1. Identity & System
-    @client.on(events.NewMessage(pattern=r'\.ping', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.ping\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def ping_handler(event):
         start = time.time()
-        msg = await event.edit("🏓 **PONG**")
+        msg = await safe_respond(event, "🏓 **PONG**")
         ms = (time.time() - start) * 1000
-        await msg.edit(f"🏓 **PONG**\n⏱ `{ms:.2f}ms`")
+        try: await msg.edit(f"🏓 **PONG**\n⏱ `{ms:.2f}ms`")
+        except: pass
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.alive', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.alive\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def alive_handler(event):
-        msg = await event.edit("🚀 **Kurup Userbot is active.**")
+        msg = await safe_respond(event, "🚀 **Kurup Userbot is active.**")
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.id', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.verify\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    async def verify_handler(event):
+        msg = await safe_respond(event, "✅ **Commands are Working!**\nSystem is scanning for jobs and responding correctly.")
+        asyncio.create_task(async_delete(event, msg))
+
+    @client.on(events.NewMessage(pattern=r'\.id\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def id_handler(event):
         user_id = getattr(client, 'user_id', 'Unknown')
-        chat_id = event.chat_id
-        text = f"🆔 **User ID:** `{user_id}`\n🏘 **Chat ID:** `{chat_id}`"
-        msg = await event.edit(text)
+        text = f"🆔 **User ID:** `{user_id}`\n🏘 **Chat ID:** `{event.chat_id}`"
+        msg = await safe_respond(event, text)
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.me', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.me\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def me_handler(event):
         me = await client.get_me()
-        user_id = getattr(client, 'user_id', 'Unknown')
-        phone = getattr(client, 'phone', 'Unknown')
-        text = f"""
-👤 **ACCOUNT INFO**
-📞 **Phone:** `{phone}`
-🆔 **ID:** `{user_id}`
-📝 **Name:** {me.first_name} {me.last_name or ''}
-🌟 **Username:** @{me.username or 'None'}
-"""
-        msg = await event.edit(text)
+        user_id, phone = getattr(client, 'user_id', 'Unknown'), getattr(client, 'phone', 'Unknown')
+        text = f"👤 **ACCOUNT INFO**\n📞 **Phone:** `{phone}`\n🆔 **ID:** `{user_id}`\n📝 **Name:** {me.first_name} {me.last_name or ''}\n🌟 **Username:** @{me.username or 'None'}"
+        msg = await safe_respond(event, text)
         asyncio.create_task(async_delete(event, msg))
 
     # 2. Status & Settings
-    @client.on(events.NewMessage(pattern=r'\.interval', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.interval\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def interval_handler(event):
         user_id = getattr(client, 'user_id', None)
         if not user_id: return
         config = await get_user_config(user_id)
-        msg = await event.edit(f"⏱ **Interval Settings:**\n├ Cycle Wait: `{config.get('interval_min', 20)}m` (Post-Cycle)\n└ Status: `{'ACTIVE ✅' if config.get('is_active') else 'PAUSED ⏸'}`")
+        text = f"⏱ **Interval Settings:**\n├ Cycle Wait: `{config.get('interval_min', 20)}m` (Post-Cycle)\n└ Status: `{'ACTIVE ✅' if config.get('is_active') else 'PAUSED ⏸'}`"
+        msg = await safe_respond(event, text)
         asyncio.create_task(async_delete(event, msg))
 
     # 3. Group Management
@@ -87,25 +104,21 @@ def register_userbot_handlers(client: TelegramClient):
     async def addgroup_handler(event):
         raw = event.pattern_match.group(1)
         if not raw:
-            await event.edit("❌ **Usage:** `.addgroup <link/addlist_link>`")
+            msg = await safe_respond(event, "❌ **Usage:** `.addgroup <link/addlist_link>`")
+            asyncio.create_task(async_delete(event, msg))
             return
             
         links = [l.strip() for l in re.split(r'[,\s\n]+', raw) if l.strip()]
-        user_id = getattr(client, 'user_id', None)
-        phone = getattr(client, 'phone', None)
-        
-        await event.edit(f"⏳ **Importing {len(links)} groups/folders...**")
+        user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
+        msg = await safe_respond(event, f"⏳ **Importing {len(links)} groups/folders...**")
         success = 0
         failed = 0
-        
         for link in links:
             try:
-                # FOLDER SUPPORT
                 if "t.me/addlist/" in link or "telegram.me/addlist/" in link:
                     slug = link.split("/addlist/")[1].split("?")[0]
                     check = await client(CheckChatlistInviteRequest(slug=slug))
                     await client(JoinChatlistInviteRequest(slug=slug, peers=check.missing_peers))
-                    
                     for peer in check.already_peers + check.missing_peers:
                         try:
                             entity = await client.get_entity(peer)
@@ -114,13 +127,9 @@ def register_userbot_handlers(client: TelegramClient):
                                 success += 1
                         except: pass
                 else:
-                    # Individual Group
                     chat_id, chat_username, title = parse_group_entry(link)
-                    if chat_username:
-                        await client(JoinChannelRequest(chat_username))
-                    elif "+ " in title:
-                        await client(ImportChatInviteRequest(title.split("+")[1]))
-                    
+                    if chat_username: await client(JoinChannelRequest(chat_username))
+                    elif "+ " in title: await client(ImportChatInviteRequest(title.split("+")[1]))
                     chat = await client.get_entity(chat_id if chat_id else chat_username)
                     await add_group(user_id, chat.id, chat.title, phone, chat_username=getattr(chat, 'username', None))
                     success += 1
@@ -128,78 +137,67 @@ def register_userbot_handlers(client: TelegramClient):
             except Exception as e:
                 logger.error(f"Addgroup failed for {link}: {e}")
                 failed += 1
-
-        msg = await event.edit(f"✅ **Import Complete!**\n📥 Added: `{success}` groups\n❌ Failed: `{failed}`")
+        await msg.edit(f"✅ **Import Complete!**\n📥 Added: `{success}` groups\n❌ Failed: `{failed}`")
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.remfailed', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.remfailed\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def remfailed_handler(event):
-        user_id = getattr(client, 'user_id', None)
-        phone = getattr(client, 'phone', None)
-        db = get_database()
-        res = await db.groups.delete_many({
-            "user_id": user_id, "account_phone": phone, 
-            "$or": [{"enabled": False}, {"first_fail_at": {"$exists": True}}]
-        })
-        msg = await event.edit(f"🗑 **Cleaned!** Removed `{res.deleted_count}` failing groups.")
+        user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
+        res = await get_database().groups.delete_many({"user_id": user_id, "account_phone": phone, "$or": [{"enabled": False}, {"first_fail_at": {"$exists": True}}]})
+        msg = await safe_respond(event, f"🗑 **Cleaned!** Removed `{res.deleted_count}` failing groups.")
         asyncio.create_task(async_delete(event, msg))
+
+    @client.on(events.NewMessage(pattern=r'\.leave\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    async def leave_handler(event):
+        if not event.is_group:
+            msg = await safe_respond(event, "❌ This command only works in groups.")
+            asyncio.create_task(async_delete(event, msg))
+            return
+        user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
+        await safe_respond(event, "👋 **Leaving and removing block...**")
+        try:
+            await remove_group(user_id, event.chat_id, phone=phone)
+            await client.delete_dialog(event.chat_id)
+        except Exception as e: logger.error(f"Leave failed: {e}")
 
     # 4. Bio & Reply
     @client.on(events.NewMessage(pattern=r'\.setreply(\s.+)?', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def setreply_handler(event):
         text = event.pattern_match.group(1)
         if not text:
-            await event.edit("❌ **Usage:** `.setreply <msg>`")
+            msg = await safe_respond(event, "❌ **Usage:** `.setreply <msg>`")
+            asyncio.create_task(async_delete(event, msg))
             return
-        user_id = getattr(client, 'user_id', None)
-        phone = getattr(client, 'phone', None)
-        db = get_database()
-        await db.sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"auto_reply_text": text.strip()}})
-        msg = await event.edit("✅ **Auto-reply updated!**")
+        user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
+        await get_database().sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"auto_reply_text": text.strip()}})
+        msg = await safe_respond(event, "✅ **Auto-reply updated!**")
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.onreply', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.onreply\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def onreply_handler(event):
         user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
         await get_database().sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"auto_reply_enabled": True}})
-        msg = await event.edit("✅ **Auto-responder ON!**")
+        msg = await safe_respond(event, "✅ **Auto-responder ON!**")
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.offreply', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.offreply\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def offreply_handler(event):
         user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
         await get_database().sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"auto_reply_enabled": False}})
-        msg = await event.edit("❌ **Auto-responder OFF!**")
+        msg = await safe_respond(event, "❌ **Auto-responder OFF!**")
         asyncio.create_task(async_delete(event, msg))
 
     # 5. Help & Sync
-    @client.on(events.NewMessage(pattern=r'\.help', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.help\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def help_handler(event):
-        help_text = """
-🛠 **USERBOT MASTER COMMANDS**
-
-📁 **GROUPS**
-`.addgroup <link>` - Link or Folder
-`.interval` - View settings
-`.remfailed` - Clean dead groups
-`.sync` - Import all chats
-
-⚙️ **AUTO-REPLY**
-`.setreply <msg>` - Set response
-`.onreply` / `.offreply` - Toggle
-
-ℹ️ **IDENTITY**
-`.ping` | `.id` | `.me` | `.alive`
-
-_All responses delete after 30s._
-"""
-        msg = await event.edit(help_text)
+        help_text = "🛠 **USERBOT MASTER COMMANDS**\n\n📁 **GROUPS**\n`.addgroup <link>` - Link or Folder\n`.interval` - View settings\n`.remfailed` - Clean dead groups\n`.leave` - Exit group\n`.sync` - Import all chats\n\n⚙️ **AUTO-REPLY**\n`.setreply <msg>` - Set response\n`.onreply` / `.offreply` - Toggle\n\nℹ️ **IDENTITY**\n`.ping` | `.verify` | `.id` | `.me` | `.alive`"
+        msg = await safe_respond(event, help_text)
         asyncio.create_task(async_delete(event, msg))
 
-    @client.on(events.NewMessage(pattern=r'\.sync', func=lambda e: e.out or e.sender_id == OWNER_ID))
+    @client.on(events.NewMessage(pattern=r'\.sync\s*$', func=lambda e: e.out or e.sender_id == OWNER_ID))
     async def sync_handler(event):
         user_id, phone = getattr(client, 'user_id', None), getattr(client, 'phone', None)
-        await event.edit("⏳ **Syncing account groups...**")
+        msg = await safe_respond(event, "⏳ **Syncing account groups...**")
         count = 0
         async for dialog in client.iter_dialogs():
             if dialog.is_group:
@@ -209,16 +207,15 @@ _All responses delete after 30s._
                         await add_group(user_id, dialog.id, dialog.name, phone, chat_username=getattr(dialog.entity, 'username', None))
                         count += 1
                 except: pass
-        msg = await event.edit(f"✅ **Synced!** Registered `{count}` groups.")
+        await msg.edit(f"✅ **Synced!** Registered `{count}` groups.")
         asyncio.create_task(async_delete(event, msg))
 
-    logger.info(f"[{getattr(client, 'phone', 'unknown')}] Master commands registered")
+    logger.info(f"[{getattr(client, 'phone', 'unknown')}] Highly responsive master commands registered")
 
 def register_auto_responder(client: TelegramClient):
     """Register auto-responder once."""
     if hasattr(client, '_auto_responder_registered'): return
     client._auto_responder_registered = True
-    
     _responder_cooldowns = {}
     @client.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
     async def responder_handler(event):
