@@ -9,7 +9,6 @@ Runs a loop that:
 
 import asyncio
 import logging
-import signal
 import os
 import platform
 import datetime
@@ -18,7 +17,10 @@ import random
 from core.base_service import BaseService
 from core.database import get_database
 from models.user import get_user_config
-from core.config import SCHEDULER_POLL_INTERVAL
+from core.config import (
+    SCHEDULER_POLL_INTERVAL, GROUP_GAP_SECONDS, 
+    SEND_DELAY_MIN, SEND_DELAY_MAX
+)
 from models.job import (
     get_pending_jobs, claim_job, complete_job, fail_job, 
     upsert_worker_heartbeat
@@ -36,6 +38,7 @@ class UnifiedSender(BaseService):
         self.worker_id = f"worker_{platform.node()}_{os.getpid()}"
         self.pool = SessionManager()
         self._batch_counts = {} # phone -> count
+        self._account_locks = {} # phone -> asyncio.Lock
 
     async def on_start(self):
         """Startup logic for the Sender service."""
@@ -52,7 +55,8 @@ class UnifiedSender(BaseService):
         while self.running:
             try:
                 await upsert_worker_heartbeat(self.worker_id)
-            except: pass
+            except Exception as e:
+                logger.warning(f"Heartbeat failed: {e}")
             await asyncio.sleep(30)
 
     async def _main_processing_loop(self):
@@ -66,66 +70,68 @@ class UnifiedSender(BaseService):
                     continue
 
                 # 2. Get Jobs
-                jobs = await get_pending_jobs(limit=5)
+                jobs = await get_pending_jobs(limit=10)
                 if not jobs:
                     await asyncio.sleep(SCHEDULER_POLL_INTERVAL)
                     continue
 
                 # 3. Process
+                # We still gather, but _process_job will use per-account locks
                 await asyncio.gather(*[self._process_job(j) for j in jobs])
                 
             except Exception as e:
                 logger.error(f"Error in sender loop: {e}")
                 await asyncio.sleep(5)
 
+    def _get_account_lock(self, phone: str) -> asyncio.Lock:
+        if phone not in self._account_locks:
+            self._account_locks[phone] = asyncio.Lock()
+        return self._account_locks[phone]
+
     async def _process_job(self, job):
-        job_id = job["_id"]
+        job_id = job["job_id"] # Use job_id (UUID)
         user_id = job["user_id"]
         phone = job["phone"]
         group_id = job["group_id"]
         message_id = job["message_id"]
 
-        if not await claim_job(job_id, self.worker_id):
-            return
-
-        try:
-            session = await get_session(user_id, phone)
-            if not session or await is_session_paused(user_id, phone):
-                await fail_job(job_id, "Session unavailable/paused")
+        # Ensure we only process ONE job per account at a time
+        async with self._get_account_lock(phone):
+            if not await claim_job(job_id, self.worker_id):
                 return
 
-            # Batch Logic
-            count = self._batch_counts.get(phone, 0)
-            if count >= 5:
-                self._batch_counts[phone] = 0
-                await fail_job(job_id, "Batch break (5/5)")
-                return
+            try:
+                session = await get_session(user_id, phone)
+                if not session or await is_session_paused(user_id, phone):
+                    await fail_job(job_id, "Session unavailable/paused")
+                    return
 
-            client = await self.pool.acquire(user_id, phone)
-            config = await get_user_config(user_id)
-            
-            status, flood_sec = await send_message_to_group(
-                client, job_id, user_id, phone, message_id, group_id,
-                copy_mode=config.get("copy_mode", False)
-            )
+                # 1. Natural Send Delay (Jitter)
+                delay = random.randint(SEND_DELAY_MIN, SEND_DELAY_MAX)
+                logger.info(f"[{phone}] Applying send jitter: {delay}s")
+                await asyncio.sleep(delay)
 
-            if status == "sent":
-                await complete_job(job_id)
-                self._batch_counts[phone] = count + 1
-                await self._apply_adaptive_delay(session)
-            elif status == "flood":
-                await self._handle_flood(user_id, phone, flood_sec, job_id)
-            else:
-                await fail_job(job_id, f"Send failed: {status}")
+                client = await self.pool.acquire(user_id, phone)
+                config = await get_user_config(user_id)
+                
+                status, flood_sec = await send_message_to_group(
+                    client, job_id, user_id, phone, message_id, group_id,
+                    copy_mode=config.get("copy_mode", False)
+                )
 
-        except Exception as e:
-            logger.error(f"Job {job_id} error: {e}")
-            await fail_job(job_id, str(e))
+                if status == "sent":
+                    await complete_job(job_id)
+                    # 2. Group Gap (Delay before next group for this same account)
+                    logger.info(f"[{phone}] Message SENT to {group_id}. Applying gap: {GROUP_GAP_SECONDS}s")
+                    await asyncio.sleep(GROUP_GAP_SECONDS)
+                elif status == "flood":
+                    await self._handle_flood(user_id, phone, flood_sec, job_id)
+                else:
+                    await fail_job(job_id, f"Send failed: {status}")
 
-    async def _apply_adaptive_delay(self, session):
-        total = session.get("total_sent", 0)
-        delay = random.randint(120, 240) if total < 50 else random.randint(60, 120)
-        await asyncio.sleep(delay)
+            except Exception as e:
+                logger.error(f"Job {job_id} error: {e}")
+                await fail_job(job_id, str(e))
 
     async def _handle_flood(self, user_id, phone, sec, job_id):
         db = get_database()

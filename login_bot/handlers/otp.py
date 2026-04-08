@@ -136,7 +136,11 @@ async def otp_keypad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     phone = context.user_data.get("phone", "Unknown")
     
     # Handle actions
-    if action == "back":
+    if action == "noop":
+        await query.answer()  # Display row — do nothing
+        return
+
+    elif action == "back":
         # Remove last digit
         otp_buffer = otp_buffer[:-1]
         await query.answer()

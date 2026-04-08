@@ -24,18 +24,18 @@ async def create_job(
     user_id: int,
     phone: str,
     message_id: int,
-    groups: List[int],
+    group_id: int,
     run_at: datetime = None,
     copy_mode: bool = False,
 ) -> dict:
     """
-    Create a new scheduled send job.
+    Create a new scheduled send job for a single group.
 
     Args:
         user_id:    Telegram user ID (owner).
         phone:      Phone number of the sending account.
         message_id: ID of the Saved Message to forward/copy.
-        groups:     List of target chat_ids.
+        group_id:   Target chat_id.
         run_at:     When to execute (default: now).
         copy_mode:  True = send_message (copy), False = forward_messages.
 
@@ -50,7 +50,7 @@ async def create_job(
         "user_id": user_id,
         "phone": phone,
         "message_id": message_id,
-        "groups": groups,
+        "group_id": group_id,
         "copy_mode": copy_mode,
         "run_at": run_at or now,
         "status": "pending",
@@ -64,7 +64,7 @@ async def create_job(
     }
 
     await db.scheduled_jobs.insert_one(doc)
-    logger.info(f"Job created: {doc['job_id']} for user {user_id}, {len(groups)} groups")
+    logger.info(f"Job created: {doc['job_id']} for user {user_id}, group {group_id}")
     return doc
 
 
