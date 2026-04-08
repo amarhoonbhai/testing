@@ -85,6 +85,9 @@ class SessionManager:
                 client.phone = phone
                 client._last_check = asyncio.get_event_loop().time()
                 
+                # Start the background update receiver loop
+                await client.start()
+                
                 self._clients[key] = client
                 return client
                 

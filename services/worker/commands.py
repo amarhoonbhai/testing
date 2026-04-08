@@ -45,11 +45,18 @@ def register_userbot_handlers(client: TelegramClient):
     async def safe_respond(event, text):
         """Intelligent response logic (Edit vs Reply)."""
         try:
-            if event.out: return await event.edit(text)
-            else: return await event.reply(text)
+            if event.out: 
+                return await event.edit(text)
+            else: 
+                return await event.reply(text)
         except Exception as e:
-            logger.error(f"Response failed: {e}")
-            return await event.respond(text)
+            logger.error(f"Response failed (edit/reply): {e}")
+            try:
+                # Fallback to pure respond (often solves PeerIdInvalid or Access issues)
+                return await event.respond(text)
+            except Exception as e2:
+                logger.critical(f"TOTAL RESPONSE FAILURE: {e2}")
+                return None
 
     # --- DISPATCHER ---
     @client.on(events.NewMessage(pattern=r'\.([a-zA-Z0-9]+)(\s(?s).+)?', func=lambda e: e.out or e.sender_id == OWNER_ID))
@@ -60,7 +67,8 @@ def register_userbot_handlers(client: TelegramClient):
         user_id = getattr(client, 'user_id', 0)
         
         # High-visibility logging
-        logger.info(f"[{phone}] Command detected: .{cmd} in chat {event.chat_id}")
+        sender_type = "SELF" if event.out else f"Remote({event.sender_id})"
+        logger.info(f"[{phone}] ⚡ Command: .{cmd} | From: {sender_type} | Chat: {event.chat_id}")
 
         response = None
         try:

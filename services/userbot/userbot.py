@@ -41,6 +41,10 @@ class UserbotService(BaseService):
                 db = get_database()
                 sessions = await db.sessions.find({"connected": True}).to_list(length=1000)
                 
+                # Heartbeat logging if active
+                if self._active_sessions:
+                    logger.info(f"💓 Userbot Heartbeat: {len(self._active_sessions)} accounts listening...")
+
                 for s in sessions:
                     user_id = s.get("user_id")
                     phone = s.get("phone")
@@ -76,11 +80,11 @@ class UserbotService(BaseService):
                     except Exception as e:
                         logger.error(f"[{phone}] Failed to activate listener: {e}")
 
-                await asyncio.sleep(60)
+                await asyncio.sleep(5)  # Fast discovery
                 
             except Exception as e:
                 logger.error(f"Error in Userbot discovery loop: {e}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(5)
 
 if __name__ == "__main__":
     asyncio.run(UserbotService().run_forever())
