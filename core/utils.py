@@ -67,3 +67,45 @@ def escape_markdown(text: str) -> str:
     """Legacy Markdown escaping."""
     if not text: return ""
     return re.sub(r'([_*\[\]])', r'\\\1', str(text))
+
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escape characters for Telegram's MarkdownV2 parser.
+    Escapes: \ _ * [ ] ( ) ~ ` > # + - = | { } . !
+    """
+    if not text: return ""
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
+
+def build_connection_success_text(phone: str, plan: dict) -> str:
+    """Standardized success message after account connection."""
+    plan_type = plan.get("plan_type", "free") if plan else "free"
+    
+    if plan and plan.get("plan_type") == "premium" and plan.get("expires_at"):
+        expires_at = plan["expires_at"]
+        diff = expires_at - datetime.utcnow()
+        days_left = diff.days
+        hours_left = diff.seconds // 3600
+        time_left = f"{days_left}d {hours_left}h" if days_left > 0 else f"{hours_left}h"
+        
+        return f"""
+✅ *Account Connected Successfully!*
+
+📱 `{phone}` is now linked.
+
+💎 *Plan:* PREMIUM
+⏳ *Remaining:* {time_left}
+
+🚀 Open the dashboard to configure groups and start sending.
+"""
+    else:
+        return f"""
+✅ *Account Connected to KURUP ADS!*
+
+📱 `{phone}` is now linked to your account.
+
+🆓 *Plan:* Free (No Expiry)
+✅ Start forwarding right away!
+
+👇 Open the dashboard to add your groups and begin.
+"""
