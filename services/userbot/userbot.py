@@ -57,8 +57,18 @@ class UserbotService(BaseService):
                         register_userbot_handlers(client)
                         register_auto_responder(client)
                         
-                        # Start persistent listener task
-                        task = asyncio.create_task(client.run_until_disconnected())
+                        # Start persistent listener task and keep reference
+                        fut = client.run_until_disconnected()
+                        task = asyncio.create_task(fut)
+                        
+                        # Add callback to cleanup when task ends
+                        def _on_finish(t, sid=sid):
+                            self._listeners.pop(sid, None)
+                            self._active_sessions.discard(sid)
+                            logger.warning(f"[{sid[1]}] Listener task ended.")
+                            
+                        task.add_done_callback(_on_finish)
+                        
                         self._listeners[sid] = task
                         self._active_sessions.add(sid)
                         logger.info(f"[{phone}] Command listener ACTIVE")

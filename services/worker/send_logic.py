@@ -1,26 +1,22 @@
 """
 Core message-sending logic for the stronger worker.
-Handles dynamic joining, handle resolution, and robust error management.
+Handles dynamic joining, handle resolution, and multi-ad campaigns.
 """
 
 import asyncio
 import logging
-from telethon import TelegramClient
-from telethon.tl.functions.messages import ForwardMessagesRequest
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.functions.messages import ImportChatInviteRequest
+import random
+import datetime
+from telethon import TelegramClient, types
 from telethon.errors import (
-    FloodWaitError,
-    PeerIdInvalidError,
-    ChatWriteForbiddenError,
-    UserPrivacyRestrictedError,
-    InviteHashExpiredError,
-    InviteHashInvalidError,
-    ChannelsTooMuchError,
-    UserBannedInChannelError,
+    FloodWaitError, PeerFloodError, ChatWriteForbiddenError,
+    UserPrivacyRestrictedError, InviteHashExpiredError, InviteHashInvalidError,
+    ChannelsTooMuchError, UserBannedInChannelError, PeerIdInvalidError,
+    ChannelInvalidError, UsernameNotOccupiedError, UsernameInvalidError
 )
 from core.database import get_database
 from models.group import toggle_group, mark_group_failing, clear_group_fail, remove_group
+from core.adaptive import AdaptiveDelayController, UserLogAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -30,141 +26,106 @@ async def send_message_to_group(
     user_id: int,
     phone: str,
     message_id: int,
-    group_id: int, # This is the numeric ID we stored or a fake hash ID
+    group_id: int,
     copy_mode: bool = False,
+    adaptive_controller: AdaptiveDelayController = None,
+    msg_obj = None, # Optional: pass pre-fetched message object for multi-ad
 ) -> tuple[str, int]:
     """
-    Send (forward) a message to a group with auto-join support.
-    Returns: (status, flood_seconds)
-    Status: 'sent', 'flood', 'deactivated', 'failed', 'skip'
+    Send a message to a group with Multi-Ad support and Stealth features.
     """
     db = get_database()
+    lgr = UserLogAdapter(logger, {'user_id': user_id, 'phone': phone})
     
-    # 1. Fetch group document to get handle/invite
     group_doc = await db.groups.find_one({"user_id": user_id, "chat_id": group_id})
-    if not group_doc:
-        logger.warning(f"[{phone}] Group {group_id} not found in database — skipping")
-        return "skip", 0
+    if not group_doc: return "skip", 0
 
     handle = group_doc.get("chat_username")
     title = group_doc.get("chat_title", "Unknown")
-    
     target_entity = None
     
-    # 2. Resolve target entity
+    # ── STEP 1: Entity Resolution & Auto-Join ─────────────────────────────
     try:
-        if handle:
-            # Public username
-            target_entity = await client.get_entity(handle)
-        else:
-            # Private hash or numeric ID
-            # If it's a numeric ID (original ID preserved)
-            if group_id < 0:
-                target_entity = await client.get_entity(group_id)
-            else:
-                # This could be a private invite hash (we stored as "Invite:hash" in title or similar)
-                # For simplicity, if we don't have an entity, we try to join first
-                raise ValueError("No handle for invite")
-
-    except (ValueError, PeerIdInvalidError):
-        # We need to join or resolve
-        # Check if the title contains an invite hash we stored
-        # Format: "[Private] +hash"
-        if " [Private] +" in title:
-            invite_hash = title.split(" [Private] +")[1]
-            try:
-                await client(ImportChatInviteRequest(invite_hash))
-                target_entity = await client.get_entity(group_id) # Try numeric lookup again
-            except InviteHashExpiredError:
-                await remove_group(user_id, group_id, phone=phone)
-                logger.info(f"[{phone}] 🗑 Auto-Removed {group_id} (Invite link expired)")
-                return "failed", 0
-            except InviteHashInvalidError:
-                await remove_group(user_id, group_id, phone=phone)
-                logger.info(f"[{phone}] 🗑 Auto-Removed {group_id} (Invalid invite hash)")
-                return "failed", 0
-            except Exception as join_err:
-                logger.error(f"[{phone}] Failed to join {group_id}: {join_err}")
-                return "failed", 0
-        elif handle:
-            # Maybe it's a public join
-            try:
+        target_entity = await client.get_input_entity(group_id)
+    except (ValueError, PeerIdInvalidError, ChannelInvalidError):
+        try:
+            if handle:
+                from telethon.tl.functions.channels import JoinChannelRequest
                 await client(JoinChannelRequest(handle))
-                target_entity = await client.get_entity(handle)
-            except Exception as join_err:
-                logger.error(f"[{phone}] Failed to join {handle}: {join_err}")
+                target_entity = await client.get_input_entity(handle)
+            elif " [Private] +" in title:
+                from telethon.tl.functions.messages import ImportChatInviteRequest
+                invite_hash = title.split(" [Private] +")[1]
+                await client(ImportChatInviteRequest(invite_hash))
+                target_entity = await client.get_input_entity(group_id)
+            else:
+                lgr.warning(f"No handle/invite for auto-join to {group_id}")
                 return "failed", 0
-        else:
-            await mark_group_failing(user_id, group_id, "Cannot resolve group entity")
+        except Exception as e:
+            lgr.error(f"Auto-Join FAILED for {group_id}: {e}")
+            await mark_group_failing(user_id, group_id, f"Auto-Join Failed: {str(e)}")
             return "failed", 0
 
-    # 3. Perform Forwarding / Copying
+    # ── STEP 2: Stealth Behaviors ─────────────────────────────────────────
     try:
-        # Resolve Actual Message ID if auto-fetch is requested
-        actual_message_id = message_id
-        if actual_message_id == -1:
-            # Fetch latest message from 'me' (Saved Messages)
-            latest_msgs = await client.get_messages('me', limit=1)
-            if not latest_msgs:
-                logger.warning(f"[{phone}] No messages found in Saved Messages")
-                return "failed", 0
-            actual_message_id = latest_msgs[0].id
-            logger.info(f"[{phone}] Auto-detected latest message ID: {actual_message_id}")
+        if random.random() > 0.1:
+            async with client.action(target_entity, 'typing'):
+                await asyncio.sleep(random.uniform(2, 4))
+    except: pass
+    await asyncio.sleep(random.uniform(0.2, 0.8))
 
-        if copy_mode:
-            # TRUE COPY: Fetch content and send as a fresh message
-            msg_obj = await client.get_messages('me', ids=actual_message_id)
-            if not msg_obj:
-                return "failed", 0
-                
-            await client.send_message(
-                target_entity,
-                message=msg_obj
-            )
-            logger.info(f"[{phone}] SENT Copy to {group_id}")
-        else:
-            # STANDARD FORWARD
-            await client(ForwardMessagesRequest(
-                from_peer='me',
-                id=[actual_message_id],
-                to_peer=target_entity,
-                drop_author=True, # Note: Telethon's ForwardMessagesRequest still behaves like a forward
-            ))
-            logger.info(f"[{phone}] SENT Forward to {group_id}")
+    # ── STEP 3: Content Fetching with Empty-Skip ──────────────────────────
+    try:
+        if not msg_obj:
+            if message_id == -1:
+                latest = await client.get_messages('me', limit=1)
+                if latest: msg_obj = latest[0]
+            else:
+                msg_obj = await client.get_messages('me', ids=message_id)
+
+        if not msg_obj:
+            lgr.error(f"Could not fetch ad message {message_id}")
+            return "failed", 0
         
-        # 4. Update Success Stats
+        # EMPTY MESSAGE SKIP Logic
+        if not msg_obj.text and not msg_obj.media:
+            lgr.warning(f"Skipping Message ID {msg_obj.id} — no text or media found.")
+            return "skip", 0
+            
+        # SERVICE MESSAGE SKIP Logic
+        if hasattr(msg_obj, 'action') and msg_obj.action is not None:
+            lgr.warning(f"Skipping Message ID {msg_obj.id} — service message.")
+            return "skip", 0
+
+        # ── STEP 4: Send ──────────────────────────────────────────────────
+        if copy_mode:
+            await client.send_message(target_entity, msg_obj)
+        else:
+            await client.forward_messages(target_entity, msg_obj)
+        
+        if adaptive_controller: adaptive_controller.on_success()
         await clear_group_fail(user_id, group_id)
-        await db.sessions.update_one(
-            {"user_id": user_id, "phone": phone},
-            {"$inc": {"total_sent": 1}, "$set": {"last_active": __import__('datetime').datetime.utcnow()}}
-        )
         return "sent", 0
 
     except FloodWaitError as e:
-        logger.warning(f"[{phone}] FloodWait observed: {e.seconds}s")
+        if adaptive_controller: adaptive_controller.on_flood(e.seconds)
         return "flood", e.seconds
 
+    except PeerFloodError:
+        lgr.critical(f"🚨 PEER_FLOOD: Account restricted. Cooling down 2h.")
+        pause_until = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
+        await db.sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"paused_until": pause_until, "pause_reason": "PeerFlood (2h cooldown)"}})
+        return "failed", 0
+
     except ChatWriteForbiddenError:
-        await mark_group_failing(user_id, group_id, "ChatWriteForbidden: No permission to post here")
-        logger.info(f"[{phone}] ⏸ Paused {group_id} (No permission to post)")
+        await mark_group_failing(user_id, group_id, "No permission to post")
         return "failed", 0
 
-    except UserPrivacyRestrictedError:
-        await mark_group_failing(user_id, group_id, "UserPrivacyRestricted: Cannot forward due to privacy")
-        return "failed", 0
-    
-    except UserBannedInChannelError:
+    except (InviteHashExpiredError, InviteHashInvalidError, UserBannedInChannelError):
+        lgr.warning(f"Removing group {group_id} (Banned or Link Expired)")
         await remove_group(user_id, group_id, phone=phone)
-        logger.info(f"[{phone}] 🗑 Auto-Removed {group_id} (Banned from group)")
-        return "failed", 0
-
-    except PeerIdInvalidError:
-        await remove_group(user_id, group_id, phone=phone)
-        logger.info(f"[{phone}] 🗑 Auto-Removed {group_id} (Group inaccessible/deleted)")
         return "failed", 0
 
     except Exception as e:
-        err_name = type(e).__name__
-        logger.error(f"[{phone}] {err_name} sending to {group_id}: {e}")
-        await mark_group_failing(user_id, group_id, f"{err_name}: {str(e)}")
+        lgr.error(f"Send Error to {group_id}: {e}")
         return "failed", 0
