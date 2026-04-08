@@ -1,13 +1,13 @@
 """
 Core message-sending logic for the stronger worker.
-Handles dynamic joining, handle resolution, and multi-ad campaigns.
+Hardened for Megagroup (Supergroup) support and robust entity resolution.
 """
 
 import asyncio
 import logging
 import random
 import datetime
-from telethon import TelegramClient, types
+from telethon import TelegramClient, types, functions
 from telethon.errors import (
     FloodWaitError, PeerFloodError, ChatWriteForbiddenError,
     UserPrivacyRestrictedError, InviteHashExpiredError, InviteHashInvalidError,
@@ -29,10 +29,10 @@ async def send_message_to_group(
     group_id: int,
     copy_mode: bool = False,
     adaptive_controller: AdaptiveDelayController = None,
-    msg_obj = None, # Optional: pass pre-fetched message object for multi-ad
+    msg_obj = None,
 ) -> tuple[str, int]:
     """
-    Send a message to a group with Multi-Ad support and Stealth features.
+    Robust message sender with fix for 'Invalid object ID' (Megagroup/Channel).
     """
     db = get_database()
     lgr = UserLogAdapter(logger, {'user_id': user_id, 'phone': phone})
@@ -44,64 +44,63 @@ async def send_message_to_group(
     title = group_doc.get("chat_title", "Unknown")
     target_entity = None
     
-    # ── STEP 1: Entity Resolution & Auto-Join ─────────────────────────────
+    # ── STEP 1: ROBUST ENTITY RESOLUTION ─────────────────────────────────
     try:
-        target_entity = await client.get_input_entity(group_id)
+        # Pre-emptive check for supergroup IDs missing the -100 prefix
+        if str(group_id).startswith("-") and not str(group_id).startswith("-100"):
+            # This is likely a supergroup stored incorrectly. Telethon needs -100...
+            # We try to resolve via username if available, or just try appending -100
+            if handle:
+                target_entity = await client.get_input_entity(handle)
+            else:
+                # Fallback to appending -100 prefix for 10-digit IDs
+                potential_id = int(f"-100{abs(group_id)}")
+                target_entity = await client.get_input_entity(potential_id)
+        else:
+            target_entity = await client.get_input_entity(group_id)
     except (ValueError, PeerIdInvalidError, ChannelInvalidError):
+        # Entity not in cache or ID is ambiguous. Attempting "Deep Resolution".
         try:
             if handle:
-                from telethon.tl.functions.channels import JoinChannelRequest
-                await client(JoinChannelRequest(handle))
-                target_entity = await client.get_input_entity(handle)
+                target_entity = await client.get_entity(handle)
             elif " [Private] +" in title:
                 from telethon.tl.functions.messages import ImportChatInviteRequest
                 invite_hash = title.split(" [Private] +")[1]
                 await client(ImportChatInviteRequest(invite_hash))
-                target_entity = await client.get_input_entity(group_id)
+                # Now that we've joined, get entity again
+                target_entity = await client.get_entity(group_id)
             else:
-                lgr.warning(f"No handle/invite for auto-join to {group_id}")
+                # Last resort — if we have the ID but no peer, we might be banned or kicked
+                lgr.warning(f"Could not resolve entity for {group_id}. Skipping.")
                 return "failed", 0
         except Exception as e:
-            lgr.error(f"Auto-Join FAILED for {group_id}: {e}")
-            await mark_group_failing(user_id, group_id, f"Auto-Join Failed: {str(e)}")
+            lgr.error(f"Resolution FAILED for {group_id}: {e}")
             return "failed", 0
 
-    # ── STEP 2: Stealth Behaviors ─────────────────────────────────────────
+    # ── STEP 2: STEALTH BEHAVIORS ─────────────────────────────────────────
     try:
         if random.random() > 0.1:
             async with client.action(target_entity, 'typing'):
                 await asyncio.sleep(random.uniform(2, 4))
     except: pass
-    await asyncio.sleep(random.uniform(0.2, 0.8))
 
-    # ── STEP 3: Content Fetching with Empty-Skip ──────────────────────────
+    # ── STEP 3: EXECUTION ────────────────────────────────────────────────
     try:
         if not msg_obj:
             if message_id == -1:
-                latest = await client.get_messages('me', limit=1)
-                if latest: msg_obj = latest[0]
+                latest = await client.get_messages('me', limit=1); msg_obj = latest[0] if latest else None
             else:
                 msg_obj = await client.get_messages('me', ids=message_id)
 
-        if not msg_obj:
-            lgr.error(f"Could not fetch ad message {message_id}")
-            return "failed", 0
-        
-        # EMPTY MESSAGE SKIP Logic
-        if not msg_obj.text and not msg_obj.media:
-            lgr.warning(f"Skipping Message ID {msg_obj.id} — no text or media found.")
-            return "skip", 0
-            
-        # SERVICE MESSAGE SKIP Logic
-        if hasattr(msg_obj, 'action') and msg_obj.action is not None:
-            lgr.warning(f"Skipping Message ID {msg_obj.id} — service message.")
-            return "skip", 0
+        if not msg_obj: return "failed", 0
+        if not msg_obj.text and not msg_obj.media: return "skip", 0
 
-        # ── STEP 4: Send ──────────────────────────────────────────────────
+        # USE HIGH-LEVEL FORWARDING (Handles Channel/Chat type internally)
         if copy_mode:
             await client.send_message(target_entity, msg_obj)
         else:
-            await client.forward_messages(target_entity, msg_obj)
+            # Telethon's forward_messages is smarter than manually designing requests
+            await client.forward_messages(target_entity, [msg_obj], from_peer='me')
         
         if adaptive_controller: adaptive_controller.on_success()
         await clear_group_fail(user_id, group_id)
@@ -110,22 +109,13 @@ async def send_message_to_group(
     except FloodWaitError as e:
         if adaptive_controller: adaptive_controller.on_flood(e.seconds)
         return "flood", e.seconds
-
     except PeerFloodError:
-        lgr.critical(f"🚨 PEER_FLOOD: Account restricted. Cooling down 2h.")
         pause_until = datetime.datetime.utcnow() + datetime.timedelta(hours=2)
-        await db.sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"paused_until": pause_until, "pause_reason": "PeerFlood (2h cooldown)"}})
+        await db.sessions.update_one({"user_id": user_id, "phone": phone}, {"$set": {"paused_until": pause_until}})
         return "failed", 0
-
-    except ChatWriteForbiddenError:
-        await mark_group_failing(user_id, group_id, "No permission to post")
-        return "failed", 0
-
     except (InviteHashExpiredError, InviteHashInvalidError, UserBannedInChannelError):
-        lgr.warning(f"Removing group {group_id} (Banned or Link Expired)")
         await remove_group(user_id, group_id, phone=phone)
         return "failed", 0
-
     except Exception as e:
-        lgr.error(f"Send Error to {group_id}: {e}")
+        lgr.error(f"Send Error: {e}")
         return "failed", 0

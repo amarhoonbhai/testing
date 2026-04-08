@@ -1,6 +1,6 @@
 """
 V5 Elite Core Utilities.
-Centralized helpers for text processing, group parsing, and UI building.
+Hardened Universal Link Parser with Supergroup ID Normalization.
 """
 
 import re
@@ -10,106 +10,60 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-def escape_markdown(text: str) -> str:
-    """
-    Escape markdown characters for Telegram's legacy Markdown parser.
-    Escapes: _, *, [, ]
-    """
-    if not text:
-        return ""
-    return re.sub(r'([_*\[\]])', r'\\\1', str(text))
-
-
-def escape_markdown_v2(text: str) -> str:
-    """
-    Escape markdown characters for Telegram's MarkdownV2 parser.
-    Escapes: _, *, [, ], (, ), ~, >, #, +, -, =, |, {, }, ., !
-    """
-    if not text:
-        return ""
-    # List of characters to escape: \ _ * [ ] ( ) ~ ` > # + - = | { } . !
-    # We use a raw string for the regex
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
-
-def build_connection_success_text(phone: str, plan: dict) -> str:
-    """
-    Build standardized success message after account connection.
-    Used by both OTP and 2FA flows.
-    """
-    plan_type = plan.get("plan_type", "free") if plan else "free"
-    
-    if plan and plan.get("plan_type") == "premium" and plan.get("expires_at"):
-        expires_at = plan["expires_at"]
-        now = datetime.utcnow()
-        diff = expires_at - now
-        days_left = diff.days
-        hours_left = diff.seconds // 3600
-        time_left = f"{days_left}d {hours_left}h" if days_left > 0 else f"{hours_left}h"
-        
-        return f"""
-✅ *Account Connected Successfully!*
-
-📱 `{phone}` is now linked.
-
-💎 *Plan:* PREMIUM
-⏳ *Remaining:* {time_left}
-
-🚀 Open the dashboard to configure groups and start sending.
-"""
-    else:
-        return f"""
-✅ *Account Connected to KURUP ADS!*
-
-📱 `{phone}` is now linked to your account.
-
-🆓 *Plan:* Free (No Expiry)
-✅ Start forwarding right away!
-
-👇 Open the dashboard to add your groups and begin.
-"""
-
 def parse_group_entry(entry: str):
     """
-    Parse any supported group link format and return (chat_id, chat_username, title).
-    Handles public usernames, private invite hashes, and numeric IDs.
+    Ultimate parser for Telegram links. Returns (chat_id, chat_username, title, type).
+    Handles: @username, t.me/slug, t.me/addlist/slug, telegram.dog/slug, t.me/c/id/msg.
     """
     entry = entry.strip()
 
     # 1. Raw numeric ID (e.g. -1001234567890)
     if re.match(r'^-?\d+$', entry):
         chat_id = int(entry)
-        return chat_id, None, f"Group {chat_id}"
+        # Normalize: if it's a 10-digit negative ID, it's likely a supergroup missing -100
+        if chat_id < 0 and -9999999999 < chat_id < -100000000:
+            chat_id = int(f"-100{abs(chat_id)}")
+        return chat_id, None, f"ID: {chat_id}", "id"
 
-    # 2. Private Invite Links (t.me/+Hash or t.me/joinchat/Hash)
-    private_match = re.search(r'(t\.me/|tg://join\?invite=)(\+?|joinchat/)([A-Za-z0-9_\-]+)', entry)
-    if private_match:
-        invite_hash = private_match.group(3)
-        # Deterministic fake ID for tracking before join
+    # 2. Chatlist (addlist) Folder Links
+    if "/addlist/" in entry:
+        match = re.search(r't\.me/addlist/([A-Za-z0-9_-]+)', entry)
+        if match:
+            slug = match.group(1)
+            return None, slug, f"Chatlist: {slug}", "addlist"
+
+    # 3. Private Invite Links (t.me/+Hash or t.me/joinchat/Hash)
+    private_match = re.search(r'(?:t\.me|telegram\.me|telegram\.dog|tg://join\?invite=)(?:/|\+?|joinchat/)([A-Za-z0-9_\-]+)', entry)
+    if private_match and (("/+" in entry) or ("joinchat/" in entry) or ("invite=" in entry)):
+        invite_hash = private_match.group(1)
         chat_id = abs(hash(f"invite:{invite_hash}")) % 10**12 * -1
-        return chat_id, None, f"[Private] +{invite_hash[:10]}"
+        return chat_id, None, f"[Private] +{invite_hash[:10]}", "invite"
 
-    # 3. Private Link with ID (https://t.me/c/123456789/1)
+    # 4. Message/Channel Links with Numeric IDs (https://t.me/c/12345/1)
+    # Extracts the numeric part and adds -100 prefix
     cid_match = re.search(r't\.me/c/(\d+)', entry)
     if cid_match:
-        chat_id = -int(f"100{cid_match.group(1)}")
-        return chat_id, None, f"Group {chat_id}"
+        chat_id = int(f"-100{cid_match.group(1)}")
+        return chat_id, None, f"ID: {chat_id}", "id"
 
-    # 4. Public @username or t.me/username
-    slug = entry
-    if 't.me/' in slug:
-        slug = slug.split('t.me/')[-1]
-    if 'tg://resolve?domain=' in slug:
-        slug = slug.split('domain=')[-1]
-    slug = slug.lstrip('@').split('?')[0].split('/')[0].strip()
+    # 5. Public Links (@username, t.me/username, telegram.dog/username)
+    # Remove protocol and domain variations
+    clean = re.sub(r'https?://(t\.me|telegram\.me|telegram\.dog)/', '', entry)
+    clean = re.sub(r'tg://resolve\?domain=', '', clean)
+    slug = clean.lstrip('@').split('?')[0].split('/')[0].strip()
 
     if re.match(r'^[A-Za-z][\w_]{3,}$', slug):
         chat_id = slug_to_id(slug)
-        return chat_id, slug, f"@{slug}"
+        return chat_id, slug, f"@{slug}", "public"
 
-    raise ValueError(f"Unrecognized link format: {entry}")
+    raise ValueError(f"X Unrecognized link format: {entry}")
 
 def slug_to_id(slug: str) -> int:
-    """Convert a public username/slug to a stable numeric ID."""
+    """Deterministic hash for placeholder IDs before Telegram resolution."""
     h = int(hashlib.md5(slug.lower().encode()).hexdigest(), 16) % 10**9
     return -int(h)
+
+def escape_markdown(text: str) -> str:
+    """Legacy Markdown escaping."""
+    if not text: return ""
+    return re.sub(r'([_*\[\]])', r'\\\1', str(text))
