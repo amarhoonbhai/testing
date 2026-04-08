@@ -185,13 +185,32 @@ def register_userbot_handlers(client: TelegramClient):
                     await handle_addlist(event, link, internal=True)
                     success += 1; continue
                 
-                chat_id, chat_username, title = parse_group_entry(link)
-                if chat_username: await client(JoinChannelRequest(chat_username))
-                elif "+ " in title: await client(ImportChatInviteRequest(title.split("+")[1]))
-                chat = await client.get_entity(chat_id if chat_id else chat_username)
+                parsed = parse_group_entry(link)
+                chat_id, chat_username, title = parsed[0], parsed[1], parsed[2]
+                
+                # Check if already joined to avoid flood/errors
+                already_in = False
+                try:
+                    chat = await client.get_entity(chat_id if chat_id else chat_username)
+                    already_in = True
+                except: pass
+
+                if not already_in:
+                    if chat_username: 
+                        await client(JoinChannelRequest(chat_username))
+                    elif "[Private] +" in title:
+                        from telethon.tl.functions.messages import ImportChatInviteRequest
+                        invite_hash = title.split("[Private] +")[1]
+                        await client(ImportChatInviteRequest(invite_hash))
+                    
+                    # Refresh entity after joining
+                    chat = await client.get_entity(chat_id if chat_id else chat_username)
+                
                 await add_group(user_id, chat.id, chat.title, phone, chat_username=getattr(chat, 'username', None))
                 success += 1
-            except: failed += 1
+            except Exception as e: 
+                logger.warning(f"Addgroup failed for {link}: {e}")
+                failed += 1
         await msg.edit(f"✅ **Import Complete!**\n📥 Added: `{success}`\n❌ Failed: `{failed}`")
         return msg
 
