@@ -653,12 +653,17 @@ def parse_group_input(input_str: str) -> str:
         return input_str
     
     # Handle message links (extract chat identifier)
-    # https://t.me/c/123456789/123 -> 123456789
+    # https://t.me/c/123456789/123 -> -100123456789
     # https://t.me/groupname/123 -> groupname
     message_link_pattern = r"(?:https?://)?(?:t\.me|telegram\.me)/(?:c/)?([a-zA-Z0-9_-]+)/(\d+)"
     match = re.match(message_link_pattern, input_str)
     if match:
-        return match.group(1)
+        extracted = match.group(1)
+        if "/c/" in input_str and extracted.isdigit():
+            return int("-100" + extracted)
+        if extracted.isdigit() or extracted.startswith("-"):
+            return int(extracted)
+        return extracted
 
     # Handle various domain variations and protocols
     patterns = [
@@ -676,7 +681,12 @@ def parse_group_input(input_str: str) -> str:
     
     # If it looks like a numeric ID
     if re.match(r"^-?\d+$", input_str):
-        return input_str
+        # Ensure proper casting so Telethon treats it as an ID, not a string username
+        val = int(input_str)
+        # If user pasted a large positive ID from Rose bot or similar, it often misses the -100
+        if val > 1000000000:
+            return int(f"-100{val}")
+        return val
 
     # If it looks like a username without @
     if re.match(r"^[a-zA-Z0-9_]+$", input_str):
