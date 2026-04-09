@@ -683,9 +683,16 @@ def parse_group_input(input_str: str) -> str:
     if re.match(r"^-?\d+$", input_str):
         # Ensure proper casting so Telethon treats it as an ID, not a string username
         val = int(input_str)
-        # If user pasted a large positive ID from Rose bot or similar, it often misses the -100
-        if val > 1000000000:
-            return int(f"-100{val}")
+        str_val = str(val)
+        
+        if str_val.startswith("-100"):
+            return val
+            
+        abs_val = abs(val)
+        # If user pasted a large ID from Rose bot or similar, it often misses the -100 prefix
+        # for megagroups. Normal basic groups are well under 1 billion.
+        if abs_val > 1000000000:
+            return int(f"-100{abs_val}")
         return val
 
     # If it looks like a username without @

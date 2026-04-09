@@ -642,6 +642,17 @@ class UserSender:
         Returns: (flood_triggered: bool, flood_wait_seconds: int)
         """
         chat_id = group.get("chat_id")
+        
+        # On-the-fly fix for incorrectly stored megagroup IDs missing the -100 prefix
+        try:
+            if isinstance(chat_id, int):
+                if chat_id < 0 and not str(chat_id).startswith("-100") and abs(chat_id) > 1000000000:
+                    chat_id = int(f"-100{abs(chat_id)}")
+                elif chat_id > 1000000000:
+                    chat_id = int(f"-100{chat_id}")
+        except Exception:
+            pass
+            
         chat_title = group.get("chat_title", "Unknown")
         
         try:
