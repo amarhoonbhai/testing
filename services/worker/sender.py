@@ -723,8 +723,7 @@ class UserSender:
             else:
                 await self.client.forward_messages(
                     entity=entity,
-                    messages=message.id,
-                    from_peer=InputPeerSelf()
+                    messages=message
                 )
                 log_action = "Forwarded"
             
