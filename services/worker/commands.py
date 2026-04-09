@@ -299,6 +299,12 @@ async def handle_addgroup(client: TelegramClient, user_id: int, message, text: s
         try:
             # Get the entity (group/channel)
             entity = await client.get_entity(group_identifier)
+            
+            # Check if user is actually a member of the group/channel
+            if getattr(entity, 'left', False):
+                failed.append((group_input, "You are not a member! Join first."))
+                continue
+            
             chat_id = entity.id
             chat_title = getattr(entity, 'title', None) or getattr(entity, 'username', str(chat_id))
             

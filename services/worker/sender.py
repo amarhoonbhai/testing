@@ -545,7 +545,7 @@ class UserSender:
                 
                 # Prime dialog cache to prevent "Could not find entity" errors for private groups
                 try:
-                    async for _ in self.client.iter_dialogs(limit=300):
+                    async for _ in self.client.iter_dialogs(limit=3000):
                         pass
                 except Exception as e:
                     self.logger.warning(f"Error priming dialogs: {e}")
@@ -652,7 +652,7 @@ class UserSender:
                 # Private group not in Telethon's entity cache — scan dialogs to find it
                 self.logger.info(f"Entity not cached for {chat_id}, scanning dialogs...")
                 try:
-                    async for dialog in self.client.iter_dialogs(limit=300):
+                    async for dialog in self.client.iter_dialogs(limit=3000):
                         if dialog.id == chat_id:
                             entity = dialog.entity
                             break
