@@ -81,20 +81,15 @@ NIGHT_MODE_START_HOUR: int = 0
 NIGHT_MODE_END_HOUR: int = 6
 TIMEZONE: str = "Asia/Kolkata"
 
-# ── Trial / Bio ─────────────────────────────────────────────────────────────
-
 BRANDING_NAME: str = "‣ Kᴜʀᴜᴘ Aᴅs"
 BRANDING_BIO: str = "Powered by @KurupAdsBot | Network: @PhiloBots"
 TRIAL_BIO_TEXT: str = BRANDING_BIO
-BIO_CHECK_INTERVAL: int = 600
-TRIAL_DAYS: int = 7  # kept for backward compat
-REFERRAL_BONUS_DAYS: int = 7
-REFERRALS_NEEDED: int = 3
+BIO_CHECK_INTERVAL: int = 30 # Check every 30s
+REFERRAL_BONUS_GROUPS: int = 5 # +5 groups per referral
+REFERRALS_NEEDED: int = 1
 
-# ── Plans ───────────────────────────────────────────────────────────────────
-
-PLAN_PRICES: dict = {"week": 99, "month": 299}
-PLAN_DURATIONS: dict = {"week": 7, "month": 30}
+# ── Plans (DEPRECATED) ──────────────────────────────────────────────────────
+# Bot is now 100% Free
 
 # ── Channel ─────────────────────────────────────────────────────────────────
 

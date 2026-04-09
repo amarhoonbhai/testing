@@ -10,7 +10,6 @@ import secrets
 
 from core.database import get_database
 from core.config import (
-    TRIAL_DAYS, REFERRAL_BONUS_DAYS, REFERRALS_NEEDED,
     BRANDING_NAME, BRANDING_BIO, DEFAULT_INTERVAL_MINUTES
 )
 
@@ -58,42 +57,54 @@ async def get_user_by_referral_code(code: str) -> Optional[dict]:
 
 
 async def check_referral_bonus(referral_code: str):
-    """Check if referrer earned bonus and apply it."""
-    db = get_database()
-    referrer = await db.users.find_one({"referral_code": referral_code})
-    if not referrer:
-        return
-
-    if referrer.get("referral_count", 0) >= REFERRALS_NEEDED:
-        from models.plan import extend_plan
-        await extend_plan(referrer["user_id"], REFERRAL_BONUS_DAYS, upgrade_to_paid=False)
+    """Bonus logic disabled - system is now free."""
+    pass
 
 
 async def get_user_config(user_id: int) -> dict:
-    """Get user settings (interval, shuffle, etc)."""
+    """Get user config, creating default if not exists."""
     db = get_database()
-    doc = await db.user_configs.find_one({"user_id": user_id})
-    if not doc:
-        # Return defaults
-        return {
+    
+    config = await db.config.find_one({"user_id": user_id})
+    
+    if not config:
+        config = {
             "user_id": user_id,
             "interval_min": DEFAULT_INTERVAL_MINUTES,
+            "last_saved_id": 0,
             "shuffle_mode": False,
             "copy_mode": False,
-            "is_active": True,
+            "send_mode": "sequential",
             "auto_reply_enabled": False,
-            "auto_reply_text": "Hello! I am currently away. (Auto-reply)",
+            "auto_reply_text": "Hello! Thanks for your interest. Please contact @KurupAdsBot for more details.",
+            "updated_at": datetime.utcnow(),
         }
-    return doc
+        await db.config.insert_one(config)
+    
+    return config
 
 
-async def update_user_config(user_id: int, **kwargs):
-    """Update specific user settings."""
+async def update_user_config(user_id: int, **kwargs) -> dict:
+    """Update user config."""
     db = get_database()
+    
     kwargs["updated_at"] = datetime.utcnow()
-    await db.user_configs.update_one(
+    
+    await db.config.update_one(
         {"user_id": user_id},
         {"$set": kwargs},
+        upsert=True
+    )
+    
+    return await get_user_config(user_id)
+
+
+async def update_last_saved_id(user_id: int, last_saved_id: int):
+    """Update last processed saved message ID."""
+    db = get_database()
+    await db.config.update_one(
+        {"user_id": user_id},
+        {"$set": {"last_saved_id": last_saved_id, "updated_at": datetime.utcnow()}},
         upsert=True
     )
 
@@ -139,16 +150,12 @@ async def get_user_profile_data(user_id: int) -> dict:
     user = await get_user(user_id)
     config = await get_user_config(user_id)
     
-    from models.plan import get_plan
-    plan = await get_plan(user_id)
-    
     from models.group import get_group_count
     group_count = await get_group_count(user_id)
     
     return {
         "user": user,
         "config": config,
-        "plan": plan,
         "group_count": group_count,
         "is_branded": await is_user_branded(user_id)
     }
@@ -162,26 +169,10 @@ async def get_all_users() -> list[int]:
 
 
 async def get_all_users_for_broadcast(filter_type: str = "all") -> list[int]:
-    """Get user IDs filtered for broadcast (all, premium, trial, expired)."""
+    """Get user IDs filtered for broadcast (all users)."""
     db = get_database()
-    
-    if filter_type == "all":
-        cursor = db.users.find({}, {"user_id": 1})
-        return [u["user_id"] async for u in cursor]
-        
-    # For specific plans, we need to join with plans collection
-    # Or just find in plans and then return user_ids
-    if filter_type == "premium":
-        cursor = db.plans.find({"plan_type": "premium", "status": "active"}, {"user_id": 1})
-        return [u["user_id"] async for u in cursor]
-    elif filter_type == "trial":
-        cursor = db.plans.find({"plan_type": "trial", "status": "active"}, {"user_id": 1})
-        return [u["user_id"] async for u in cursor]
-    elif filter_type == "expired":
-        cursor = db.plans.find({"status": "expired"}, {"user_id": 1})
-        return [u["user_id"] async for u in cursor]
-        
-    return []
+    cursor = db.users.find({}, {"user_id": 1})
+    return [u["user_id"] async for u in cursor]
 
 
 # Alias for backward compatibility

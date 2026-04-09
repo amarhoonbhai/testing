@@ -151,3 +151,15 @@ async def get_all_failing_groups() -> List[dict]:
     db = get_database()
     cursor = db.groups.find({"first_fail_at": {"$exists": True}})
     return await cursor.to_list(length=1000)
+
+
+async def remove_stale_failing_groups(user_id: int) -> int:
+    """Remove groups failing for more than 24 hours. Returns count removed."""
+    from datetime import timedelta
+    db = get_database()
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    result = await db.groups.delete_many({
+        "user_id": user_id,
+        "first_fail_at": {"$lte": cutoff},
+    })
+    return result.deleted_count

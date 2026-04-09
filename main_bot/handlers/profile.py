@@ -9,7 +9,6 @@ from telegram.ext import ContextTypes
 import datetime
 
 from models.user import get_user_profile_data
-from models.plan import get_plan
 from main_bot.utils.keyboards import get_profile_keyboard
 from core.utils import escape_markdown
 
@@ -32,26 +31,10 @@ async def profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         data = {}
 
-    # ─── Plan badge ───
-    plan = data.get("plan")
-    if plan and plan.get("status") == "active":
-        plan_type = plan.get("plan_type", "free")
-        expires_at = plan.get("expires_at")
-
-        if plan_type == "premium" and expires_at:
-            days_left = (expires_at - datetime.datetime.utcnow()).days
-            hours_left = (expires_at - datetime.datetime.utcnow()).seconds // 3600
-            if days_left > 0:
-                plan_line = f"💎 PREMIUM — {days_left}d {hours_left}h left"
-            else:
-                plan_line = f"💎 PREMIUM — {hours_left}h left"
-        else:
-            plan_line = "🆓 FREE — No Expiry"
-    elif plan:
-        # Downgraded back to free after expiry
-        plan_line = "🆓 FREE — No Expiry"
-    else:
-        plan_line = "🆓 FREE — No Expiry"
+    # ─── Branding Status ───
+    is_branded = data.get("is_branded", False)
+    branding_line = "🟢 BRANDING ACTIVE" if is_branded else "🔴 BRANDING MISSING"
+    status_line = "🆓 FREE FOREVER (Enforced Branding)"
 
     # ─── Sessions ───
     sessions = data.get("sessions", [])
@@ -81,8 +64,9 @@ async def profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Username:* {username}
 *User ID:* `{user_id}`
 
-*SUBSCRIPTION*
-  {plan_line}
+*SERVICE STATUS*
+  {status_line}
+  {branding_line}
 
 *ACCOUNTS:* {accounts_count} connected
 *GROUPS:* {enabled_groups}/{total_groups} active

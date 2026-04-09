@@ -293,11 +293,11 @@ async def save_session_and_complete(
         
         context.user_data.clear()
 
-        # Fetch the user's current plan and build success text
-        from models.plan import get_plan
+        # Fetch the user's current branding status
+        from models.user import is_user_branded
         from core.utils import build_connection_success_text
-        plan = await get_plan(user_id)
-        text = build_connection_success_text(phone, plan)
+        is_branded = await is_user_branded(user_id)
+        text = build_connection_success_text(phone, is_branded)
         
         await query.edit_message_text(
             text,

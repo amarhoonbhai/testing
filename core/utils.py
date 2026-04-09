@@ -79,35 +79,17 @@ def escape_markdown_v2(text: str) -> str:
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
 
-def build_connection_success_text(phone: str, plan: dict) -> str:
+def build_connection_success_text(phone: str, branding_active: bool = True) -> str:
     """Standardized success message after account connection."""
-    plan_type = plan.get("plan_type", "free") if plan else "free"
+    branding_tag = "🟢 ACTIVE" if branding_active else "🔴 MISSING"
     
-    if plan and plan.get("plan_type") == "premium" and plan.get("expires_at"):
-        expires_at = plan["expires_at"]
-        diff = expires_at - datetime.utcnow()
-        days_left = diff.days
-        hours_left = diff.seconds // 3600
-        time_left = f"{days_left}d {hours_left}h" if days_left > 0 else f"{hours_left}h"
-        
-        return f"""
+    return f"""
 ✅ *Account Connected Successfully!*
 
 📱 `{phone}` is now linked.
 
-💎 *Plan:* PREMIUM
-⏳ *Remaining:* {time_left}
+🚀 *KURUP ADS — FREE EDITION*
+📢 *Branding:* {branding_tag}
 
-🚀 Open the dashboard to configure groups and start sending.
-"""
-    else:
-        return f"""
-✅ *Account Connected to KURUP ADS!*
-
-📱 `{phone}` is now linked to your account.
-
-🆓 *Plan:* Free (No Expiry)
-✅ Start forwarding right away!
-
-👇 Open the dashboard to add your groups and begin.
+Open the dashboard to configure groups and start sending.
 """

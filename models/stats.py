@@ -16,11 +16,6 @@ async def get_admin_stats() -> Dict[str, Any]:
     total_users = await db.users.count_documents({})
     connected_sessions = await db.sessions.count_documents({"connected": True})
     
-    # Plans segmentation
-    paid_active = await db.plans.count_documents({"status": "active", "plan_type": "premium"})
-    trial_active = await db.plans.count_documents({"status": "active", "plan_type": "trial"})
-    expired = await db.plans.count_documents({"status": "expired"})
-    
     # Message stats (last 24h)
     sends_24h = await db.job_logs.count_documents({"timestamp": {"$gt": cutoff_24h}})
     success_24h = await db.job_logs.count_documents({"timestamp": {"$gt": cutoff_24h}, "status": "sent"})
@@ -39,9 +34,6 @@ async def get_admin_stats() -> Dict[str, Any]:
     return {
         "total_users": total_users,
         "connected_sessions": connected_sessions,
-        "paid_active": paid_active,
-        "trial_active": trial_active,
-        "expired": expired,
         "sends_24h": sends_24h,
         "success_24h": success_24h,
         "failed_24h": failed_24h,
@@ -121,13 +113,14 @@ async def get_user_profile_data(user_id: int) -> Dict[str, Any]:
     # Total sent ever
     total_sent = await db.sessions.aggregate([
         {"$match": {"user_id": user_id}},
-        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$total_sent", 0]}}}}
+        {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$stats_total", 0]}}}}
     ]).to_list(length=1)
     total_sum = total_sent[0]["total"] if total_sent else 0
 
     sessions = await db.sessions.find({"user_id": user_id}).to_list(length=100)
     user = await db.users.find_one({"user_id": user_id})
-    config = await db.user_configs.find_one({"user_id": user_id})
+    # Use 'config' collection as per new architecture
+    config = await db.config.find_one({"user_id": user_id})
     
     return {
         "user_id": user_id,
@@ -141,6 +134,58 @@ async def get_user_profile_data(user_id: int) -> Dict[str, Any]:
         "total_sent": total_sum,
         "success_rate_24h": success_rate_24h
     }
+
+
+async def log_send(
+    user_id: int,
+    chat_id: int,
+    saved_msg_id: int,
+    status: str = "success",
+    error: str = None,
+    phone: str = None
+):
+    """Log a message send attempt and update account stats."""
+    db = get_database()
+    
+    now = datetime.utcnow()
+    log_doc = {
+        "user_id": user_id,
+        "phone": phone,
+        "chat_id": chat_id,
+        "saved_msg_id": saved_msg_id,
+        "sent_at": now,
+        "status": status,
+        "error": error,
+    }
+    
+    # Use send_logs for detailed history (matching source logic)
+    await db.send_logs.insert_one(log_doc)
+    
+    # Legacy compatibility: also log to job_logs for dashboard stats
+    legacy_status = "sent" if status == "success" else status
+    await db.job_logs.insert_one({
+        "user_id": user_id,
+        "phone": phone,
+        "group_id": chat_id,
+        "message_id": saved_msg_id,
+        "status": legacy_status,
+        "error": error,
+        "timestamp": now
+    })
+    
+    # Update session activity and success rate
+    if phone:
+        update_data = {"last_active_at": now}
+        
+        # Increment total/success counters in session for fast dashboard access
+        inc_data = {"stats_total": 1}
+        if status == "success":
+            inc_data["stats_success"] = 1
+            
+        await db.sessions.update_one(
+            {"user_id": user_id, "phone": phone},
+            {"$set": update_data, "$inc": inc_data}
+        )
 
 async def get_active_workers() -> List[Dict[str, Any]]:
     """Get list of active workers that reported heartbeat in the last 2 minutes."""

@@ -26,7 +26,7 @@ async def create_session(
             "session_string": session_string,
             "connected": True,
             "connected_at": now,
-            "last_active": now,
+            "last_active_at": now,
             "worker_disabled": False,
             "auth_fail_count": 0,
         },
@@ -81,7 +81,17 @@ async def update_session_activity(user_id: int, phone: str):
     db = get_database()
     await db.sessions.update_one(
         {"user_id": user_id, "phone": phone},
-        {"$set": {"last_active": datetime.utcnow()}},
+        {"$set": {"last_active_at": datetime.utcnow()}},
+    )
+
+
+async def update_current_msg_index(user_id: int, phone: str, index: int):
+    """Update current message index for a specific account (phone)."""
+    db = get_database()
+    await db.sessions.update_one(
+        {"user_id": user_id, "phone": phone},
+        {"$set": {"current_msg_index": index, "updated_at": datetime.utcnow()}},
+        upsert=True
     )
 
 
@@ -177,10 +187,15 @@ async def toggle_session_ads(user_id: int, phone: str, is_active: bool):
     )
 
 
-async def update_session_original_name(user_id: int, phone: str, first: str, last: str = ""):
-    """Store the original name of the account if not already stored."""
+async def update_session_original_profile(user_id: int, phone: str, first: str, last: str = "", bio: str = ""):
+    """Store the original profile (name/bio) if not already stored."""
     db = get_database()
     await db.sessions.update_one(
         {"user_id": user_id, "phone": phone, "original_first_name": {"$exists": False}},
-        {"$set": {"original_first_name": first, "original_last_name": last}},
+        {"$set": {
+            "original_first_name": first, 
+            "original_last_name": last,
+            "original_bio": bio,
+            "profile_captured_at": datetime.utcnow()
+        }},
     )

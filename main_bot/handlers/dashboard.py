@@ -10,7 +10,6 @@ from models.user import (
     get_user_config, update_user_config, is_user_branded, 
     get_user_profile_data
 )
-from models.plan import get_plan
 from models.group import get_user_groups, get_group_count
 from models.session import get_all_user_sessions
 from models.stats import get_account_stats
@@ -78,7 +77,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Get user data
     sessions = await get_all_user_sessions(user_id)
-    plan = await get_plan(user_id)
     config = await get_user_config(user_id)
     group_count = await get_group_count(user_id)
     
@@ -124,7 +122,7 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ═══ Forwarding status ═══
     has_connected = any(s.get("connected") for s in sessions) if sessions else False
-    if has_connected and group_count > 0 and plan and plan.get("status") == "active":
+    if has_connected and group_count > 0:
         fwd_status = "🟢 *ACTIVE*"
     elif has_connected and group_count == 0:
         fwd_status = "🟡 *NO GROUPS*"
@@ -137,13 +135,11 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ═══ Settings section ═══
     is_branded = await is_user_branded(user_id)
+    branding_status = "🟢 ACTIVE" if is_branded else "🔴 MISSING"
     
-    copy_icon = "🟢" if config.get("copy_mode") and is_branded else "⚫"
-    shuffle_icon = "🟢" if config.get("shuffle_mode") and is_branded else "⚫"
-    responder_icon = "🟢" if config.get("auto_reply_enabled") and is_branded else "⚫"
-    
-    if not is_branded:
-        copy_icon = shuffle_icon = responder_icon = "🔒"
+    copy_icon = "🟢" if config.get("copy_mode") else "⚫"
+    shuffle_icon = "🟢" if config.get("shuffle_mode") else "⚫"
+    responder_icon = "🟢" if config.get("auto_reply_enabled") else "⚫"
         
     send_mode = config.get("send_mode", "sequential").title()
     reply_text = config.get("auto_reply_text", "")
@@ -157,14 +153,13 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📱 *ACCOUNTS* ({len(sessions) if sessions else 0})
 {account_section}
 
-🏷️ *SUBSCRIPTION*
-  ➤ {plan_status}
-{plan_line2}
-
 📤 *FORWARDING:* {fwd_status}
   ➤ Groups: {group_count} ▪ Total Sent: {total_sends}
-  ➤ Status: {await get_group_status_summary(user_id)}
-  ➤ Interval: {interval}m (Cycle End) ▪ Gap: 3.5m
+  ➤ Health: {await get_group_status_summary(user_id)}
+  ➤ Interval: {interval}m
+
+🏷️ *BRANDING:* {branding_status}
+  └─ _Powered by @KurupAdsBot (Free Edition)_
 
 ⚙️ *SETTINGS*
   {copy_icon} Copy Mode ▪ {shuffle_icon} Shuffle
@@ -226,9 +221,7 @@ to start auto-forwarding messages.
 async def toggle_send_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = update.effective_user.id
-    if not await is_user_branded(user_id):
-        await query.answer("❌ This feature is locked for free users.", show_alert=True)
-        return
+    # Features are now UNLOCKED for everyone (Enforced branding)
     config = await get_user_config(user_id)
     modes = ["sequential", "rotate", "random"]
     current = config.get("send_mode", "sequential")
@@ -313,9 +306,7 @@ async def toggle_shuffle_ui_callback(update: Update, context: ContextTypes.DEFAU
 async def toggle_copy_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = update.effective_user.id
-    if not await is_user_branded(user_id):
-        await query.answer("🔒 Feature locked.", show_alert=True)
-        return
+    # Features are now UNLOCKED
     config = await get_user_config(user_id)
     new_val = not config.get("copy_mode", False)
     await update_user_config(user_id, copy_mode=new_val)
@@ -326,9 +317,7 @@ async def toggle_copy_ui_callback(update: Update, context: ContextTypes.DEFAULT_
 async def toggle_responder_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = update.effective_user.id
-    if not await is_user_branded(user_id):
-        await query.answer("🔒 Feature locked.", show_alert=True)
-        return
+    # Features are now UNLOCKED
     config = await get_user_config(user_id)
     new_val = not config.get("auto_reply_enabled", False)
     await update_user_config(user_id, auto_reply_enabled=new_val)
@@ -365,9 +354,7 @@ async def receive_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def set_responder_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = update.effective_user.id
-    if not await is_user_branded(user_id):
-        await query.answer("🔒 Feature locked.", show_alert=True)
-        return
+    # Features are now UNLOCKED
     await query.answer()
     await query.edit_message_text("🤖 *SET RESPONDER TEXT*\n\nPlease send the message you want the bot to reply with.", parse_mode="Markdown")
     return WAITING_RESPONDER_TEXT

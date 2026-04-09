@@ -35,7 +35,6 @@ def get_dashboard_keyboard(is_active: bool = True, include_add: bool = False) ->
             InlineKeyboardButton("🤝 Referrals", callback_data="referral"),
         ],
         [
-            InlineKeyboardButton("🎁 My Plan", callback_data="my_plan"),
             InlineKeyboardButton("🏠 Main Menu", callback_data="home"),
         ],
     ]
@@ -62,39 +61,9 @@ def get_account_selection_keyboard(sessions: list) -> InlineKeyboardMarkup:
 
 
 def get_plan_keyboard() -> InlineKeyboardMarkup:
-    """Build plan display keyboard."""
-    keyboard = [
-        [
-            InlineKeyboardButton("💎 Upgrade to WEEKLY (₹99)", callback_data="buy_plan:week"),
-        ],
-        [
-            InlineKeyboardButton("🏆 Upgrade to MONTHLY (₹299)", callback_data="buy_plan:month"),
-        ],
-        [
-            InlineKeyboardButton("🧾 Redeem Promo Code", callback_data="redeem_code"),
-        ],
-        [
-            InlineKeyboardButton("👨‍💻 Contact Support", url="https://t.me/spinify"),
-        ],
-        [
-            InlineKeyboardButton("🔙 Back", callback_data="dashboard"),
-            InlineKeyboardButton("🏠 Home", callback_data="home"),
-        ],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+    """DEPRECATED - Returns home keyboard."""
+    return get_home_keyboard()
 
-def get_admin_upgrade_keyboard(target_user_id: int) -> InlineKeyboardMarkup:
-    """Build admin upgrade selection keyboard."""
-    keyboard = [
-        [
-            InlineKeyboardButton("💎 Grant 1 Week", callback_data=f"adm_upgr:{target_user_id}:week"),
-            InlineKeyboardButton("🏆 Grant 1 Month", callback_data=f"adm_upgr:{target_user_id}:month"),
-        ],
-        [
-            InlineKeyboardButton("🔙 Back to Admin", callback_data="admin"),
-        ],
-    ]
-    return InlineKeyboardMarkup(keyboard)
 
 
 def get_referral_keyboard(referral_link: str) -> InlineKeyboardMarkup:
@@ -171,13 +140,6 @@ def get_admin_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton("📁 Group Stats", callback_data="admin_group_stats"),
             InlineKeyboardButton("📢 Global Blast", callback_data="admin_broadcast"),
-        ],
-        [
-            InlineKeyboardButton("🎟 Give 1 Week", callback_data="gen_code:week"),
-            InlineKeyboardButton("🎟 Give 1 Month", callback_data="gen_code:month"),
-        ],
-        [
-            InlineKeyboardButton("⚡ Quick Upgrade User", callback_data="admin_upgrade_init"),
         ],
         [
             InlineKeyboardButton("👥 User Database", callback_data="admin_users"),
@@ -272,7 +234,6 @@ def get_profile_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("⚙️ Manage Accounts", callback_data="accounts_list"),
         ],
         [
-            InlineKeyboardButton("🎁 My Plan", callback_data="my_plan"),
             InlineKeyboardButton("🤝 Referrals", callback_data="referral"),
         ],
         [

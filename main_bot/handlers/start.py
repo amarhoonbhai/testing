@@ -7,7 +7,6 @@ from telegram.ext import ContextTypes
 
 from core.config import REQUIRED_CHANNELS, CHANNEL_USERNAME
 from models.user import create_user
-from models.plan import get_plan
 from models.session import get_all_user_sessions
 from main_bot.utils.keyboards import get_welcome_keyboard
 
@@ -24,35 +23,25 @@ async def build_welcome_text(user) -> str:
     username = escape_markdown(f"@{user.username}" if user.username else "Not set")
     user_id = user.id
 
-    # Get account and plan info
-    plan = await get_plan(user_id)
+    # Get account info
     sessions = await get_all_user_sessions(user_id)
     accounts_count = len(sessions) if sessions else 0
 
-    # Plan badge
-    if plan and plan.get("status") == "active":
-        import datetime
-        plan_type = plan.get("plan_type", "trial").title()
-        days_left = (plan["expires_at"] - datetime.datetime.utcnow()).days
-        if plan_type.lower() == "trial":
-            plan_tag = f"TRIAL ({days_left}d left)"
-        else:
-            plan_tag = f"PREMIUM ({days_left}d left)"
-    elif plan:
-        plan_tag = "EXPIRED"
-    else:
-        plan_tag = "No Plan"
+    # Branding info
+    from models.user import is_user_branded
+    is_branded = await is_user_branded(user_id)
+    branding_tag = "🟢 ACTIVE" if is_branded else "🔴 MISSING"
 
     text = f"""
 ⚡ *GROUP MESSAGE SCHEDULER* ⚡
 
-*★ V3.3 — PRO ENGINE ★*
+*★ V5 ELITE — FREE EDITION ★*
 
 *Welcome, {full_name}!*
 *Username:* {username}
 *User ID:* `{user_id}`
 *Accounts:* {accounts_count} connected
-*Plan:* {plan_tag}
+*Branding Status:* {branding_tag}
 
 🎯 *AUTOMATE YOUR TELEGRAM ADS*
 

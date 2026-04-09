@@ -14,12 +14,8 @@ from main_bot.utils.keyboards import (
     get_night_mode_settings_keyboard, get_admin_upgrade_keyboard, get_stats_keyboard,
     get_admin_group_stats_keyboard
 )
-from core.config import (
-    PLAN_PRICES, PLAN_DURATIONS, TRIAL_DAYS, OWNER_ID,
-    MAIN_BOT_TOKEN
-)
+from core.config import OWNER_ID, MAIN_BOT_TOKEN
 from core.utils import escape_markdown
-from models.plan import extend_plan, activate_plan, get_plan
 from models.session import get_all_connected_sessions
 from models.group import get_all_failing_groups, clear_group_fail
 
@@ -121,10 +117,7 @@ async def get_stats_text():
 👥 *USER METRICS*
 ├ Total Users: {stats.get('total_users', 0)}
 ├ Active Sessions: {len(sessions)}
-├ Disabled Sessions: {disabled}
-├ Premium Active: {stats.get('paid_active', 0)}
-├ Free Users: {stats.get('trial_active', 0)}
-└ Expired Plans: {stats.get('expired', 0)}
+└ Disabled Sessions: {disabled}
 
 📨 *PERFORMANCE (LAST 24H)*
 ├ Messages Attempted: {total}
@@ -215,7 +208,6 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     
     from models.session import get_all_connected_sessions
-    from models.plan import get_plan
     from models.stats import get_active_workers
     from datetime import datetime
     
@@ -244,10 +236,6 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
             uid = s.get("user_id")
             if not uid: continue
             
-            plan = await get_plan(uid)
-            if not plan or plan.get("status") != "active":
-                continue
-                
             active_sessions_count += 1
             phone = s.get("phone", "Unknown")
             status = s.get("worker_status", "Off")
@@ -440,297 +428,6 @@ async def receive_broadcast_message(update: Update, context: ContextTypes.DEFAUL
     context.user_data.pop("waiting_for", None)
     context.user_data.pop("broadcast_target", None)
     return ConversationHandler.END
-
-
-async def gen_code_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Generate a redeem code."""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("⛔ Access denied", show_alert=True)
-        return
-    
-    plan_type = query.data.split(":")[1]
-    
-    code = await generate_redeem_code(plan_type, created_by=user_id)
-    escaped_code = escape_markdown(code)
-    
-    await query.answer()
-    
-    days = 7 if plan_type == "week" else 30
-    
-    text = f"""
-🎟 *NEW PROMO CODE GENERATED*
-
-✅ *Payload ready for distribution.*
-
-📋 *Access Code:* `{escaped_code}`
-📦 *Tier:* {plan_type.upper()} PRO
-📅 *Duration:* {days} Days Lifetime
-🔒 *Scope:* Single-use only
-
-*Instructions:* User must post `/redeem {escaped_code}`
-"""
-    
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
-    )
-
-
-async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /generate <week|month> command."""
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await update.message.reply_text("⛔ Access denied")
-        return
-    
-    if not context.args:
-        await update.message.reply_text(
-            "⚠️ *Usage:* `/generate <week/month>`\n\nExample: `/generate week`",
-            parse_mode="Markdown"
-        )
-        return
-    
-    plan_type = context.args[0].lower()
-    
-    if plan_type not in ["week", "month"]:
-        await update.message.reply_text("Invalid tier. Use: *week* or *month*", parse_mode="Markdown")
-        return
-    
-    code = await generate_redeem_code(plan_type, created_by=user_id)
-    escaped_code = escape_markdown(code)
-    days = 7 if plan_type == "week" else 30
-    
-    await update.message.reply_text(
-        f"🎟 *NEW PROMO CODE GENERATED*\n\n"
-        f"📋 *Access Code:* `{escaped_code}`\n"
-        f"📦 *Tier:* {plan_type.upper()} PRO\n"
-        f"📅 *Duration:* {days} Days",
-        parse_mode="Markdown",
-    )
-
-
-async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show users overview."""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("⛔ Access denied", show_alert=True)
-        return
-    
-    await query.answer()
-    
-    stats = await get_admin_stats()
-    
-    text = f"""
-👥 *GLOBAL USER DATABASE*
-
-📊 *Total Registered Users:* {stats['total_users']}
-
-*SEGMENTATION ANALYSIS:*
-├ 🔗 Active API Sessions: {stats['connected_sessions']}
-├ 🎁 Free Trials Running: {stats['trial_active']}
-├ 💎 Premium Subs Active: {stats['paid_active']}
-└ ⏰ Expired Memberships: {stats['expired']}
-
-_Pro Tip: Use the Broadcast system to target specific segments._
-"""
-    
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
-    )
-async def admin_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show global night mode settings."""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("⛔ Access denied", show_alert=True)
-        return
-    
-    await query.answer()
-    
-    settings = await get_global_settings()
-    current = settings.get("night_mode_force", "auto").upper()
-    
-    text = f"""
-🌙 *GLOBAL NIGHT MODE CONTROL*
-══════════════════════════════
-
-*Current State:* `{current}`
-
-Select a mode button below to override the system-wide night mode behavior:
-
-🔴 *FORCE ON:* Pauses all bots immediately.
-🟢 *FORCE OFF:* Disables night mode pause entirely.
-⏳ *AUTO (Schedule):* Resumes 00:00-06:00 IST logic.
-
-_This change affects all accounts globally._
-"""
-    
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_night_mode_settings_keyboard(),
-    )
-
-
-async def set_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Update global night mode setting via callback."""
-    query = update.callback_query
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await query.answer("⛔ Access denied", show_alert=True)
-        return
-    
-    mode = query.data.split(":")[1]
-    await update_global_settings(night_mode_force=mode)
-    
-    await query.answer(f"✅ Night Mode updated to {mode.upper()}", show_alert=True)
-    await admin_nightmode_callback(update, context)
-
-
-async def nightmode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /nightmode command from owner."""
-    user_id = update.effective_user.id
-    
-    if not is_owner(user_id):
-        await update.message.reply_text("⛔ Access denied")
-        return
-    
-    settings = await get_global_settings()
-    current = settings.get("night_mode_force", "auto").upper()
-    
-    text = f"""
-🌙 *GLOBAL NIGHT MODE CONTROL*
-══════════════════════════════
-
-*Current State:* `{current}`
-
-Select a mode button below to override the system-wide night mode behavior.
-"""
-    
-    await update.message.reply_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_night_mode_settings_keyboard(),
-    )
-async def admin_upgrade_init_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start the upgrade process (ask for User ID)."""
-    query = update.callback_query
-    
-    if not is_owner(update.effective_user.id):
-        await query.answer("⛔ Access denied", show_alert=True)
-        return ConversationHandler.END
-    
-    await query.answer()
-    await query.edit_message_text(
-        "⚡ *ADMIN UPGRADE TOOL*\n\n"
-        "Please send the *Telegram User ID* of the user you wish to upgrade.\n\n"
-        "_Example: 123456789_\n\n"
-        "Type /cancel to abort.",
-        parse_mode="Markdown",
-        reply_markup=get_back_home_keyboard()
-    )
-    return WAITING_UPGRADE_USER_ID
-
-async def receive_upgrade_user_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive User ID and show options."""
-    if not is_owner(update.effective_user.id): return ConversationHandler.END
-    
-    text = update.message.text
-    if text == "/cancel":
-        await update.message.reply_text("Cancelled.", reply_markup=get_back_home_keyboard())
-        return ConversationHandler.END
-        
-    try:
-        target_uid = int(text)
-        plan = await get_plan(target_uid)
-        
-        status = "No Plan"
-        if plan:
-            status = plan.get("plan_type", "trial").upper()
-            
-        await update.message.reply_text(
-            f"👤 *USER:* `{target_uid}`\n"
-            f"📊 *CURRENT:* `{status}`\n\n"
-            "Select the upgrade tier below:",
-            parse_mode="Markdown",
-            reply_markup=get_admin_upgrade_keyboard(target_uid)
-        )
-        return ConversationHandler.END
-    except ValueError:
-        await update.message.reply_text("❌ Invalid ID. Please send a numeric User ID.")
-        return WAITING_UPGRADE_USER_ID
-
-async def admin_upgrade_perform_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Execute the upgrade."""
-    query = update.callback_query
-    if not is_owner(update.effective_user.id):
-        await query.answer("⛔ Access denied", show_alert=True)
-        return
-    
-    data = query.data.split(":")
-    target_uid = int(data[1])
-    tier = data[2]
-    
-    await query.answer(f"Upgrading {target_uid} to {tier.upper()}...")
-    
-    await activate_plan(target_uid, tier)
-    days = PLAN_DURATIONS.get(tier, 0)
-    
-    await query.edit_message_text(
-        f"✅ *SUCCESSFULLY UPGRADED*\n\n"
-        f"👤 *User:* `{target_uid}`\n"
-        f"📦 *Tier:* {tier.upper()}\n"
-        f"📅 *Added:* {days} Days\n\n"
-        "_The user has been notified via their dashboard._",
-        parse_mode="Markdown",
-        reply_markup=get_admin_keyboard()
-    )
-    
-    # Try to notify the user
-    try:
-        await context.bot.send_message(
-            target_uid,
-            f"🎊 *PLAN UPGRADED!*\n\n"
-            f"The administrator has granted you **{days} days** of **{tier.upper()}** access.\n"
-            "Enjoy uninterrupted service!",
-            parse_mode="Markdown"
-        )
-    except: pass
-
-async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /upgrade <user_id> <week/month>."""
-    if not is_owner(update.effective_user.id): return
-    
-    if len(context.args) < 2:
-        await update.message.reply_text("⚠️ *Usage:* `/upgrade <user_id> <week|month>`")
-        return
-        
-    try:
-        uid = int(context.args[0])
-        tier = context.args[1].lower()
-        if tier not in ["week", "month"]: raise ValueError()
-        
-        await activate_plan(uid, tier)
-        days = PLAN_DURATIONS[tier]
-        
-        await update.message.reply_text(f"✅ User `{uid}` upgraded to {tier.upper()} ({days} days).")
-        
-        try:
-            await context.bot.send_message(uid, f"🎊 *PLAN UPGRADED!*\n\nGranted **{days} days** of **{tier.upper()}**.")
-        except: pass
-    except:
-        await update.message.reply_text("❌ Invalid arguments. Example: `/upgrade 123456 week`")
 
 
 async def admin_group_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
