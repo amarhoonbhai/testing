@@ -102,23 +102,8 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         account_section = "  ○ No accounts connected\n  └─ Tap *Add Account* below"
     
     # ═══ Plan badge ═══
-    if plan and plan.get("status") == "active":
-        plan_type = plan.get("plan_type", "free")
-        expires_at = plan.get("expires_at")
-
-        if plan_type == "premium" and expires_at:
-            days_left = (expires_at - datetime.datetime.utcnow()).days
-            hours_left = ((expires_at - datetime.datetime.utcnow()).seconds // 3600)
-            expiry_date = format_expiry_date(expires_at)
-            plan_badge = "💎 PREMIUM"
-            plan_status = f"{plan_badge} ▪ {days_left}d {hours_left}h left" if days_left > 0 else f"{plan_badge} ▪ {hours_left}h left"
-            plan_line2 = f"     └─ 📅 Expires: {expiry_date}"
-        else:
-            plan_status = "🆓 FREE PLAN"
-            plan_line2 = "     └─ ✅ Active — No Expiry"
-    else:
-        plan_status = "🆓 FREE PLAN"
-        plan_line2 = "     └─ ✅ Active — No Expiry"
+    plan_status = "🆓 FREE EDITION"
+    plan_line2 = "     └─ ✅ Active — Network Branded"
     
     # ═══ Forwarding status ═══
     has_connected = any(s.get("connected") for s in sessions) if sessions else False

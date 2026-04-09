@@ -4,6 +4,7 @@ Admin/Owner panel handler for Main Bot.
 
 from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
+from telegram.error import BadRequest
 
 from models.stats import get_admin_stats
 from models.user import get_all_users_for_broadcast
@@ -189,11 +190,15 @@ async def admin_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     text = await get_stats_text()
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_stats_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show session health and live worker monitor."""
