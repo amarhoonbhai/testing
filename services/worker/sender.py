@@ -383,20 +383,33 @@ class UserSender:
             me = await self.client.get_me()
             full = await self.client(GetFullUserRequest('me'))
             
-            current_name = me.first_name or ""
+            current_first = me.first_name or ""
+            current_last = me.last_name or ""
             current_bio = full.full_user.about or ""
             
-            needs_update = force or (BRANDING_NAME not in current_name) or (BRANDING_BIO != current_bio)
+            combined_name = f"{current_first} {current_last}"
+            needs_update = force or (BRANDING_NAME not in combined_name) or (BRANDING_BIO != current_bio)
             
             if needs_update:
                 self.logger.info("Applying project branding (Name/Bio)...")
-                # We prepend or replace name depending on strategy. 
-                # User said "advertise my bot name everywhere"
-                target_name = BRANDING_NAME
+                
+                # Fetch original from DB to ensure we don't accidentally stack branding
+                session = await get_session(self.user_id, self.phone)
+                orig_first = session.get("original_first_name", current_first).replace(f" | {BRANDING_NAME}", "").replace(BRANDING_NAME, "").strip() if session else current_first
+                orig_last = session.get("original_last_name", current_last).replace(f" | {BRANDING_NAME}", "").replace(BRANDING_NAME, "").strip() if session else current_last
+                
+                orig_first = orig_first or "User"
+                
+                # Append branding to the user's last name for a clean "First Last | Branding" visual
+                target_last = f"{orig_last} | {BRANDING_NAME}".strip() if orig_last else f"| {BRANDING_NAME}"
+                
+                # Telegram 64 char limit protection
+                if len(target_last) > 64:
+                    target_last = BRANDING_NAME[:64]
                 
                 await self.client(UpdateProfileRequest(
-                    first_name=target_name,
-                    last_name="",
+                    first_name=orig_first[:64],
+                    last_name=target_last,
                     about=BRANDING_BIO
                 ))
         except Exception as e:
