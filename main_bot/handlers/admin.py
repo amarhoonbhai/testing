@@ -6,12 +6,11 @@ from telegram import Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from models.stats import get_admin_stats
-from models.code import generate_redeem_code
 from models.user import get_all_users_for_broadcast
 from models.settings import get_global_settings, update_global_settings
 from main_bot.utils.keyboards import (
     get_admin_keyboard, get_broadcast_keyboard, get_back_home_keyboard,
-    get_night_mode_settings_keyboard, get_admin_upgrade_keyboard, get_stats_keyboard,
+    get_night_mode_settings_keyboard, get_stats_keyboard,
     get_admin_group_stats_keyboard
 )
 from core.config import OWNER_ID, MAIN_BOT_TOKEN
@@ -428,6 +427,115 @@ async def receive_broadcast_message(update: Update, context: ContextTypes.DEFAUL
     context.user_data.pop("waiting_for", None)
     context.user_data.pop("broadcast_target", None)
     return ConversationHandler.END
+
+
+async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show users overview."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("⛔ Access denied", show_alert=True)
+        return
+    
+    await query.answer()
+    
+    stats = await get_admin_stats()
+    
+    text = f"""
+👥 *GLOBAL USER DATABASE*
+
+📊 *Total Registered Users:* {stats['total_users']}
+
+*SEGMENTATION ANALYSIS:*
+├ 🔗 Active API Sessions: {stats['connected_sessions']}
+└ 🛡️ Status: 🟢 All services operating normally
+"""
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=get_stats_keyboard(),
+    )
+
+
+async def admin_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show global night mode settings."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("⛔ Access denied", show_alert=True)
+        return
+    
+    await query.answer()
+    
+    settings = await get_global_settings()
+    current = settings.get("night_mode_force", "auto").upper()
+    
+    text = f"""
+🌙 *GLOBAL NIGHT MODE CONTROL*
+══════════════════════════════
+
+*Current State:* `{current}`
+
+Select a mode button below to override the system-wide night mode behavior:
+
+🔴 *FORCE ON:* Pauses all bots immediately.
+🟢 *FORCE OFF:* Disables night mode pause entirely.
+⏳ *AUTO (Schedule):* Resumes 00:00-06:00 IST logic.
+
+_This change affects all accounts globally._
+"""
+    
+    await query.edit_message_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=get_night_mode_settings_keyboard(),
+    )
+
+
+async def set_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Update global night mode setting via callback."""
+    query = update.callback_query
+    user_id = update.effective_user.id
+    
+    if not is_owner(user_id):
+        await query.answer("⛔ Access denied", show_alert=True)
+        return
+    
+    mode = query.data.split(":")[1]
+    await update_global_settings(night_mode_force=mode)
+    
+    await query.answer(f"✅ Night Mode updated to {mode.upper()}", show_alert=True)
+    await admin_nightmode_callback(update, context)
+
+
+async def nightmode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /nightmode command from owner."""
+    user_id = update.effective_user.id
+    
+    if not is_owner(user_id):
+        await update.message.reply_text("⛔ Access denied")
+        return
+    
+    settings = await get_global_settings()
+    current = settings.get("night_mode_force", "auto").upper()
+    
+    text = f"""
+🌙 *GLOBAL NIGHT MODE CONTROL*
+══════════════════════════════
+
+*Current State:* `{current}`
+
+Select a mode button below to override the system-wide night mode behavior.
+"""
+    
+    await update.message.reply_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=get_night_mode_settings_keyboard(),
+    )
 
 
 async def admin_group_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -22,7 +22,7 @@ class WorkerService(BaseService):
         super().__init__("WorkerService")
         self.manager: Optional[WorkerManager] = None
     
-    async def start(self):
+    async def on_start(self):
         """Start the worker manager."""
         logger.info("Initializing Unified Worker Service...")
         self.manager = WorkerManager()
@@ -37,7 +37,7 @@ class WorkerService(BaseService):
             logger.error(f"Worker service error: {e}")
             raise
     
-    async def stop(self):
+    async def on_stop(self):
         """Gracefully stop all worker tasks."""
         if self.manager:
             logger.info("Shutting down Unified Worker Service...")
@@ -48,4 +48,4 @@ class WorkerService(BaseService):
 if __name__ == "__main__":
     # For standalone testing
     service = WorkerService()
-    asyncio.run(service.run())
+    asyncio.run(service.run_forever())

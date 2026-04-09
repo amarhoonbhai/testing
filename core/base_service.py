@@ -17,8 +17,8 @@ class BaseService(ABC):
     def __init__(self, service_name: str):
         self.service_name = service_name
         self.running = False
-        self._loop = asyncio.get_event_loop()
-        self._stop_event = asyncio.Event()
+        self._loop = None
+        self._stop_event = None
 
     async def _setup_signals(self):
         """Standard SIGINT/SIGTERM handling across OS platforms."""
@@ -47,6 +47,8 @@ class BaseService(ABC):
 
     async def run_forever(self):
         """Main entry point for all V5 services."""
+        self._loop = asyncio.get_running_loop()
+        self._stop_event = asyncio.Event()
         setup_service_logging(self.service_name)
         logger.info(f"🚀 Initializing {self.service_name} Elite (V5)...")
         
