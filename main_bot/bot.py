@@ -26,20 +26,12 @@ from main_bot.handlers.dashboard import (
     set_interval_prompt, receive_interval, set_responder_text_prompt,
     receive_responder_text, WAITING_INTERVAL, WAITING_RESPONDER_TEXT,
 )
-from main_bot.handlers.plans import my_plan_callback, buy_plan_callback
-from main_bot.handlers.referral import referral_callback
-from main_bot.handlers.redeem import (
-    redeem_code_callback, receive_redeem_code, redeem_command, WAITING_CODE,
-)
 from main_bot.handlers.admin import (
     admin_callback, admin_command, broadcast_command, stats_command,
     admin_stats_callback, admin_broadcast_callback, broadcast_target_callback,
-    receive_broadcast_message, gen_code_callback, generate_command,
-    admin_users_callback, admin_nightmode_callback, set_nightmode_callback,
-    nightmode_command, admin_health_callback, WAITING_BROADCAST_MESSAGE,
-    admin_upgrade_init_callback, receive_upgrade_user_id, admin_upgrade_perform_callback,
-    upgrade_command, WAITING_UPGRADE_USER_ID, admin_group_stats_callback,
-    admin_retry_failing_callback, admin_stop_all_callback, admin_start_all_callback,
+    receive_broadcast_message, admin_users_callback, admin_nightmode_callback, 
+    set_nightmode_callback, nightmode_command, admin_health_callback, 
+    WAITING_BROADCAST_MESSAGE, admin_group_stats_callback, admin_retry_failing_callback,
 )
 from main_bot.handlers.help import help_callback, help_command, guide_callback
 from main_bot.handlers.account import (
@@ -65,21 +57,13 @@ class MainBotService(BaseService):
         # Command Handlers
         cmds = [
             ("start", start_handler), ("admin", admin_command), ("stats", stats_command),
-            ("broadcast", broadcast_command), ("help", help_command), ("redeem", redeem_command),
-            ("my_plan", my_plan_callback), ("referral", referral_callback), ("profile", profile_callback),
-            ("accounts", accounts_list_callback), ("dashboard", dashboard_callback),
-            ("generate", generate_command), ("nightmode", nightmode_command), ("upgrade", upgrade_command)
+            ("broadcast", broadcast_command), ("help", help_command),
+            ("profile", profile_callback), ("accounts", accounts_list_callback), 
+            ("dashboard", dashboard_callback), ("nightmode", nightmode_command)
         ]
         for cmd, h in cmds:
             app.add_handler(CommandHandler(cmd, h))
 
-        # Conversations
-        app.add_handler(ConversationHandler(
-            entry_points=[CallbackQueryHandler(redeem_code_callback, pattern="^redeem_code$")],
-            states={WAITING_CODE: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_redeem_code)]},
-            fallbacks=[CallbackQueryHandler(home_callback, pattern="^home$")],
-            per_user=True, per_chat=True
-        ))
         
         app.add_handler(ConversationHandler(
             entry_points=[CallbackQueryHandler(broadcast_target_callback, pattern="^broadcast:")],
@@ -110,7 +94,6 @@ class MainBotService(BaseService):
             ("^accounts_list$", accounts_list_callback), ("^manage_settings$", manage_settings_callback),
             ("^user_stats$", user_stats_callback), ("^profile$", profile_callback),
             ("^help$", help_callback), ("^guide$", guide_callback),
-            ("^buy_plan:", buy_plan_callback), ("^my_plan$", my_plan_callback),
             ("^toggle_shuffle$", toggle_shuffle_ui_callback),
             ("^toggle_copy$", toggle_copy_ui_callback),
             ("^toggle_responder$", toggle_responder_ui_callback),

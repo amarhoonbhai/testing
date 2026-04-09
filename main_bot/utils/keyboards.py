@@ -190,10 +190,6 @@ def get_broadcast_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔗 Active APIs", callback_data="broadcast:connected"),
         ],
         [
-            InlineKeyboardButton("🎁 Trial Group", callback_data="broadcast:trial"),
-            InlineKeyboardButton("💎 Premium Base", callback_data="broadcast:paid"),
-        ],
-        [
             InlineKeyboardButton("🔙 Back to Tools", callback_data="admin"),
             InlineKeyboardButton("🏠 Home", callback_data="home"),
         ],
@@ -232,9 +228,6 @@ def get_profile_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton("⚙️ Manage Accounts", callback_data="accounts_list"),
-        ],
-        [
-            InlineKeyboardButton("🤝 Referrals", callback_data="referral"),
         ],
         [
             InlineKeyboardButton("🔙 Back to Dashboard", callback_data="dashboard"),
