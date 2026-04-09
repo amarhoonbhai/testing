@@ -113,29 +113,23 @@ async def handle_help(client: TelegramClient, user_id: int, message):
     """Handle .help command with professional styling."""
     from core.config import MIN_INTERVAL_MINUTES
     text = (
-        "📘 *BOT WORKER COMMANDS* 📘\n\n"
-        "👥 *GROUP MANAGEMENT*\n"
-        "🔸 `.addgroup <url>` — Add to forward list\n"
-        "🔸 `.addfolder <name>` — Add all groups from folder\n"
-        "🔸 `.rmgroup <url/idx>` — Remove from list\n"
-        "🔸 `.groups` — Show your active groups\n"
-        "🔸 `.folders` — List your Telegram folders\n\n"
-        "⚙️ *SETTINGS*\n"
-        "🔸 `.interval <min>` — Set loop delay (min: {min}m)\n"
-        "🔸 `.shuffle on/off` — Randomize loop order\n"
-        "🔸 `.copymode on/off` — Send as fresh message\n"
-        "🔸 `.sendmode <seq/rot/rand>` — Message distribution\n"
-        "🔸 `.responder <msg>` — Set auto-reply for DMs\n"
-        "🔸 `.responder off` — Disable auto-reply\n\n"
-        "⚡ *DIAGNOSTICS*\n"
-        "🔸 `.ping` — Check if worker is alive\n\n"
+        "🏆 *KURUP ADS ELITE — MASTER COMMANDS*\n\n"
+        "👥 *GROUPS & IMPORTS*\n"
+        "├ `.addgroup link1 link2` — Multi-add\n"
+        "├ `.addlist <addlist_url>` — Import Folder/Chatlist\n"
+        "├ `.addfolder <name>` — Import a Telegram folder\n"
+        "├ `.folders` — List your local folders\n"
+        "└ `.groups` | `.remfailed` | `.leave`\n\n"
+        "⚙️ *CAMPAIGN SETTINGS*\n"
+        "├ `.interval <min>` — Set loop delay (min: {min}m)\n"
+        "├ `.copymode on/off` — Use fresh copy vs forward\n"
+        "└ `.responder <msg>` | `.responder off`\n\n"
+        "⚡ *SYSTEM & INFO*\n"
+        "└ `.status` | `.ping` | `.me` | `.id`\n\n"
         "👑 *OWNER COMMANDS*\n"
-        "🔸 `.userstatus <id>` — Check any user's plan\n"
-        "🔸 `.addplan <id> <week/month/days>` — Grant plan\n"
-        "🔸 `.nightmode on/off/auto` — Global control\n\n"
-        "💡 *PRO TIP:* You can add multiple groups at once!\n"
-        "Example: `.addgroup @group1 @group2`"
-    ).format(min=MIN_INTERVAL_MINUTES)
+        "└ `.addplan` | `.userstatus` | `.nightmode`\n"
+        "".format(min=MIN_INTERVAL_MINUTES)
+    )
     
     await reply_to_command(client, message, text)
 
@@ -283,6 +277,10 @@ async def handle_addgroup(client: TelegramClient, user_id: int, message, text: s
     
     await reply_to_command(client, message, f"➤ Checking {len(group_inputs)} group(s)...")
     
+    # Fetch existing group IDs for this account to prevent duplicate entries
+    existing_groups = await get_user_groups(user_id, phone=getattr(client, 'phone', None))
+    existing_ids = {g["chat_id"] for g in existing_groups}
+    
     added = []
     failed = []
     
@@ -303,6 +301,11 @@ async def handle_addgroup(client: TelegramClient, user_id: int, message, text: s
             entity = await client.get_entity(group_identifier)
             chat_id = entity.id
             chat_title = getattr(entity, 'title', None) or getattr(entity, 'username', str(chat_id))
+            
+            if chat_id in existing_ids:
+                failed.append((group_input, "Already added to this account"))
+                continue
+
             
             # Get member count
             member_count = 0
