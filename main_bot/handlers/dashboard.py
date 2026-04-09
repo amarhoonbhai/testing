@@ -5,6 +5,7 @@ Dashboard handler for Main Bot.
 import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
+from telegram.error import BadRequest
 
 from models.user import (
     get_user_config, update_user_config, is_user_branded, 
@@ -160,7 +161,11 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.edit_message_text(dashboard_text, parse_mode="Markdown", reply_markup=kb)
+        try:
+            await update.callback_query.edit_message_text(dashboard_text, parse_mode="Markdown", reply_markup=kb)
+        except BadRequest as e:
+            if "Message is not modified" not in str(e):
+                raise
     else:
         await update.message.reply_text(dashboard_text, parse_mode="Markdown", reply_markup=kb)
 
@@ -233,7 +238,11 @@ async def manage_settings_callback(update: Update, context: ContextTypes.DEFAULT
 
 _Toggle or update your preferences below._
 """
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_manage_settings_keyboard(config, is_branded=await is_user_branded(user_id)))
+    try:
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_manage_settings_keyboard(config, is_branded=await is_user_branded(user_id)))
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -272,7 +281,11 @@ async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 """
     except Exception as e:
         text = f"❌ Could not load stats: {e}"
-    await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_dashboard_keyboard())
+    try:
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_dashboard_keyboard())
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def toggle_shuffle_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):

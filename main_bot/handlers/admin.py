@@ -48,11 +48,15 @@ Welcome to the command center.
 Manage users, track live statistics, and broadcast announcements directly below.
 """
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_admin_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_admin_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -256,11 +260,15 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
     
     text += "\n\n*Status Legend:*\n🟢 Healthy | 🟡 Unstable | 🔴 Critical"
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_stats_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 
@@ -283,11 +291,15 @@ Select your target audience below to
 initiate the broadcast sequence:
 """
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_broadcast_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_broadcast_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def broadcast_target_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -314,11 +326,15 @@ Send me the exact message you want to blast.
 *Abort:* Type `/cancel` anytime to stop.
 """
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_back_home_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_back_home_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
     
     context.user_data["waiting_for"] = "broadcast_message"
     return WAITING_BROADCAST_MESSAGE
@@ -457,11 +473,15 @@ async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 └ 🛡️ Status: 🟢 All services operating normally
 """
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_stats_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_stats_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def admin_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -493,11 +513,15 @@ Select a mode button below to override the system-wide night mode behavior:
 _This change affects all accounts globally._
 """
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_night_mode_settings_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_night_mode_settings_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 
 async def set_nightmode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -581,11 +605,15 @@ async def admin_group_stats_callback(update: Update, context: ContextTypes.DEFAU
             
     text += "\n_Failing groups are automatically paused. Click 'Retry All' to attempt recovery._"
     
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_admin_group_stats_keyboard(),
-    )
+    try:
+        await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_admin_group_stats_keyboard(),
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
 
 async def admin_retry_failing_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Clear all group failures to trigger retries."""
