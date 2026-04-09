@@ -16,6 +16,7 @@ async def add_group(
     chat_title: str,
     account_phone: str, # Mandatory now
     chat_username: str = None,
+    member_count: int = 0,
 ) -> dict:
     """Add or update a group linked to a specific account phone."""
     db = get_database()
@@ -29,6 +30,7 @@ async def add_group(
             "$set": {
                 "chat_title": chat_title,
                 "chat_username": chat_username,
+                "member_count": member_count,
                 "enabled": True,
                 "updated_at": now,
             },
