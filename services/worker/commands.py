@@ -13,6 +13,7 @@ from telethon.errors import (
     UsernameInvalidError,
     InviteHashInvalidError,
     InviteHashExpiredError,
+    FloodWaitError,
 )
 from telethon.tl.types import InputPeerSelf, InputPeerChannel, InputPeerChat
 from telethon.tl.functions.messages import GetDialogFiltersRequest
@@ -62,18 +63,6 @@ async def process_command(client: TelegramClient, user_id: int, message) -> bool
         elif cmd == ".interval":
             await handle_interval(client, user_id, message, text)
             return True
-        elif cmd == ".shuffle":
-            await handle_shuffle(client, user_id, message, text)
-            return True
-        elif cmd == ".copymode":
-            await handle_copymode(client, user_id, message, text)
-            return True
-        elif cmd == ".sendmode":
-            await handle_sendmode(client, user_id, message, text)
-            return True
-        elif cmd == ".responder":
-            await handle_responder(client, user_id, message, text)
-            return True
         elif cmd == ".ping":
             await reply_to_command(client, message, "● Pong! Worker is active ⚡")
             return True
@@ -116,18 +105,16 @@ async def handle_help(client: TelegramClient, user_id: int, message):
         "🏆 *KURUP ADS ELITE — MASTER COMMANDS*\n\n"
         "👥 *GROUPS & IMPORTS*\n"
         "├ `.addgroup link1 link2` — Multi-add\n"
-        "├ `.addlist <addlist_url>` — Import Folder/Chatlist\n"
+        "├ `.rmgroup <url/id>` — Remove a single group\n"
         "├ `.addfolder <name>` — Import a Telegram folder\n"
         "├ `.folders` — List your local folders\n"
-        "└ `.groups` | `.remfailed` | `.leave`\n\n"
+        "└ `.groups` | `.rmpaused` \n\n"
         "⚙️ *CAMPAIGN SETTINGS*\n"
-        "├ `.interval <min>` — Set loop delay (min: {min}m)\n"
-        "├ `.copymode on/off` — Use fresh copy vs forward\n"
-        "└ `.responder <msg>` | `.responder off`\n\n"
+        "└ `.interval <min>` — Set loop delay (min: {min}m)\n\n"
         "⚡ *SYSTEM & INFO*\n"
-        "└ `.status` | `.ping` | `.me` | `.id`\n\n"
+        "└ `.status` | `.ping` \n\n"
         "👑 *OWNER COMMANDS*\n"
-        "└ `.addplan` | `.userstatus` | `.nightmode`\n"
+        "└ `.nightmode`\n"
         "".format(min=MIN_INTERVAL_MINUTES)
     )
     
@@ -182,10 +169,6 @@ async def handle_status(client: TelegramClient, user_id: int, message, text: str
 
 ⚡ *LIVE SETTINGS*
 ├ Interval: {interval}m
-├ Send Mode: {send_mode}
-├ Shuffle: {"🟢 ON" if config.get("shuffle_mode") else "⚫ OFF"}
-├ Copy Mode: {"🟢 ON" if config.get("copy_mode") else "⚫ OFF"}
-├ Auto-Responder: {"🟢 ON" if config.get("auto_reply_enabled") else "⚫ OFF"}
 └ Night Mode: {await get_night_mode_label()}
 
 👥 *GROUPS ({enabled_groups}/{total_groups})*
@@ -337,6 +320,9 @@ async def handle_addgroup(client: TelegramClient, user_id: int, message, text: s
             failed.append((group_input, "Private/No access"))
         except (InviteHashInvalidError, InviteHashExpiredError):
             failed.append((group_input, "Invalid invite"))
+        except FloodWaitError as e:
+            failed.append((group_input, f"FloodWait ({e.seconds}s)"))
+            break  # Stop checking further since we're rate limited
         except Exception as e:
             failed.append((group_input, str(e)[:20]))
     
@@ -498,126 +484,6 @@ async def handle_interval(client: TelegramClient, user_id: int, message, text: s
         f"➤ New interval: {interval} minutes\n\n"
         f"Messages will be forwarded every {interval} minutes."
     )
-
-
-async def handle_shuffle(client: TelegramClient, user_id: int, message, text: str):
-    """Handle .shuffle on/off command."""
-    parts = text.split(maxsplit=1)
-    if len(parts) < 2:
-        config = await get_user_config(user_id)
-        current = "ON" if config.get("shuffle_mode", False) else "OFF"
-        await reply_to_command(client, message,
-            f"➤ Shuffle Mode: {current}\n\n"
-            f"Usage: .shuffle on/off\n"
-            f"Randomizes group order each cycle."
-        )
-        return
-    
-    val = parts[1].strip().lower()
-    enable = val == "on"
-    
-    await update_user_config(user_id, shuffle_mode=enable)
-    status_text = "ENABLED ●" if enable else "DISABLED ○"
-    
-    await reply_to_command(client, message,
-        f"■ Shuffle Mode {status_text}\n\n"
-        f"Groups will now be {'randomized' if enable else 'sent in order'} each cycle."
-    )
-
-
-async def handle_copymode(client: TelegramClient, user_id: int, message, text: str):
-    """Handle .copymode on/off command."""
-    parts = text.split(maxsplit=1)
-    if len(parts) < 2:
-        config = await get_user_config(user_id)
-        current = "ON" if config.get("copy_mode", False) else "OFF"
-        await reply_to_command(client, message,
-            f"➤ Copy Mode: {current}\n\n"
-            f"Usage: .copymode on/off\n"
-            f"Sends as new message instead of forwarding."
-        )
-        return
-    
-    val = parts[1].strip().lower()
-    enable = val == "on"
-    
-    await update_user_config(user_id, copy_mode=enable)
-    status_text = "ENABLED ●" if enable else "DISABLED ○"
-    
-    await reply_to_command(client, message,
-        f"■ Copy Mode {status_text}\n\n"
-        f"Messages will now be {'sent as new copies' if enable else 'forwarded normally'}."
-    )
-
-
-async def handle_sendmode(client: TelegramClient, user_id: int, message, text: str):
-    """Handle .sendmode <sequential/rotate/random> command."""
-    parts = text.split(maxsplit=1)
-    config = await get_user_config(user_id)
-    current = config.get("send_mode", "sequential")
-    
-    if len(parts) < 2:
-        await reply_to_command(client, message,
-            f"➤ Send Mode: {current.title()}\n\n"
-            f"Usage: .sendmode <mode>\n"
-            f"Modes:\n"
-            f"  ◦ sequential: Ad 1 to all groups, then Ad 2...\n"
-            f"  ◦ rotate: Grp 1 gets Ad 1, Grp 2 gets Ad 2...\n"
-            f"  ◦ random: Random ad sent to each group"
-        )
-        return
-    
-    val = parts[1].strip().lower()
-    if val in ["seq", "sequential"]:
-        val = "sequential"
-    elif val in ["rot", "rotate"]:
-        val = "rotate"
-    elif val in ["rand", "random"]:
-        val = "random"
-    else:
-        await reply_to_command(client, message, "○ Invalid mode! Choose: sequential, rotate, or random.")
-        return
-    
-    await update_user_config(user_id, send_mode=val)
-    
-    await reply_to_command(client, message,
-        f"■ Send Mode Updated: {val.title()} ●\n\n"
-        f"Message distribution pattern changed."
-    )
-
-
-async def handle_responder(client: TelegramClient, user_id: int, message, text: str):
-    """Handle .responder on/off or .responder <message>."""
-    parts = text.split(maxsplit=1)
-    if len(parts) < 2:
-        config = await get_user_config(user_id)
-        current = "ON" if config.get("auto_reply_enabled", False) else "OFF"
-        await reply_to_command(client, message,
-            f"➤ Auto-Responder: {current}\n\n"
-            f"Usage:\n"
-            f"  .responder on/off\n"
-            f"  .responder <your message>\n\n"
-            f"Current message:\n"
-            f"\"{config.get('auto_reply_text')}\""
-        )
-        return
-    
-    val = parts[1].strip()
-    
-    if val.lower() == "on":
-        await update_user_config(user_id, auto_reply_enabled=True)
-        await reply_to_command(client, message, "■ Auto-Responder ENABLED ●")
-    elif val.lower() == "off":
-        await update_user_config(user_id, auto_reply_enabled=False)
-        await reply_to_command(client, message, "■ Auto-Responder DISABLED ○")
-    else:
-        # Set message
-        await update_user_config(user_id, auto_reply_text=val, auto_reply_enabled=True)
-        await reply_to_command(client, message, 
-            f"● Auto-Responder set and ENABLED!\n\n"
-            f"➤ New message: {val}"
-        )
-
 
 
 async def handle_rmpaused(client: TelegramClient, user_id: int, message):

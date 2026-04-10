@@ -99,7 +99,6 @@ class UserSender:
         # Professional Logging with Adapter
         self.logger = UserLogAdapter(logger, {'user_id': user_id, 'phone': phone})
         self.wake_up_event = asyncio.Event()
-        self.responder_cache = {}  # Cache: {sender_id: timestamp} to avoid double-replies
         self.status = "Initializing"
         self.message_counter = 0  # Track total sends in this session
         
@@ -296,10 +295,6 @@ class UserSender:
                         await process_command(self.client, self.user_id, event.message)
                         return
 
-                    # 2. Handle Auto-Responder (Private messages only)
-                    if event.is_private:
-                        await self.handle_auto_reply(event)
-
                 except Exception as e:
                     self.logger.error(f"Incoming handler error: {e}")
             
@@ -435,40 +430,6 @@ class UserSender:
                 self.logger.info("✅ Profile restored successfully.")
         except Exception as e:
             self.logger.error(f"Failed to restore profile: {e}")
-    
-    
-    async def handle_auto_reply(self, event):
-        """Send automated reply to incoming private messages."""
-        try:
-            sender = await event.get_sender()
-            sender_id = event.sender_id
-            
-            # Skip bots and deleted users
-            if not sender or getattr(sender, 'bot', False):
-                return
-            
-            # 1. Check if responder is enabled
-            config = await self._get_cached_config()
-            if not config.get("auto_reply_enabled", False):
-                return
-            
-            # 2. Prevent spamming (reply once every 24h per user)
-            now = datetime.utcnow().timestamp()
-            last_reply = self.responder_cache.get(sender_id, 0)
-            if now - last_reply < 86400:  # 24 hours
-                return
-            
-            reply_text = config.get("auto_reply_text", "Hello! Thanks for your message.")
-            
-            self.logger.info(f"Sending auto-reply to {sender_id}")
-            await event.reply(reply_text)
-            
-            # Update cache
-            self.responder_cache[sender_id] = now
-            
-        except Exception as e:
-            self.logger.error(f"Auto-reply error: {e}")
-
     async def run_loop(self):
         """Main sender loop - Simplified nested loop."""
         while self.running:
@@ -553,7 +514,6 @@ class UserSender:
                 messages.sort(key=lambda x: x.id)
                 
                 config = await self._get_cached_config()
-                copy_mode = config.get("copy_mode", False)
                 interval_minutes = config.get("interval_min", DEFAULT_INTERVAL_MINUTES)
                 
                 # Prime dialog cache to prevent "Could not find entity" errors for private groups
@@ -574,7 +534,7 @@ class UserSender:
                         self.logger.info(f"📤 Forwarding msg {msg.id} to {chat_title}...")
                         await self.update_status(f"Sending to {chat_title}")
                         
-                        flood_triggered, flood_wait = await self.forward_single_message(msg, group, copy_mode=copy_mode)
+                        flood_triggered, flood_wait = await self.forward_single_message(msg, group)
                         
                         if flood_triggered:
                             await self.update_status(f"FloodWait ({flood_wait}s)")
@@ -582,13 +542,17 @@ class UserSender:
                             
                         # Group Gap Delay (skip after the last group)
                         if grp_idx < len(groups) - 1:
-                            await self.update_status(f"Group Gap ({GROUP_GAP_SECONDS}s)")
-                            await asyncio.sleep(GROUP_GAP_SECONDS)
+                            target_gap = self.adaptive_group_gap.get_gap()
+                            gap = random.uniform(target_gap * 0.8, target_gap * 1.5)
+                            await self.update_status(f"Group Gap ({int(gap)}s)")
+                            await asyncio.sleep(gap)
                             
                     # Message Gap Delay (skip after the last message)
                     if msg_idx < len(messages) - 1:
-                        await self.update_status(f"Msg Gap ({MESSAGE_GAP_SECONDS}s)")
-                        await asyncio.sleep(MESSAGE_GAP_SECONDS)
+                        target_gap = self.adaptive_msg_gap.get_gap()
+                        gap = random.uniform(target_gap * 0.8, target_gap * 1.5)
+                        await self.update_status(f"Msg Gap ({int(gap)}s)")
+                        await asyncio.sleep(gap)
                 
                 # 5. Cycle complete, respect user interval
                 actual_interval = max(interval_minutes, MIN_INTERVAL_MINUTES)
@@ -636,7 +600,7 @@ class UserSender:
             logger.error(f"[User {self.user_id}] Error fetching saved messages: {e}")
             return []
     
-    async def forward_single_message(self, message, group: dict, copy_mode: bool = False) -> tuple:
+    async def forward_single_message(self, message, group: dict) -> tuple:
         """
         Forward or copy a single message to a single group.
         Returns: (flood_triggered: bool, flood_wait_seconds: int)
@@ -694,38 +658,15 @@ class UserSender:
                 asyncio.create_task(db_log_send(self.user_id, chat_id, message.id, "failed", f"Entity error: {e}", phone=self.phone))
                 return (False, 0)
             
-            # ── STEP 2: Human-like typing (safe — errors are swallowed) ─────
-            if random.random() > 0.1:
-                try:
-                    typing_duration = random.uniform(2, 5)
-                    async with self.client.action(entity, 'typing'):
-                        await asyncio.sleep(typing_duration)
-                except Exception:
-                    pass  # Typing failure is harmless, never let it crash
+            # ── STEP 2: Send the message ────────────────────────────────────
+            # Use single random jitter delay (safe) instead of typing RPC which causes API bans
+            await asyncio.sleep(random.uniform(0.5, 2.0))
 
-            # ── STEP 3: Random micro-delay before sending ───────────────────
-            await asyncio.sleep(random.uniform(0.1, 0.5))
-
-            # ── STEP 4: Send the message ────────────────────────────────────
-            if copy_mode:
-                # Safeguard: skip empty messages (no text and no media)
-                if not message.text and not message.media:
-                    self.logger.warning("Skipping empty message")
-                    return (False, 0)
-
-                await self.client.send_message(
-                    entity=entity,
-                    message=message.text or None,
-                    file=message.media,
-                    formatting_entities=message.entities if message.text else None
-                )
-                log_action = "Copied"
-            else:
-                await self.client.forward_messages(
-                    entity=entity,
-                    messages=message
-                )
-                log_action = "Forwarded"
+            await self.client.forward_messages(
+                entity=entity,
+                messages=message
+            )
+            log_action = "Forwarded"
             
             self.logger.info(f"{log_action} message {message.id} to {chat_title}")
             self.adaptive_group_gap.on_success()

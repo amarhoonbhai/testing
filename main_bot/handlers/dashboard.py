@@ -23,9 +23,7 @@ from core.config import (
 )
 from core.utils import escape_markdown
 
-# Conversation states
 WAITING_INTERVAL = 11
-WAITING_RESPONDER_TEXT = 12
 
 
 def format_last_active(dt: datetime.datetime) -> str:
@@ -123,16 +121,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_branded = await is_user_branded(user_id)
     branding_status = "🟢 ACTIVE" if is_branded else "🔴 MISSING"
     
-    copy_icon = "🟢" if config.get("copy_mode") else "⚫"
-    shuffle_icon = "🟢" if config.get("shuffle_mode") else "⚫"
-    responder_icon = "🟢" if config.get("auto_reply_enabled") else "⚫"
-        
-    send_mode = config.get("send_mode", "sequential").title()
-    reply_text = config.get("auto_reply_text", "")
-    reply_preview = escape_markdown(reply_text[:25] + "..." if len(reply_text) > 25 else reply_text)
-    if not is_branded:
-        reply_preview = "Locked"
-    
     dashboard_text = f"""
 📊 *DASHBOARD* — {user_name}
 
@@ -146,11 +134,6 @@ async def show_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🏷️ *BRANDING:* {branding_status}
   └─ _Powered by @KurupAdsBot (Free Edition)_
-
-⚙️ *SETTINGS*
-  {copy_icon} Copy Mode ▪ {shuffle_icon} Shuffle
-  🔄 Send Mode: {send_mode}
-  {responder_icon} Responder: _{reply_preview}_
 
 
 """
@@ -208,17 +191,7 @@ to start auto-forwarding messages.
     await query.edit_message_text(text, parse_mode="Markdown", reply_markup=get_add_account_keyboard())
 
 
-async def toggle_send_mode_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = update.effective_user.id
-    # Features are now UNLOCKED for everyone (Enforced branding)
-    config = await get_user_config(user_id)
-    modes = ["sequential", "rotate", "random"]
-    current = config.get("send_mode", "sequential")
-    next_mode = modes[(modes.index(current) + 1) % len(modes)]
-    await update_user_config(user_id, send_mode=next_mode)
-    await query.answer(f"✅ Send mode: {next_mode.title()}")
-    await manage_settings_callback(update, context)
+
 
 
 async def manage_settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -227,14 +200,12 @@ async def manage_settings_callback(update: Update, context: ContextTypes.DEFAULT
     await query.answer()
     config = await get_user_config(user_id)
     interval = config.get("interval_min", MIN_INTERVAL_MINUTES)
-    send_mode = config.get("send_mode", "sequential").title()
     text = f"""
 🛠️ *USER SETTINGS*
 ══════════════════════════════
 
 ⏱️ *Interval:* {interval} minutes (Wait after cycle)
 🔄 *Group Gap:* 3.5 minutes (Pre-set)
-🤖 *Auto-Responder:* {"Enabled ✅" if config.get("auto_reply_enabled") else "Disabled ⚫"}
 
 _Toggle or update your preferences below._
 """
@@ -288,39 +259,7 @@ async def user_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             raise
 
 
-async def toggle_shuffle_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = update.effective_user.id
-    if not await is_user_branded(user_id):
-        await query.answer("🔒 Feature locked.", show_alert=True)
-        return
-    config = await get_user_config(user_id)
-    new_val = not config.get("shuffle_mode", False)
-    await update_user_config(user_id, shuffle_mode=new_val)
-    await query.answer(f"Shuffle {'Enabled' if new_val else 'Disabled'}")
-    await manage_settings_callback(update, context)
 
-
-async def toggle_copy_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = update.effective_user.id
-    # Features are now UNLOCKED
-    config = await get_user_config(user_id)
-    new_val = not config.get("copy_mode", False)
-    await update_user_config(user_id, copy_mode=new_val)
-    await query.answer(f"Copy Mode {'Enabled' if new_val else 'Disabled'}")
-    await manage_settings_callback(update, context)
-
-
-async def toggle_responder_ui_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = update.effective_user.id
-    # Features are now UNLOCKED
-    config = await get_user_config(user_id)
-    new_val = not config.get("auto_reply_enabled", False)
-    await update_user_config(user_id, auto_reply_enabled=new_val)
-    await query.answer(f"Responder {'Enabled' if new_val else 'Disabled'}")
-    await manage_settings_callback(update, context)
 
 
 async def noop_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -349,17 +288,4 @@ async def receive_interval(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_INTERVAL
 
 
-async def set_responder_text_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = update.effective_user.id
-    # Features are now UNLOCKED
-    await query.answer()
-    await query.edit_message_text("🤖 *SET RESPONDER TEXT*\n\nPlease send the message you want the bot to reply with.", parse_mode="Markdown")
-    return WAITING_RESPONDER_TEXT
 
-
-async def receive_responder_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    await update_user_config(user_id, auto_reply_text=update.message.text)
-    await update.message.reply_text("✅ Responder text updated.", reply_markup=get_dashboard_keyboard())
-    return ConversationHandler.END

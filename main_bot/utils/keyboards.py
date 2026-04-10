@@ -314,29 +314,9 @@ def get_confirm_clear_groups_acc_keyboard(phone: str) -> InlineKeyboardMarkup:
 
 def get_manage_settings_keyboard(config: dict, is_branded: bool = True) -> InlineKeyboardMarkup:
     """Build keyboard for user settings management."""
-    shuffle_status = "🟢 ON" if config.get("shuffle_mode") else "⚫ OFF"
-    copy_status = "🟢 ON" if config.get("copy_mode") else "⚫ OFF"
-    responder_status = "🟢 ON" if config.get("auto_reply_enabled") else "⚫ OFF"
-    
-    s_lock = "" if is_branded else " 🔒"
-    c_lock = "" if is_branded else " 🔒"
-    r_lock = "" if is_branded else " 🔒"
-    m_lock = "" if is_branded else " 🔒"
-    
     keyboard = [
         [
-            InlineKeyboardButton(f"🔁 Shuffle: {shuffle_status}{s_lock}", callback_data="toggle_shuffle_ui"),
-            InlineKeyboardButton(f"📝 Copy Mode: {copy_status}{c_lock}", callback_data="toggle_copy_ui"),
-        ],
-        [
-            InlineKeyboardButton(f"🔄 Toggle Send Mode{m_lock}", callback_data="toggle_send_mode"),
-        ],
-        [
             InlineKeyboardButton("⏱️ Set Interval", callback_data="set_interval_prompt"),
-            InlineKeyboardButton(f"🤖 Responder: {responder_status}{r_lock}", callback_data="toggle_responder_ui"),
-        ],
-        [
-            InlineKeyboardButton(f"✍️ Set Responder Text{r_lock}", callback_data="set_responder_text_prompt"),
         ],
         [
             InlineKeyboardButton("🔙 Back to Dashboard", callback_data="dashboard"),

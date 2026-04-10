@@ -48,9 +48,6 @@ async def profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ─── Config ───
     config = data.get("config") or {}
-    copy_mode = "✅ ON" if config.get("copy_mode") else "⚫ OFF"
-    shuffle_mode = "✅ ON" if config.get("shuffle_mode") else "⚫ OFF"
-    responder = "✅ ON" if config.get("auto_reply_enabled") else "⚫ OFF"
 
     # ─── Referral ───
     user_data = data.get("user") or {}
@@ -74,11 +71,6 @@ async def profile_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *FORWARDING STATS*
   📤 Total Sent: {total_sent}
   🎯 Success Rate: {success_rate}%
-
-*SETTINGS*
-  Copy Mode: {copy_mode}
-  Shuffle: {shuffle_mode}
-  Responder: {responder}
 
 *REFERRALS*
   Code: `{referral_code}`

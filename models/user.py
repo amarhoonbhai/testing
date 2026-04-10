@@ -72,11 +72,6 @@ async def get_user_config(user_id: int) -> dict:
             "user_id": user_id,
             "interval_min": DEFAULT_INTERVAL_MINUTES,
             "last_saved_id": 0,
-            "shuffle_mode": False,
-            "copy_mode": False,
-            "send_mode": "sequential",
-            "auto_reply_enabled": False,
-            "auto_reply_text": "Hello! Thanks for your interest. Please contact @KurupAdsBot for more details.",
             "updated_at": datetime.utcnow(),
         }
         await db.config.insert_one(config)
