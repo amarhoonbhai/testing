@@ -20,11 +20,9 @@ from core.base_service import BaseService
 # Import handlers
 from main_bot.handlers.start import start_handler, home_callback, check_join_callback
 from main_bot.handlers.dashboard import (
-    dashboard_callback, add_account_callback, toggle_send_mode_callback,
-    manage_settings_callback, user_stats_callback, toggle_shuffle_ui_callback,
-    toggle_copy_ui_callback, toggle_responder_ui_callback, noop_callback,
-    set_interval_prompt, receive_interval, set_responder_text_prompt,
-    receive_responder_text, WAITING_INTERVAL, WAITING_RESPONDER_TEXT,
+    dashboard_callback, add_account_callback,
+    manage_settings_callback, user_stats_callback, noop_callback,
+    set_interval_prompt, receive_interval, WAITING_INTERVAL,
 )
 from main_bot.handlers.admin import (
     admin_callback, admin_command, broadcast_command, stats_command,
@@ -79,12 +77,7 @@ class MainBotService(BaseService):
             fallbacks=[CallbackQueryHandler(manage_settings_callback, pattern="^manage_settings$")],
             per_user=True, per_chat=True
         ))
-        app.add_handler(ConversationHandler(
-            entry_points=[CallbackQueryHandler(set_responder_text_prompt, pattern="^set_responder_text$")],
-            states={WAITING_RESPONDER_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_responder_text)]},
-            fallbacks=[CallbackQueryHandler(manage_settings_callback, pattern="^manage_settings$")],
-            per_user=True, per_chat=True
-        ))
+
 
         # Callback patterns
         patterns = [
@@ -94,10 +87,7 @@ class MainBotService(BaseService):
             ("^accounts_list$", accounts_list_callback), ("^manage_settings$", manage_settings_callback),
             ("^user_stats$", user_stats_callback), ("^profile$", profile_callback),
             ("^help$", help_callback), ("^guide$", guide_callback),
-            ("^toggle_shuffle$", toggle_shuffle_ui_callback),
-            ("^toggle_copy$", toggle_copy_ui_callback),
-            ("^toggle_responder$", toggle_responder_ui_callback),
-            ("^toggle_send_mode$", toggle_send_mode_callback),
+
             ("^start_ads$", start_all_accounts_callback),
             ("^stop_ads$", stop_all_accounts_callback),
         ]
