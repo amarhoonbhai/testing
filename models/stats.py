@@ -187,6 +187,19 @@ async def log_send(
             {"$set": update_data, "$inc": inc_data}
         )
 
+async def get_account_sent_today(user_id: int, phone: str) -> int:
+    """Get successful sends for a specific account in the last 24 hours."""
+    db = get_database()
+    cutoff_24h = datetime.utcnow() - timedelta(days=1)
+    
+    count = await db.job_logs.count_documents({
+        "user_id": user_id,
+        "phone": phone,
+        "status": "sent",
+        "timestamp": {"$gt": cutoff_24h}
+    })
+    return count
+
 async def get_active_workers() -> List[Dict[str, Any]]:
     """Get list of active workers that reported heartbeat in the last 2 minutes."""
     db = get_database()

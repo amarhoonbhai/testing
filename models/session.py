@@ -199,3 +199,31 @@ async def update_session_original_profile(user_id: int, phone: str, first: str, 
             "profile_captured_at": datetime.utcnow()
         }},
     )
+
+
+async def archive_session(user_id: int, phone: str, reason: str):
+    """
+    Archive a session by moving it to 'archived_sessions' and deleting it from 'sessions'.
+    Used for deactivated or permanently revoked accounts.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    db = get_database()
+    
+    # 1. Fetch the existing session
+    session = await db.sessions.find_one({"user_id": user_id, "phone": phone})
+    if not session:
+        return
+        
+    # 2. Add archive metadata
+    session["archived_at"] = datetime.utcnow()
+    session["archive_reason"] = reason
+    session["connected"] = False
+    
+    # 3. Save to archives
+    await db.archived_sessions.insert_one(session)
+    
+    # 4. Remove from active sessions
+    await db.sessions.delete_one({"user_id": user_id, "phone": phone})
+    
+    logger.info(f"📦 Archived invalid session: {phone} (User: {user_id}) | Reason: {reason}")

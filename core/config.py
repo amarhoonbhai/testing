@@ -35,7 +35,7 @@ LOGIN_BOT_TOKEN: str = os.getenv("LOGIN_BOT_TOKEN", "")
 # ── Bot Usernames ───────────────────────────────────────────────────────────
 
 MAIN_BOT_USERNAME: str = os.getenv("MAIN_BOT_USERNAME", "KurupAdsBot")
-LOGIN_BOT_USERNAME: str = os.getenv("LOGIN_BOT_USERNAME", "kuruploginbot")
+LOGIN_BOT_USERNAME: str = os.getenv("LOGIN_BOT_USERNAME", "kurupverifybot")
 
 # ── Owner / Admin ───────────────────────────────────────────────────────────
 
@@ -69,6 +69,16 @@ MESSAGE_GAP_SECONDS: int = _safe_int(os.getenv("MESSAGE_GAP_SECONDS", "120"), 12
 MIN_INTERVAL_MINUTES: int = 20
 DEFAULT_INTERVAL_MINUTES: int = 20
 MAX_GROUPS_PER_USER: int = 10000
+DAILY_MESSAGE_LIMIT: int = 150  # Emergency safety valve
+
+# ── Stealth Algorithm (Behavioral Pacing) ──────────────────────────────────
+# Batch processing: After N messages, take a long break.
+BATCH_SIZE_MIN: int = 3
+BATCH_SIZE_MAX: int = 7
+LONG_BREAK_MIN: int = 900   # 15 minutes
+LONG_BREAK_MAX: int = 1800  # 30 minutes
+WARMING_PERIOD_DAYS: int = 3
+WARMING_MULTIPLIER: float = 2.5 # Initial delay multiplier for new accounts
 
 # ── Rate-limit protection ──────────────────────────────────────────────────
 

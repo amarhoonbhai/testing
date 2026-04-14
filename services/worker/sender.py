@@ -32,15 +32,19 @@ from telethon.tl.functions.account import UpdateProfileRequest
 
 from core.config import (
     GROUP_GAP_SECONDS, MESSAGE_GAP_SECONDS, DEFAULT_INTERVAL_MINUTES,
-    MIN_INTERVAL_MINUTES, OWNER_ID, MAX_GROUPS_PER_USER
+    MIN_INTERVAL_MINUTES, OWNER_ID, MAX_GROUPS_PER_USER, DAILY_MESSAGE_LIMIT
 )
 from models.session import (
     get_session, update_current_msg_index,
     update_session_activity, get_all_user_sessions, update_session_original_profile,
-    mark_session_auth_failed, mark_session_disabled, reset_session_auth_fails
+    mark_session_auth_failed, mark_session_disabled, reset_session_auth_fails,
+    archive_session
 )
 from models.user import get_user_config, update_last_saved_id
-from models.stats import log_send as db_log_send
+from models.stats import (
+    log_send as db_log_send,
+    get_account_sent_today
+)
 from models.group import (
     get_user_groups, remove_group, toggle_group,
     mark_group_failing, clear_group_fail, remove_stale_failing_groups
@@ -56,30 +60,72 @@ logger = logging.getLogger(__name__)
 
 
 class AdaptiveDelayController:
-    """Dynamically adjusts gaps based on FloodWait and success rates."""
-    MAX_MULTIPLIER = 10.0  # Hard cap — prevents runaway wait times
+    """Dynamically adjusts gaps based on FloodWait, success rates, and behavioral batching."""
+    MAX_MULTIPLIER = 12.0  # Increased for more breathing room during floods
 
     def __init__(self, base_gap: int):
         self.base_gap = base_gap
         self.multiplier = 1.0
         self.success_streak = 0
         self.last_flood_at = None
+        
+        # Batching state
+        self.messages_in_current_batch = 0
+        self.current_target_batch_size = random.randint(BATCH_SIZE_MIN, BATCH_SIZE_MAX)
+        
+        # Session Warming state
+        self.warming_multiplier = 1.0
 
-    def get_gap(self) -> int:
-        return int(self.base_gap * self.multiplier)
+    def set_warming(self, session_created_at: datetime):
+        """Set warming multiplier based on account age in the system."""
+        age = datetime.utcnow() - session_created_at
+        if age < timedelta(days=WARMING_PERIOD_DAYS):
+            # Linearly decrease from WARMING_MULTIPLIER to 1.0 over the period
+            progress = age.total_seconds() / (WARMING_PERIOD_DAYS * 86400)
+            self.warming_multiplier = max(1.0, WARMING_MULTIPLIER * (1.0 - progress))
+        else:
+            self.warming_multiplier = 1.0
+
+    def get_gap(self, is_batch_break: bool = False) -> int:
+        """
+        Calculate the next delay.
+        Includes stochastic jitter and warming factors.
+        """
+        if is_batch_break:
+            # Long break between batches
+            base = random.randint(LONG_BREAK_MIN, LONG_BREAK_MAX)
+        else:
+            # Standard gap with ±25% random jitter
+            jitter = random.uniform(0.75, 1.25)
+            base = self.base_gap * jitter
+            
+        return int(base * self.multiplier * self.warming_multiplier)
 
     def on_flood(self, wait_seconds: int):
         self.last_flood_at = datetime.utcnow()
-        new_mult = max(self.multiplier * 1.5, (wait_seconds / self.base_gap) * 1.1)
-        self.multiplier = min(new_mult, self.MAX_MULTIPLIER)  # cap applied
+        # Aggressive backoff on flood
+        new_mult = max(self.multiplier * 2.0, (wait_seconds / self.base_gap) * 1.2)
+        self.multiplier = min(new_mult, self.MAX_MULTIPLIER)
         self.success_streak = 0
+        # Reduce batch size for safety after a flood
+        self.current_target_batch_size = max(BATCH_SIZE_MIN, self.current_target_batch_size - 1)
 
     def on_success(self):
         self.success_streak += 1
-        # Every 10 successes, slowly decrease multiplier back to 1.0
-        if self.success_streak >= 10 and self.multiplier > 1.0:
-            self.multiplier = max(1.0, self.multiplier * 0.9)
+        self.messages_in_current_batch += 1
+        
+        # Every 15 successes, slowly decrease multiplier back to 1.0
+        if self.success_streak >= 15 and self.multiplier > 1.0:
+            self.multiplier = max(1.0, self.multiplier * 0.85)
             self.success_streak = 0
+
+    def is_batch_complete(self) -> bool:
+        """Check if current batch limit reached."""
+        if self.messages_in_current_batch >= self.current_target_batch_size:
+            self.messages_in_current_batch = 0
+            self.current_target_batch_size = random.randint(BATCH_SIZE_MIN, BATCH_SIZE_MAX)
+            return True
+        return False
 
 
 class UserSender:
@@ -195,6 +241,11 @@ class UserSender:
                 await self.client.disconnect()
             return
 
+        # Initialize Stealth Warming logic
+        created_at = session_data.get("created_at") or datetime.utcnow()
+        self.adaptive_group_gap.set_warming(created_at)
+        self.adaptive_msg_gap.set_warming(created_at)
+
         # ── Phase 2: Run session (no semaphore — slot is already freed) ─────
         await self._run_session()
 
@@ -215,9 +266,9 @@ class UserSender:
             if fail_count >= self.MAX_AUTH_FAILURES:
                 self.logger.error(
                     f"Session unauthorized — {fail_count} failures. "
-                    f"Permanently disabling."
+                    f"Permanently Archiving."
                 )
-                await mark_session_disabled(
+                await archive_session(
                     self.user_id, self.phone, f"auth_failed_{fail_count}x"
                 )
             else:
@@ -478,6 +529,15 @@ class UserSender:
                     await asyncio.sleep(min(wait_seconds, 3600))
                     continue
                 
+                # ── 2b. Check Daily Message Limit (Safety) ──────────────────
+                sent_today = await get_account_sent_today(self.user_id, self.phone)
+                if sent_today >= DAILY_MESSAGE_LIMIT:
+                    self.logger.info(f"🛑 Daily safety limit reached ({sent_today}/{DAILY_MESSAGE_LIMIT}). Sleeping.")
+                    await self.update_status(f"Limit Reached ({sent_today})")
+                    # Sleep for an hour and check again
+                    await asyncio.sleep(3600)
+                    continue
+                
                 # 3. Get groups
                 all_raw_groups = await get_user_groups(self.user_id, enabled_only=True)
                 
@@ -542,15 +602,22 @@ class UserSender:
                             
                         # Group Gap Delay (skip after the last group)
                         if grp_idx < len(groups) - 1:
-                            target_gap = self.adaptive_group_gap.get_gap()
-                            gap = random.uniform(target_gap * 0.8, target_gap * 1.5)
-                            await self.update_status(f"Group Gap ({int(gap)}s)")
-                            await asyncio.sleep(gap)
+                            # ── STEALTH CHECK: Batch Break ──────────────────
+                            if self.adaptive_group_gap.is_batch_complete():
+                                break_gap = self.adaptive_group_gap.get_gap(is_batch_break=True)
+                                self.logger.info(f"☕ Batch complete. Taking a 'Coffee Break' ({break_gap//60}m)...")
+                                await self.update_status(f"Coffee Break ({break_gap//60}m)")
+                                await asyncio.sleep(break_gap)
+                            else:
+                                target_gap = self.adaptive_group_gap.get_gap()
+                                gap = random.uniform(target_gap * 0.8, target_gap * 1.2)
+                                await self.update_status(f"Group Gap ({int(gap)}s)")
+                                await asyncio.sleep(gap)
                             
                     # Message Gap Delay (skip after the last message)
                     if msg_idx < len(messages) - 1:
                         target_gap = self.adaptive_msg_gap.get_gap()
-                        gap = random.uniform(target_gap * 0.8, target_gap * 1.5)
+                        gap = random.uniform(target_gap * 0.8, target_gap * 1.2)
                         await self.update_status(f"Msg Gap ({int(gap)}s)")
                         await asyncio.sleep(gap)
                 
@@ -715,8 +782,8 @@ class UserSender:
             return (False, 0)
             
         except InputUserDeactivatedError:
-            self.logger.error(f"🛑 Account {self.phone} is deactivated by Telegram!")
-            asyncio.create_task(mark_session_disabled(self.user_id, self.phone, reason="User Deactivated"))
+            self.logger.error(f"🛑 Account {self.phone} is deactivated by Telegram! Archiving.")
+            asyncio.create_task(archive_session(self.user_id, self.phone, reason="User Deactivated"))
             asyncio.create_task(db_log_send(self.user_id, chat_id, message.id, "failed", "UserDeactivated", phone=self.phone))
             self.running = False
             return (False, 0)
@@ -764,9 +831,10 @@ class UserSender:
                     
                     # 2. Authorization Check (Prevents ghost runs)
                     if not await self.client.is_user_authorized():
-                        self.logger.error("Session revoked or unauthorized. Stopping sender.")
+                        self.logger.error("Session revoked or unauthorized. Archiving.")
                         self.running = False
                         await self.update_status("🔴 Session Revoked")
+                        await archive_session(self.user_id, self.phone, reason="Session Revoked")
                         return
 
                     self.last_heartbeat = datetime.utcnow()

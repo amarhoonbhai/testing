@@ -41,7 +41,7 @@ _Step-by-step to auto-forward to 100+ groups in 5 minutes_
 *STEP 2 — Connect Your Account*
 
 1. Tap *Add Account* on the home screen
-2. You'll be sent to @kurupLoginBot
+2. You'll be sent to @kurupverifybot
 3. Enter your *API ID*, then *API Hash*
 4. Enter your phone number with country code (e.g. `+91XXXXXXXXXX`)
 5. Enter the OTP sent to your Telegram
@@ -81,7 +81,7 @@ You can add up to 10,000 groups!
 
 *🛡️ BUILT-IN SAFETY*
 
-✅ 45-second gap between each group (Flood protection)
+✅ Stealth Pacing: Non-linear gaps & batch breaks
 ✅ Smart auto-pause from 12AM–6AM IST (Night Mode)
 ✅ Auto-removes invalid/banned groups
 ✅ Your API keys are never shared or stored in plain text
