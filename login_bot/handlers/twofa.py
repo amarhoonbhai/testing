@@ -9,21 +9,11 @@ from telegram.ext import ContextTypes
 from telethon.errors import PasswordHashInvalidError, FloodWaitError
 
 
-from login_bot.handlers.otp import _login_clients
-from login_bot.utils.keyboards import get_2fa_keyboard, get_cancel_keyboard, get_success_keyboard
-from core.utils import escape_markdown, build_connection_success_text
-from models.session import create_session
-from models.user import create_user
-
-logger = logging.getLogger(__name__)
-
+from html import escape
 
 async def receive_2fa_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Process 2FA password input."""
-    state = context.user_data.get("state")
-    
-    if state != "waiting_2fa":
-        return
+    from login_bot.handlers.login import WAITING_2FA
     
     user_id = update.effective_user.id
     password = update.message.text.strip()
@@ -32,10 +22,11 @@ async def receive_2fa_password(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if not login_data:
         await update.message.reply_text(
-            "❌ Session expired. Please start over.",
+            "❌ <b>Session expired.</b> Please start over.",
+            parse_mode="HTML",
             reply_markup=get_cancel_keyboard(),
         )
-        return
+        return ConversationHandler.END
     
     client = login_data["client"]
     phone = login_data["phone"]
@@ -81,31 +72,34 @@ async def receive_2fa_password(update: Update, context: ContextTypes.DEFAULT_TYP
         
         await verifying_msg.edit_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_success_keyboard(),
         )
+        return ConversationHandler.END
         
     except PasswordHashInvalidError:
         await verifying_msg.edit_text(
-            "❌ *Invalid Password*\n\n"
+            "❌ <b>Invalid Password</b>\n\n"
             "The 2FA password is incorrect. Please try again.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_2fa_keyboard(),
         )
+        return WAITING_2FA
         
     except FloodWaitError as e:
         await verifying_msg.edit_text(
-            f"⏳ *Too Many Attempts*\n\n"
+            f"⏳ <b>Too Many Attempts</b>\n\n"
             f"Please wait {e.seconds} seconds before trying again.",
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_cancel_keyboard(),
         )
+        return WAITING_2FA
         
     except Exception as e:
         logger.error(f"2FA error: {e}")
-        escaped_e = escape_markdown(str(e))
         await verifying_msg.edit_text(
-            f"❌ *Error*\n\n{escaped_e}",
-            parse_mode="Markdown",
+            f"❌ <b>Error</b>\n\n{escape(str(e))}",
+            parse_mode="HTML",
             reply_markup=get_cancel_keyboard(),
         )
+        return WAITING_2FA

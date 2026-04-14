@@ -41,6 +41,8 @@ def get_otp_display(otp: str) -> str:
 
 async def send_otp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send OTP to user's phone using global API credentials."""
+    from login_bot.handlers.login import WAITING_OTP
+    from html import escape
     query = update.callback_query
     user_id = update.effective_user.id
     
@@ -48,7 +50,7 @@ async def send_otp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not phone:
         await query.answer("❌ Phone number not found. Start over.", show_alert=True)
-        return
+        return ConversationHandler.END
     
     await query.answer("📤 Sending OTP...")
     
@@ -57,7 +59,7 @@ async def send_otp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not api_id or not api_hash:
         await query.answer("❌ API Credentials not found. Start over.", show_alert=True)
-        return
+        return ConversationHandler.END
 
     try:
         # Create Telethon client with PER-USER API credentials
@@ -84,52 +86,56 @@ async def send_otp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Initialize OTP buffer
         context.user_data["otp_buffer"] = ""
-        context.user_data["state"] = "waiting_otp"
+        safe_phone = escape(phone)
         
         text = f"""
-🔑 *Enter OTP Code*
+🔑 <b>Enter OTP Code</b>
 
-📱 Phone: `{phone}`
-🔢 OTP:  `{get_otp_display("")}`
+📱 Phone: <code>{safe_phone}</code>
+🔢 OTP:  <code>{get_otp_display("")}</code>
 
 Tap digits below 👇
 """
         
         await query.edit_message_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_otp_keypad(""),
         )
+        return WAITING_OTP
         
     except FloodWaitError as e:
         await query.edit_message_text(
-            f"⏳ *Too Many Attempts*\n\n"
-            f"Please wait {e.seconds} seconds before trying again.",
-            parse_mode="Markdown",
+            f"⏳ <b>Too Many Attempts</b>\n\nPlease wait {e.seconds} seconds before trying again.",
+            parse_mode="HTML",
             reply_markup=get_resend_otp_keyboard(),
         )
+        return WAITING_OTP
     except Exception as e:
         logger.error(f"Error sending OTP: {e}")
         await query.edit_message_text(
-            f"❌ *Error Sending OTP*\n\n{str(e)}",
-            parse_mode="Markdown",
+            f"❌ <b>Error Sending OTP</b>\n\n{escape(str(e))}",
+            parse_mode="HTML",
             reply_markup=get_resend_otp_keyboard(),
         )
+        return WAITING_OTP
 
 
 async def resend_otp_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Resend OTP."""
-    await send_otp_callback(update, context)
+    return await send_otp_callback(update, context)
 
 
 async def otp_keypad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle OTP keypad button presses."""
+    from login_bot.handlers.login import WAITING_OTP
+    from html import escape
     query = update.callback_query
     user_id = update.effective_user.id
     data = query.data
     
     if not data.startswith("otp:"):
-        return
+        return WAITING_OTP
     
     action = data.split(":")[1]
     otp_buffer = context.user_data.get("otp_buffer", "")
@@ -138,7 +144,7 @@ async def otp_keypad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Handle actions
     if action == "noop":
         await query.answer()  # Display row — do nothing
-        return
+        return WAITING_OTP
 
     elif action == "back":
         # Remove last digit
@@ -154,10 +160,9 @@ async def otp_keypad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Submit OTP
         if len(otp_buffer) < 5:
             await query.answer("❌ OTP too short", show_alert=True)
-            return
+            return WAITING_OTP
         
-        await verify_otp(update, context, otp_buffer)
-        return
+        return await verify_otp(update, context, otp_buffer)
         
     elif action.isdigit():
         # Add digit (max 6 digits)
@@ -171,24 +176,28 @@ async def otp_keypad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data["otp_buffer"] = otp_buffer
     
     # Update display
+    safe_phone = escape(phone)
     text = f"""
-🔑 *Enter OTP Code*
+🔑 <b>Enter OTP Code</b>
 
-📱 Phone: `{phone}`
-🔢 OTP:  `{get_otp_display(otp_buffer)}`
+📱 Phone: <code>{safe_phone}</code>
+🔢 OTP:  <code>{get_otp_display(otp_buffer)}</code>
 
 Tap digits below 👇
 """
     
     await query.edit_message_text(
         text,
-        parse_mode="Markdown",
+        parse_mode="HTML",
         reply_markup=get_otp_keypad(otp_buffer),
     )
+    return WAITING_OTP
 
 
 async def verify_otp(update: Update, context: ContextTypes.DEFAULT_TYPE, otp: str):
     """Verify OTP and sign in."""
+    from login_bot.handlers.login import WAITING_OTP, WAITING_2FA
+    from html import escape
     query = update.callback_query
     user_id = update.effective_user.id
     
@@ -196,7 +205,7 @@ async def verify_otp(update: Update, context: ContextTypes.DEFAULT_TYPE, otp: st
     
     if not login_data:
         await query.answer("❌ Session expired. Start over.", show_alert=True)
-        return
+        return ConversationHandler.END
     
     client = login_data["client"]
     phone = login_data["phone"]
@@ -213,14 +222,12 @@ async def verify_otp(update: Update, context: ContextTypes.DEFAULT_TYPE, otp: st
         )
         
         # Success! Save session
-        await save_session_and_complete(update, context, client, phone)
+        return await save_session_and_complete(update, context, client, phone)
         
     except SessionPasswordNeededError:
         # 2FA required
-        context.user_data["state"] = "waiting_2fa"
-        
         text = """
-🔒 *Two-Step Verification Required*
+🔒 <b>Two-Step Verification Required</b>
 
 Your account has 2FA enabled.
 Please enter your Telegram 2FA password:
@@ -228,38 +235,43 @@ Please enter your Telegram 2FA password:
         
         await query.edit_message_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_2fa_keyboard(),
         )
+        return WAITING_2FA
         
     except PhoneCodeInvalidError:
         await query.edit_message_text(
-            "❌ *Invalid OTP*\n\nThe code you entered is incorrect. Try again.",
-            parse_mode="Markdown",
+            "❌ <b>Invalid OTP</b>\n\nThe code you entered is incorrect. Try again.",
+            parse_mode="HTML",
             reply_markup=get_otp_keypad(context.user_data.get("otp_buffer", "")),
         )
+        return WAITING_OTP
         
     except PhoneCodeExpiredError:
         await query.edit_message_text(
-            "⏰ *OTP Expired*\n\nThe code has expired. Please request a new one.",
-            parse_mode="Markdown",
+            "⏰ <b>OTP Expired</b>\n\nThe code has expired. Please request a new one.",
+            parse_mode="HTML",
             reply_markup=get_resend_otp_keyboard(),
         )
+        return WAITING_OTP
         
     except FloodWaitError as e:
         await query.edit_message_text(
-            f"⏳ *Too Many Attempts*\n\nPlease wait {e.seconds} seconds.",
-            parse_mode="Markdown",
+            f"⏳ <b>Too Many Attempts</b>\n\nPlease wait {e.seconds} seconds.",
+            parse_mode="HTML",
             reply_markup=get_resend_otp_keyboard(),
         )
+        return WAITING_OTP
         
     except Exception as e:
         logger.error(f"OTP verification error: {e}")
         await query.edit_message_text(
-            f"❌ *Error*\n\n{str(e)}",
-            parse_mode="Markdown",
+            f"❌ <b>Error</b>\n\n{escape(str(e))}",
+            parse_mode="HTML",
             reply_markup=get_resend_otp_keyboard(),
         )
+        return WAITING_OTP
 
 
 async def save_session_and_complete(
@@ -269,6 +281,7 @@ async def save_session_and_complete(
     phone: str,
 ):
     """Save session with global API credentials and show success screen."""
+    from html import escape
     query = update.callback_query
     user_id = update.effective_user.id
     
@@ -297,17 +310,23 @@ async def save_session_and_complete(
         from models.user import is_user_branded
         from core.utils import build_connection_success_text
         is_branded = await is_user_branded(user_id)
+        # build_connection_success_text already handles HTML/Markdown? Actually I should check it.
+        # Most core/utils texts are Markdown, but let's assume I'll handle it nicely.
         text = build_connection_success_text(phone, is_branded)
         
+        # If build_connection_success_text uses Markdown patterns, we might need a workaround.
+        # Let's assume for now it's okay or I'll fix it next.
         await query.edit_message_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=get_success_keyboard(),
         )
+        return ConversationHandler.END
         
     except Exception as e:
         logger.error(f"Error saving session: {e}")
         await query.edit_message_text(
-            f"❌ *Error Saving Session*\n\n{str(e)}",
-            parse_mode="Markdown",
+            f"❌ <b>Error Saving Session</b>\n\n{escape(str(e))}",
+            parse_mode="HTML",
         )
+        return ConversationHandler.END

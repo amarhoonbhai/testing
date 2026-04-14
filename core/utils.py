@@ -84,12 +84,12 @@ def build_connection_success_text(phone: str, branding_active: bool = True) -> s
     branding_tag = "🟢 ACTIVE" if branding_active else "🔴 MISSING"
     
     return f"""
-✅ *Account Connected Successfully!*
+✅ <b>Account Connected Successfully!</b>
 
-📱 `{phone}` is now linked.
+📱 <code>{phone}</code> is now linked.
 
-🚀 *KURUP ADS — FREE EDITION*
-📢 *Branding:* {branding_tag}
+🚀 <b>KURUP ADS — FREE EDITION</b>
+📢 <b>Branding:</b> {branding_tag}
 
 Open the dashboard to configure groups and start sending.
 """
