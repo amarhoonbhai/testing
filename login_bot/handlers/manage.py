@@ -11,8 +11,7 @@ from login_bot.utils.keyboards import (
     get_disconnect_confirm_keyboard,
     get_login_welcome_keyboard,
 )
-from core.utils import escape_markdown_v2
-
+from html import escape
 
 async def manage_accounts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """List all accounts for the user."""
@@ -24,13 +23,13 @@ async def manage_accounts_callback(update: Update, context: ContextTypes.DEFAULT
 
     if not accounts:
         text = (
-            "📭 *No Accounts Connected*\n\n"
-            "You haven't linked any Telegram accounts yet\\.\n\n"
-            "Tap *➕ Add Account* to get started\\!"
+            "📭 <b>No Accounts Connected</b>\n\n"
+            "You haven't linked any Telegram accounts yet.\n\n"
+            "Tap <b>➕ Add Account</b> to get started!"
         )
         await query.edit_message_text(
             text,
-            parse_mode="MarkdownV2",
+            parse_mode="HTML",
             reply_markup=get_manage_accounts_keyboard([]),
         )
         return
@@ -40,15 +39,15 @@ async def manage_accounts_callback(update: Update, context: ContextTypes.DEFAULT
     paused = sum(1 for a in accounts if a.get("paused_until"))
 
     text = (
-        f"📱 *Connected Accounts \\({total}\\)*\n"
+        f"📱 <b>Connected Accounts ({total})</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🟢 Active: `{active}` │ ⏸️ Paused: `{paused}`\n\n"
-        f"_Tap an account to view options or disconnect it\\._"
+        f"🟢 Active: <code>{active}</code> │ ⏸️ Paused: <code>{paused}</code>\n\n"
+        f"<i>Tap an account to view options or disconnect it.</i>"
     )
 
     await query.edit_message_text(
         text,
-        parse_mode="MarkdownV2",
+        parse_mode="HTML",
         reply_markup=get_manage_accounts_keyboard(accounts),
     )
 
@@ -59,17 +58,17 @@ async def manage_acc_details_callback(update: Update, context: ContextTypes.DEFA
     await query.answer()
 
     phone = query.data.split(":")[1]
-    safe_phone = escape_markdown_v2(phone)
+    safe_phone = escape(phone)
 
     text = (
-        f"🔧 *Manage Account*\n"
+        f"🔧 <b>Manage Account</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📱 Number: `{safe_phone}`\n\n"
-        f"_Choose an action for this account:_"
+        f"📱 Number: <code>{safe_phone}</code>\n\n"
+        f"<i>Choose an action for this account:</i>"
     )
     await query.edit_message_text(
         text,
-        parse_mode="MarkdownV2",
+        parse_mode="HTML",
         reply_markup=get_account_options_keyboard(phone),
     )
 
@@ -80,19 +79,19 @@ async def disconnect_acc_callback(update: Update, context: ContextTypes.DEFAULT_
     await query.answer()
 
     phone = query.data.split(":")[1]
-    safe_phone = escape_markdown_v2(phone)
+    safe_phone = escape(phone)
 
     text = (
-        f"⚠️ *Confirm Disconnection*\n"
+        f"⚠️ <b>Confirm Disconnection</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📱 Account: `{safe_phone}`\n\n"
-        f"This will *stop all active forwarding jobs* for this account\\.\n"
+        f"📱 Account: <code>{safe_phone}</code>\n\n"
+        f"This will <b>stop all active forwarding jobs</b> for this account.\n"
         f"Are you sure you want to proceed?"
     )
 
     await query.edit_message_text(
         text,
-        parse_mode="MarkdownV2",
+        parse_mode="HTML",
         reply_markup=get_disconnect_confirm_keyboard(phone),
     )
 
@@ -119,14 +118,13 @@ async def login_home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = update.effective_user
     user_id = user.id
     first_name = user.first_name or "User"
-    safe_name = escape_markdown_v2(first_name)
 
     accounts = await get_all_user_sessions(user_id)
     acc_count = len(accounts)
 
     await query.edit_message_text(
-        build_welcome_text(safe_name, acc_count), # Using safe_name which is already escaped
-        parse_mode="MarkdownV2",
+        build_welcome_text(first_name, acc_count),
+        parse_mode="HTML",
         reply_markup=get_login_welcome_keyboard(),
         disable_web_page_preview=True,
     )
