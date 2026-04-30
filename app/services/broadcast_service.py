@@ -358,7 +358,7 @@ async def _send_to_groups(
 
 
 async def _resolve_entity(client, group: dict):
-    """Resolve a group dict to a Telethon entity."""
+    """Resolve a group dict to a Telethon entity, joining if needed."""
     link_type = group.get("link_type", "")
     identifier = group.get("identifier", "")
     link = group.get("link", "")
@@ -366,7 +366,35 @@ async def _resolve_entity(client, group: dict):
     try:
         if link_type == "username":
             return await client.get_entity(f"@{identifier}")
-        return await client.get_entity(link)
+        
+        # For invite links, try joining if get_entity fails
+        try:
+            return await client.get_entity(link)
+        except (ValueError, Exception):
+            from telethon.tl.functions.messages import ImportChatInviteRequest
+            from telethon.tl.functions.channels import JoinChannelRequest
+            
+            if link_type == "invite":
+                # Extract hash if it's a link
+                hash_val = identifier
+                if "+" in identifier:
+                    hash_val = identifier.split("+")[-1]
+                elif "joinchat/" in identifier:
+                    hash_val = identifier.split("joinchat/")[-1]
+                
+                try:
+                    await client(ImportChatInviteRequest(hash_val))
+                    return await client.get_entity(link)
+                except Exception:
+                    pass
+            
+            # Try joining directly if it's a public link/username
+            try:
+                await client(JoinChannelRequest(link))
+                return await client.get_entity(link)
+            except Exception:
+                return None
+                
     except Exception as e:
         logger.warning(f"Cannot resolve {identifier}: {type(e).__name__}")
         return None

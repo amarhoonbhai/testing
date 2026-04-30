@@ -29,6 +29,7 @@ WAITING_AD, WAITING_INTERVAL = range(2)
 #  SET AD MESSAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@require_join
 async def set_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Entry: ask user for ad content."""
     query = update.callback_query
@@ -93,6 +94,7 @@ def build_set_ad_conversation() -> ConversationHandler:
 #  SET TIME INTERVAL
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@require_join
 async def set_interval_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Entry: ask user for interval in seconds."""
     query = update.callback_query

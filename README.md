@@ -8,7 +8,7 @@ A Telegram bot for legitimate opt-in marketing with multi-account support, smart
 
 - **Multi-Account Hosting** — Host up to 5 Telegram accounts with encrypted sessions
 - **Ad Broadcasting** — Send text, photo, or video ads to your groups/channels
-- **Smart Intervals** — Configurable broadcast cycles (minimum 300s)
+- **Smart Intervals** — Configurable broadcast cycles (minimum 1200s)
 - **Auto Reply** — Automated reply messages on hosted accounts
 - **Analytics Dashboard** — Track sent messages, failures, and broadcast status
 - **Enforced Branding** — Auto-apply name suffix and bio on hosted accounts

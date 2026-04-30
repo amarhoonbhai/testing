@@ -48,8 +48,8 @@ def start_keyboard() -> InlineKeyboardMarkup:
 #  DASHBOARD
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def dashboard_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
+    buttons = [
         [
             InlineKeyboardButton("➕  Link Account", callback_data="add_account"),
             InlineKeyboardButton("📱  Accounts", callback_data="my_accounts"),
@@ -70,8 +70,14 @@ def dashboard_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton("🗑  Remove", callback_data="delete_accounts"),
             InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
         ],
-        [InlineKeyboardButton("↩  Home", callback_data="home")],
-    ])
+    ]
+    
+    if is_owner:
+        buttons.append([InlineKeyboardButton("⚙  Admin Console", callback_data="admin")])
+    
+    buttons.append([InlineKeyboardButton("↩  Home", callback_data="home")])
+    
+    return InlineKeyboardMarkup(buttons)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

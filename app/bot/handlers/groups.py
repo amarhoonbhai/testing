@@ -42,6 +42,7 @@ async def manage_groups_callback(update: Update, context: ContextTypes.DEFAULT_T
     await _send_menu(update, context, text, keyboards.groups_keyboard())
 
 
+@require_join
 async def add_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Entry: ask for group links."""
     query = update.callback_query

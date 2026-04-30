@@ -41,6 +41,7 @@ PHONE, OTP, PASSWORD_2FA = range(3)
 #  ADD ACCOUNT FLOW
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@require_join
 async def add_account_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Entry point: ask for phone number."""
     query = update.callback_query

@@ -7,6 +7,7 @@ import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from app.config import OWNER_ID
 from app.database.models import get_user, get_account_count, get_group_count, upsert_user
 from app.bot import messages, keyboards
 from app.bot.handlers.start import _send_menu, require_join
@@ -30,6 +31,9 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     interval = user.get("interval_seconds", 1200)
     ads_status = user.get("ads_status", "paused")
     night_paused = user.get("night_mode_paused", False)
+    
+    # Check if user is the owner
+    is_owner = (user_id == OWNER_ID)
 
     text = messages.dashboard_text(
         account_count=account_count,
@@ -44,5 +48,5 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await _send_menu(
         update, context,
         text,
-        keyboards.dashboard_keyboard(),
+        keyboards.dashboard_keyboard(is_owner=is_owner),
     )
