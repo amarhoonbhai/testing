@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: kurup-ads-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./assets:/app/assets
+    depends_on:
+      - mongo
+
+  mongo:
+    image: mongo:7
+    container_name: kurup-ads-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: kurup_ads
+
+volumes:
+  mongo_data:

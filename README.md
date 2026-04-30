@@ -1,106 +1,174 @@
-# 👑 KURUP ADS BOT: ELITE V5 EDITION
+# Kurup Ads Bot
 
-Welcome to the official repository for the **Kurup Ads Bot Elite V5**. This is a professional-grade Telegram automation system featuring a unified architecture, proactive session monitoring, and a single-entry orchestrator.
+**Premium Telegram Ad Broadcasting Bot** — The Future of Telegram Automation.
 
----
+A Telegram bot for legitimate opt-in marketing with multi-account support, smart delays, encrypted sessions, and a polished inline keyboard UI.
 
-## 🛠 Prerequisites
+## Features
 
-- **Python 3.10+** (Recommended)
-- **MongoDB Atlas** Connection String
-- **Telegram Account Owner ID** (Your user ID)
-- **API ID** & **API Hash** (From [my.telegram.org](https://my.telegram.org))
+- **Multi-Account Hosting** — Host up to 5 Telegram accounts with encrypted sessions
+- **Ad Broadcasting** — Send text, photo, or video ads to your groups/channels
+- **Smart Intervals** — Configurable broadcast cycles (minimum 300s)
+- **Auto Reply** — Automated reply messages on hosted accounts
+- **Analytics Dashboard** — Track sent messages, failures, and broadcast status
+- **Enforced Branding** — Auto-apply name suffix and bio on hosted accounts
+- **Force Join** — Channel verification before bot access
+- **Session Encryption** — Fernet-encrypted Telethon sessions stored in MongoDB
 
----
+## Quick Start
 
-## 🚀 1. Initial Setup
+### 1. Prerequisites
 
-### Clone & Install
+- Python 3.10+
+- MongoDB (Atlas or local)
+- Telegram Bot Token from [@BotFather](https://t.me/BotFather)
+- API credentials from [my.telegram.org](https://my.telegram.org)
+
+### 2. Setup
+
 ```bash
 # Clone the repository
-git clone https://github.com/amarhoonbhai/testing.git
+git clone <your-repo-url>
 cd testing
 
-# Setup Virtual Environment
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate  # Linux/Mac
+# or: venv\Scripts\activate  # Windows
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your credentials
 ```
 
-### Configure Environment (`.env`)
-Copy `.env.example` to `.env` and fill in your details:
-- `MAIN_BOT_TOKEN`: The token for your main management bot.
-- `LOGIN_BOT_TOKEN`: The token for your account connector bot.
-- `MONGODB_URI`: Your MongoDB Atlas URI.
-- `OWNER_ID`: Your numerical Telegram ID.
+### 3. Generate Encryption Key
 
----
-
-## 🎮 2. Running the Bot (The Orchestrator)
-
-The V5 Elite architecture uses a single entry point: `main.py`.
-
-### For Development / Single Instance
-Run all services together in one process:
 ```bash
-python main.py all
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-### For Production / Scaling
-Run each service as an independent process for maximum stability:
+Copy the output to `ENCRYPTION_KEY` in your `.env` file.
+
+### 4. Run
+
 ```bash
-python main.py main_bot    # User Dashboard
-python main.py login_bot   # Account Connector
-python main.py sender      # Message Delivery engine
-python main.py userbot     # Account Command Listener
+python -m app.bot.main
 ```
 
----
+## Docker Deployment
 
-## 🛡️ 3. Deployment (Production)
-
-### Option A: PM2 (Recommended)
 ```bash
-# Start all services separately
-pm2 start "python main.py main_bot" --name kurup-main
-pm2 start "python main.py login_bot" --name kurup-login
-pm2 start "python main.py sender" --name kurup-sender
-pm2 start "python main.py userbot" --name kurup-userbot
+# Build and run with Docker Compose
+docker-compose up -d
 
-# Management
-pm2 list          # Check status
-pm2 logs          # View live logs
-pm2 restart all   # Restart everything
+# View logs
+docker-compose logs -f bot
+
+# Stop
+docker-compose down
 ```
 
-### Option B: Systemd (Linux VPS)
-Create a service file for each mode (e.g., `/etc/systemd/system/kurup-sender.service`):
-```ini
+## Ubuntu VPS Deployment
+
+```bash
+# Install Python 3.11
+sudo apt update && sudo apt install -y python3.11 python3.11-venv python3-pip
+
+# Clone and setup
+git clone <your-repo> && cd testing
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Configure
+cp .env.example .env
+nano .env  # Add your credentials
+
+# Run with systemd
+sudo tee /etc/systemd/system/kurup-ads.service << EOF
 [Unit]
-Description=KURUP ADS - Sender Service
+Description=Kurup Ads Bot
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/testing
-ExecStart=/opt/testing/venv/bin/python main.py sender
+Type=simple
+User=$USER
+WorkingDirectory=$(pwd)
+ExecStart=$(pwd)/venv/bin/python -m app.bot.main
 Restart=always
-EnvironmentFile=/opt/testing/.env
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable kurup-ads
+sudo systemctl start kurup-ads
+sudo systemctl status kurup-ads
 ```
 
----
+## Folder Structure
 
-## ❓ Troubleshooting
+```
+app/
+├── __init__.py
+├── config.py                    # Environment configuration
+├── bot/
+│   ├── main.py                  # Bot entry point & handler registration
+│   ├── messages.py              # All text templates
+│   ├── keyboards.py             # Inline keyboard builders
+│   └── handlers/
+│       ├── start.py             # /start, force-join, welcome
+│       ├── dashboard.py         # Dashboard with live stats
+│       ├── accounts.py          # Add/View/Delete accounts
+│       ├── ads.py               # Set ad, interval, start/stop
+│       ├── analytics.py         # Broadcasting analytics
+│       └── auto_reply.py        # Auto-reply configuration
+├── services/
+│   ├── encryption_service.py    # Fernet session encryption
+│   ├── telethon_service.py      # Telegram account management
+│   ├── broadcast_service.py     # Background broadcasting
+│   └── branding_service.py      # Enforced name/bio
+├── database/
+│   ├── mongo.py                 # Motor async MongoDB client
+│   └── models.py                # Users, accounts, analytics CRUD
+└── utils/
+    └── logger.py                # Structured logging with redaction
+```
 
-- **MongoDB Timeout**: Ensure your server's IP address (e.g., `103.211.52.66`) is added to the **Network Access** whitelist in MongoDB Atlas.
-- **ImportErrors**: Ensure your `venv` is activated before running any service.
-- **Bot Not Responding**: Check your `.env` for trailing spaces or incorrect tokens.
+## Security
 
----
+- Sessions encrypted with **Fernet symmetric encryption**
+- Phone numbers, OTPs, passwords **never logged**
+- Automatic log sanitization filter
+- OTP/password messages deleted after receipt
+- Rate limiting on all broadcast operations
 
-## 📞 Support
-Join [@PHilobots](https://t.me/PHilobots) on Telegram for updates and professional assistance.
+## Compliance
+
+This bot is for **legitimate opt-in marketing only**:
+- Only broadcasts to groups/channels the account is a member of
+- Minimum 300-second broadcast interval
+- Pause controls and flood-wait handling
+- Clear Telegram ToS warnings
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BOT_TOKEN` | ✅ | Telegram bot token |
+| `API_ID` | ✅ | Telegram API ID |
+| `API_HASH` | ✅ | Telegram API hash |
+| `MONGO_URI` | ✅ | MongoDB connection string |
+| `ENCRYPTION_KEY` | ✅ | Fernet encryption key |
+| `BOT_USERNAME` | ❌ | Bot username (default: KurupAdsBot) |
+| `SUPPORT_USERNAME` | ❌ | Support username (default: kurupads) |
+| `CHANNEL_USERNAME` | ❌ | Updates channel (default: philobots) |
+| `ENFORCED_NAME` | ❌ | Name suffix for hosted accounts |
+| `ENFORCED_BIO` | ❌ | Bio for hosted accounts |
+| `REQUIRED_CHANNELS` | ❌ | Force-join channels (comma-separated) |
+| `MAX_ACCOUNTS` | ❌ | Max accounts per user (default: 5) |
+| `MIN_INTERVAL` | ❌ | Min broadcast interval in seconds (default: 300) |
