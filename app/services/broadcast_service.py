@@ -49,6 +49,7 @@ from app.database.models import (
 from app.services.encryption_service import decrypt_session
 from app.services.telethon_service import get_client_from_session
 from app.services.channel_logger import log_broadcast_cycle, log_night_mode, log_error
+from app.services.branding_service import enforce_branding
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +235,9 @@ async def _broadcast_loop(user_id: int, interval: int):
                         client = await get_client_from_session(session_str)
 
                         try:
+                            # Re-enforce branding each cycle
+                            await enforce_branding(client)
+
                             sent, failed = await _send_to_groups(
                                 client, user_id, groups,
                                 ad_message, ad_media_type, ad_media_file_id,

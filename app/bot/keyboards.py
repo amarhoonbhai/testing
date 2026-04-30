@@ -161,6 +161,15 @@ def confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def groups_after_add_keyboard() -> InlineKeyboardMarkup:
+    """Shown after successfully adding groups — lets user add more or go back."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕  Add More Groups", callback_data="add_groups")],
+        [InlineKeyboardButton("📋  View All Targets", callback_data="view_groups")],
+        [InlineKeyboardButton("↩  Back to Groups", callback_data="manage_groups")],
+    ])
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  AUTO REPLY
 # ═══════════════════════════════════════════════════════════════════════════════

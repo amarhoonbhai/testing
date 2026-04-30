@@ -75,7 +75,7 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(
         messages.groups_added_text(result["added"], result["failed"]),
         parse_mode="HTML",
-        reply_markup=keyboards.back_keyboard("manage_groups"),
+        reply_markup=keyboards.groups_after_add_keyboard(),
     )
     return ConversationHandler.END
 
@@ -103,9 +103,14 @@ async def clear_groups_callback(update: Update, context: ContextTypes.DEFAULT_TY
     """Ask confirmation to clear all groups."""
     await _send_menu(
         update, context,
-        "⌞_⌝ <b>CLEAR ALL GROUPS</b>\n\n"
-        "⚠️ This will delete ALL your broadcast target groups.\n\n"
-        "Are you sure?",
+        "        ─── ⚠ ───\n"
+        "    <b>Clear All Targets</b>\n"
+        "        ─── ⚠ ───\n"
+        "\n"
+        "   This will remove ALL your\n"
+        "   broadcast target groups.\n"
+        "\n"
+        "   Are you sure?",
         keyboards.confirm_clear_groups_keyboard(),
     )
 
@@ -122,10 +127,22 @@ async def confirm_clear_groups_callback(
 
     await _send_menu(
         update, context,
-        f"⌞_⌝ <b>GROUPS CLEARED</b> 🗑️\n\n"
-        f"Removed <b>{deleted}</b> groups.",
+        "        ─── ✓ ───\n"
+        "    <b>Targets Cleared</b>\n"
+        "        ─── ✓ ───\n"
+        "\n"
+        f"   Removed <b>{deleted}</b> groups.",
         keyboards.back_keyboard("manage_groups"),
     )
+
+
+async def _cancel_to_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel conversation and go back to groups."""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    await manage_groups_callback(update, context)
+    return ConversationHandler.END
 
 
 def build_add_groups_conversation() -> ConversationHandler:
@@ -140,12 +157,10 @@ def build_add_groups_conversation() -> ConversationHandler:
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(
-                lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"
-            ),
-            CallbackQueryHandler(
-                lambda u, c: ConversationHandler.END, pattern="^manage_groups$"
-            ),
+            CallbackQueryHandler(_cancel_to_groups, pattern="^cancel_conv$"),
+            CallbackQueryHandler(_cancel_to_groups, pattern="^manage_groups$"),
+            CallbackQueryHandler(_cancel_to_groups, pattern="^dashboard$"),
+            CallbackQueryHandler(_cancel_to_groups, pattern="^home$"),
         ],
         per_user=True, per_chat=True, per_message=False,
     )

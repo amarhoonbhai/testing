@@ -95,6 +95,15 @@ def build_auto_reply_conversation() -> ConversationHandler:
             CallbackQueryHandler(
                 lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"
             ),
+            CallbackQueryHandler(
+                lambda u, c: ConversationHandler.END, pattern="^dashboard$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: ConversationHandler.END, pattern="^home$"
+            ),
+            CallbackQueryHandler(
+                lambda u, c: ConversationHandler.END, pattern="^auto_reply$"
+            ),
         ],
         per_user=True, per_chat=True, per_message=False,
     )

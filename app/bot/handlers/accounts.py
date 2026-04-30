@@ -240,7 +240,11 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await _send_menu(
         update, context,
-        "⌞_⌝ <b>Operation cancelled.</b>",
+        "        ─── ✕ ───\n"
+        "    <b>Operation Cancelled</b>\n"
+        "        ─── ✕ ───\n"
+        "\n"
+        "   Returned to dashboard.",
         keyboards.back_keyboard("dashboard"),
     )
     return ConversationHandler.END
@@ -364,6 +368,8 @@ def build_add_account_conversation() -> ConversationHandler:
         fallbacks=[
             CallbackQueryHandler(cancel_conversation, pattern="^cancel_conv$"),
             CallbackQueryHandler(cancel_conversation, pattern="^dashboard$"),
+            CallbackQueryHandler(cancel_conversation, pattern="^home$"),
+            CallbackQueryHandler(cancel_conversation, pattern="^my_accounts$"),
         ],
         per_user=True,
         per_chat=True,
