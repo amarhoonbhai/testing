@@ -1,5 +1,6 @@
 """
 Dashboard handler — shows the main control panel with live stats.
+Force-join is enforced via @require_join decorator.
 """
 
 import logging
@@ -8,24 +9,15 @@ from telegram.ext import ContextTypes
 
 from app.database.models import get_user, get_account_count, get_group_count, upsert_user
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu, _check_membership
+from app.bot.handlers.start import _send_menu, require_join
 
 logger = logging.getLogger(__name__)
 
 
+@require_join
 async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show the dashboard with live user stats."""
     user_id = update.effective_user.id
-
-    # Force-join check
-    joined = await _check_membership(user_id, context)
-    if not joined:
-        await _send_menu(
-            update, context,
-            messages.force_join_text(),
-            keyboards.force_join_keyboard(),
-        )
-        return
 
     user = await get_user(user_id)
     if not user:

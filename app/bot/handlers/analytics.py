@@ -8,11 +8,12 @@ from telegram.ext import ContextTypes
 
 from app.database.models import get_user, get_analytics, get_user_accounts, get_group_count
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu
+from app.bot.handlers.start import _send_menu, require_join
 
 logger = logging.getLogger(__name__)
 
 
+@require_join
 async def analytics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show analytics dashboard."""
     user_id = update.effective_user.id

@@ -11,13 +11,14 @@ from telegram.ext import (
 
 from app.database.models import get_user, update_user
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu
+from app.bot.handlers.start import _send_menu, require_join
 
 logger = logging.getLogger(__name__)
 
 WAITING_AR_TEXT = 0
 
 
+@require_join
 async def auto_reply_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show auto-reply settings."""
     user_id = update.effective_user.id
@@ -30,6 +31,7 @@ async def auto_reply_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await _send_menu(update, context, text, keyboards.auto_reply_keyboard(enabled))
 
 
+@require_join
 async def ar_enable_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Enable auto-reply."""
     query = update.callback_query
@@ -41,6 +43,7 @@ async def ar_enable_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await _send_menu(update, context, text, keyboards.auto_reply_keyboard(True))
 
 
+@require_join
 async def ar_disable_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Disable auto-reply."""
     query = update.callback_query

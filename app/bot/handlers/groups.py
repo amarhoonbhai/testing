@@ -21,13 +21,14 @@ from app.database.models import (
 )
 from app.services.channel_logger import log_groups_added
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu
+from app.bot.handlers.start import _send_menu, require_join
 
 logger = logging.getLogger(__name__)
 
 WAITING_LINKS = 0
 
 
+@require_join
 async def manage_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show groups management screen."""
     user_id = update.effective_user.id
@@ -79,6 +80,7 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     return ConversationHandler.END
 
 
+@require_join
 async def view_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """View all added groups."""
     user_id = update.effective_user.id
@@ -96,6 +98,7 @@ async def view_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     await _send_menu(update, context, text, keyboards.groups_list_keyboard())
 
 
+@require_join
 async def clear_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ask confirmation to clear all groups."""
     await _send_menu(

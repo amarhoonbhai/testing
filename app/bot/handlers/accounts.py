@@ -29,7 +29,7 @@ from app.services.telethon_service import send_login_code, verify_code, verify_2
 from app.services.branding_service import enforce_branding
 from app.services.channel_logger import log_account_added, log_account_deleted
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu
+from app.bot.handlers.start import _send_menu, require_join
 
 logger = logging.getLogger(__name__)
 
@@ -250,6 +250,7 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 #  MY ACCOUNTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@require_join
 async def my_accounts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show list of hosted accounts."""
     user_id = update.effective_user.id
@@ -274,6 +275,7 @@ async def my_accounts_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 #  DELETE ACCOUNTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@require_join
 async def delete_accounts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show accounts available for deletion."""
     user_id = update.effective_user.id
@@ -289,11 +291,16 @@ async def delete_accounts_callback(update: Update, context: ContextTypes.DEFAULT
 
     await _send_menu(
         update, context,
-        "⌞_⌝ <b>DELETE ACCOUNTS</b>\n\nSelect an account to delete:",
+        "        ─── 🗑 ───\n"
+        "    <b>Remove Account</b>\n"
+        "        ─── 🗑 ───\n"
+        "\n"
+        "   Select the account to disconnect:",
         keyboards.delete_accounts_keyboard(accounts),
     )
 
 
+@require_join
 async def del_acc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle account deletion selection — show confirmation."""
     query = update.callback_query

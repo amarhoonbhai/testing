@@ -17,7 +17,7 @@ from app.database.models import (
 from app.services.broadcast_service import start_broadcast, stop_broadcast
 from app.services.channel_logger import log_ads_started, log_ads_stopped
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu
+from app.bot.handlers.start import _send_menu, require_join
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,7 @@ def build_set_interval_conversation() -> ConversationHandler:
 #  START / STOP ADS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+@require_join
 async def start_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start advertising."""
     query = update.callback_query
@@ -167,6 +168,7 @@ async def start_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _send_menu(update, context, messages.error_text(result["error"]), keyboards.back_keyboard("dashboard"))
 
 
+@require_join
 async def stop_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Stop advertising."""
     query = update.callback_query

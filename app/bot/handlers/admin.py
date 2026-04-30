@@ -1,7 +1,7 @@
 """
-Admin panel handler — Owner-only dashboard with system-wide stats.
+Admin panel handler — Owner-only system dashboard.
 
-Shows all users, accounts, broadcast health, and system performance.
+Shows all users, accounts, broadcast health, and performance.
 Only accessible by OWNER_ID.
 """
 
@@ -79,36 +79,32 @@ async def _show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(_tz).strftime("%Y-%m-%d %H:%M:%S IST")
 
     text = (
-        f"┌─────────────────────────────┐\n"
-        f"│  ⚙️ <b>ADMIN PANEL</b>              │\n"
-        f"│  @{BOT_USERNAME}              │\n"
-        f"└─────────────────────────────┘\n"
+        f"        ─── ⚙ ───\n"
+        f"    <b>Admin Panel</b>\n"
+        f"    @{BOT_USERNAME}\n"
+        f"        ─── ⚙ ───\n"
         f"\n"
-        f"┌─ <b>👥 USERS</b> ──────────────────┐\n"
-        f"│ Total Users: <b>{total_users}</b>\n"
-        f"│ Running Ads: <b>{running_users}</b>\n"
-        f"│ Paused: <b>{paused_users}</b>\n"
-        f"└─────────────────────────────┘\n"
+        f"   <b>Users</b>\n"
+        f"   ┊ Total       {total_users}\n"
+        f"   ┊ Running     {running_users}\n"
+        f"   ┊ Paused      {paused_users}\n"
         f"\n"
-        f"┌─ <b>📱 ACCOUNTS</b> ────────────────┐\n"
-        f"│ Total: <b>{total_accounts}</b>\n"
-        f"│ Active: <b>{active_accounts}</b> ✅\n"
-        f"│ Errors: <b>{error_accounts}</b> ❌\n"
-        f"└─────────────────────────────┘\n"
+        f"   <b>Accounts</b>\n"
+        f"   ┊ Total       {total_accounts}\n"
+        f"   ┊ Active      {active_accounts} ●\n"
+        f"   ┊ Errors      {error_accounts} ✕\n"
         f"\n"
-        f"┌─ <b>📂 GROUPS</b> ─────────────────┐\n"
-        f"│ Total: <b>{total_groups}</b>\n"
-        f"│ Active: <b>{active_groups}</b>\n"
-        f"└─────────────────────────────┘\n"
+        f"   <b>Groups</b>\n"
+        f"   ┊ Total       {total_groups}\n"
+        f"   ┊ Active      {active_groups}\n"
         f"\n"
-        f"┌─ <b>📊 PERFORMANCE</b> ──────────────┐\n"
-        f"│ Messages Sent: <b>{global_sent}</b>\n"
-        f"│ Failed: <b>{global_failed}</b>\n"
-        f"│ Active Broadcasts: <b>{active_broadcasts}</b>\n"
-        f"│ Success Rate: <b>{_success_rate(global_sent, global_failed)}</b>\n"
-        f"└─────────────────────────────┘\n"
+        f"   <b>Performance</b>\n"
+        f"   ┊ Sent        {global_sent}\n"
+        f"   ┊ Failed      {global_failed}\n"
+        f"   ┊ Live Now    {active_broadcasts}\n"
+        f"   ┊ Rate        {_success_rate(global_sent, global_failed)}\n"
         f"\n"
-        f"🕐 <i>{now}</i>"
+        f"   🕐 {now}"
     )
 
     await _send_menu(update, context, text, keyboards.admin_keyboard())
@@ -124,13 +120,18 @@ async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     cursor = db.users.find({}).sort("last_seen", -1).limit(20)
     users = await cursor.to_list(20)
 
-    lines = ["┌─ <b>👥 RECENT USERS</b> ──────────┐\n"]
+    lines = [
+        f"        ─── 👥 ───",
+        f"    <b>Recent Users</b>",
+        f"        ─── 👥 ───",
+        f"",
+    ]
     for i, u in enumerate(users, 1):
         uid = u.get("telegram_user_id", "?")
         uname = u.get("username", "—")
         status = u.get("ads_status", "paused")
-        icon = "▶️" if status == "running" else "⏸️"
-        lines.append(f"{i}. {icon} <code>{uid}</code> @{uname}")
+        dot = "●" if status == "running" else "○"
+        lines.append(f"   {dot}  {i}. <code>{uid}</code>  @{uname}")
 
     text = "\n".join(lines)
     await _send_menu(update, context, text, keyboards.admin_back_keyboard())
@@ -143,11 +144,14 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     db = get_db()
-
-    # Get all accounts with user info
     accounts = await db.accounts.find({}).to_list(100)
 
-    lines = ["┌─ <b>🏥 ACCOUNT HEALTH</b> ────────┐\n"]
+    lines = [
+        f"        ─── 🏥 ───",
+        f"    <b>Account Health</b>",
+        f"        ─── 🏥 ───",
+        f"",
+    ]
 
     for acc in accounts[:30]:
         phone = acc.get("phone_masked", "***")
@@ -155,17 +159,17 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
         uid = acc.get("user_id", "?")
 
         if status == "active":
-            icon = "🟢"
+            dot = "●"
         elif status == "error":
-            icon = "🔴"
+            dot = "✕"
         else:
-            icon = "🟡"
+            dot = "○"
 
-        lines.append(f"{icon} <code>{phone}</code> — {status} (user: <code>{uid}</code>)")
+        lines.append(f"   {dot}  <code>{phone}</code>  user:<code>{uid}</code>")
 
     total = len(accounts)
     if total > 30:
-        lines.append(f"\n<i>... and {total - 30} more</i>")
+        lines.append(f"\n   <i>+ {total - 30} more</i>")
 
     text = "\n".join(lines)
     await _send_menu(update, context, text, keyboards.admin_back_keyboard())
@@ -183,7 +187,12 @@ async def admin_broadcast_stats_callback(
     cursor = db.analytics.find({}).sort("total_sent", -1).limit(20)
     stats = await cursor.to_list(20)
 
-    lines = ["┌─ <b>📊 TOP BROADCASTERS</b> ───────┐\n"]
+    lines = [
+        f"        ─── 📊 ───",
+        f"    <b>Top Broadcasters</b>",
+        f"        ─── 📊 ───",
+        f"",
+    ]
 
     for i, s in enumerate(stats, 1):
         uid = s.get("user_id", "?")
@@ -192,8 +201,8 @@ async def admin_broadcast_stats_callback(
         last = s.get("last_broadcast_at")
         last_str = last.strftime("%m/%d %H:%M") if last else "Never"
         lines.append(
-            f"{i}. <code>{uid}</code> — "
-            f"✅{sent} ❌{failed} 🕐{last_str}"
+            f"   {i}. <code>{uid}</code>  "
+            f"sent:{sent}  fail:{failed}  {last_str}"
         )
 
     text = "\n".join(lines)

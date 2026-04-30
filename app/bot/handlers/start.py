@@ -1,11 +1,13 @@
 """
-Start handler — /start command, welcome screen, guide, disclaimer.
+Start handler — /start command, welcome, guide, disclaimer.
 
-Includes force-join channel verification before showing dashboard.
+Force-join verification runs on EVERY interaction. If a user leaves
+any required channel, the bot blocks them until they rejoin.
 """
 
 import os
 import logging
+import functools
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -23,8 +25,12 @@ _BANNER_ABS = os.path.join(
 )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  FORCE-JOIN GATE — checks on EVERY action
+# ═══════════════════════════════════════════════════════════════════════════════
+
 async def _check_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    """Check if user has joined all required channels."""
+    """Check if user has joined ALL required channels."""
     for channel in REQUIRED_CHANNELS:
         try:
             member = await context.bot.get_chat_member(f"@{channel}", user_id)
@@ -35,6 +41,32 @@ async def _check_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE) ->
             return False
     return True
 
+
+def require_join(handler_func):
+    """
+    Decorator: Enforces channel membership on EVERY button press.
+    If user has left any channel, blocks them with rejoin screen.
+    """
+    @functools.wraps(handler_func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user_id = update.effective_user.id
+
+        joined = await _check_membership(user_id, context)
+        if not joined:
+            await _send_menu(
+                update, context,
+                messages.force_join_text(),
+                keyboards.force_join_keyboard(),
+            )
+            return
+
+        return await handler_func(update, context, *args, **kwargs)
+    return wrapper
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  MENU HELPER
+# ═══════════════════════════════════════════════════════════════════════════════
 
 async def _send_menu(
     update: Update,
@@ -87,6 +119,10 @@ async def _send_menu(
     )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  HANDLERS
+# ═══════════════════════════════════════════════════════════════════════════════
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command."""
     user = update.effective_user
@@ -125,10 +161,13 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     joined = await _check_membership(user.id, context)
     if not joined:
-        await query.answer("❌ You haven't joined all channels yet!", show_alert=True)
+        await query.answer(
+            "❌ You haven't joined all channels yet. Please join and try again.",
+            show_alert=True,
+        )
         return
 
-    await query.answer("✅ Verified!")
+    await query.answer("✅ Verified successfully!")
     await _send_menu(
         update, context,
         messages.welcome_text(
@@ -141,6 +180,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
+@require_join
 async def home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 'Back' to home/start screen."""
     user = update.effective_user
@@ -156,8 +196,9 @@ async def home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+@require_join
 async def how_to_use_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle 'How To Use' / Guide button."""
+    """Handle 'Guide' button."""
     await _send_menu(
         update, context,
         messages.how_to_use_text(),
@@ -165,6 +206,7 @@ async def how_to_use_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
+@require_join
 async def disclaimer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 'Disclaimer' button."""
     await _send_menu(
@@ -174,6 +216,7 @@ async def disclaimer_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 
+@require_join
 async def powered_by_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 'Powered by' button."""
     await _send_menu(
