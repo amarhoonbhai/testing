@@ -23,7 +23,6 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
 
     default_doc = {
         "telegram_user_id": telegram_user_id,
-        "username": username,
         "plan": "free",
         "max_accounts": MAX_ACCOUNTS,
         "ad_message": None,

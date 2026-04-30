@@ -360,4 +360,5 @@ def build_add_account_conversation() -> ConversationHandler:
         ],
         per_user=True,
         per_chat=True,
+        per_message=False,
     )

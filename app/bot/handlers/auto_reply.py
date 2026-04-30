@@ -93,5 +93,5 @@ def build_auto_reply_conversation() -> ConversationHandler:
                 lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"
             ),
         ],
-        per_user=True, per_chat=True,
+        per_user=True, per_chat=True, per_message=False,
     )

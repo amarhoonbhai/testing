@@ -144,5 +144,5 @@ def build_add_groups_conversation() -> ConversationHandler:
                 lambda u, c: ConversationHandler.END, pattern="^manage_groups$"
             ),
         ],
-        per_user=True, per_chat=True,
+        per_user=True, per_chat=True, per_message=False,
     )
