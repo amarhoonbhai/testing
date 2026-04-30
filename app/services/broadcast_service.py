@@ -48,7 +48,9 @@ from app.database.models import (
 )
 from app.services.encryption_service import decrypt_session
 from app.services.telethon_service import get_client_from_session
-from app.services.channel_logger import log_broadcast_cycle, log_night_mode, log_error
+from app.services.channel_logger import (
+    log_broadcast_cycle, log_night_mode, log_error, log_message_sent
+)
 from app.services.branding_service import enforce_branding
 
 logger = logging.getLogger(__name__)
@@ -172,15 +174,7 @@ def _get_backoff_delay(consecutive_errors: int) -> float:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def _broadcast_loop(user_id: int, interval: int):
-    """
-    Main broadcast loop with night mode and safety controls.
-
-    Flow per cycle:
-    1. Check night mode → sleep until morning if active
-    2. Get user's active accounts and target groups
-    3. For each account, send ad to each group with smart delays
-    4. Sleep for configured interval + jitter before next cycle
-    """
+    """Main broadcast loop with night mode and safety controls."""
     consecutive_errors = 0
 
     try:
@@ -195,7 +189,7 @@ async def _broadcast_loop(user_id: int, interval: int):
                     )
                     await update_user(user_id, night_mode_paused=True)
                     await log_night_mode(user_id, "start")
-                    await asyncio.sleep(wait_secs + 60)  # +60s buffer
+                    await asyncio.sleep(wait_secs + 60)
                     await update_user(user_id, night_mode_paused=False)
                     await log_night_mode(user_id, "end")
                     logger.info(f"Night mode ended for user {user_id}, resuming")
@@ -211,9 +205,7 @@ async def _broadcast_loop(user_id: int, interval: int):
                 ad_media_file_id = user.get("ad_media_file_id")
 
                 accounts = await get_user_accounts(user_id)
-                active_accounts = [
-                    a for a in accounts if a.get("status") == "active"
-                ]
+                active_accounts = [a for a in accounts if a.get("status") == "active"]
                 if not active_accounts:
                     logger.warning(f"No active accounts for user {user_id}")
                     break
@@ -229,9 +221,7 @@ async def _broadcast_loop(user_id: int, interval: int):
 
                 for account in active_accounts:
                     try:
-                        session_str = decrypt_session(
-                            account["encrypted_session"]
-                        )
+                        session_str = decrypt_session(account["encrypted_session"])
                         client = await get_client_from_session(session_str)
 
                         try:
@@ -241,49 +231,34 @@ async def _broadcast_loop(user_id: int, interval: int):
                             sent, failed = await _send_to_groups(
                                 client, user_id, groups,
                                 ad_message, ad_media_type, ad_media_file_id,
+                                account["phone_masked"]
                             )
                             cycle_sent += sent
                             cycle_failed += failed
-                            consecutive_errors = 0  # Reset on success
+                            consecutive_errors = 0
                         finally:
                             await client.disconnect()
 
-                    except (ConnectionError, UserDeactivatedBanError,
-                            AuthKeyUnregisteredError):
-                        logger.warning(
-                            f"Session dead for {account['phone_masked']}"
-                        )
-                        await update_account_status(
-                            user_id, account["phone_masked"], "error"
-                        )
+                    except (ConnectionError, UserDeactivatedBanError, AuthKeyUnregisteredError):
+                        logger.warning(f"Session dead for {account['phone_masked']}")
+                        await update_account_status(user_id, account["phone_masked"], "error")
                         consecutive_errors += 1
                     except Exception:
-                        logger.error(
-                            f"Account error: {account['phone_masked']}",
-                            exc_info=True,
-                        )
+                        logger.error(f"Account error: {account['phone_masked']}", exc_info=True)
                         consecutive_errors += 1
 
                 # ── Safety: too many consecutive errors → pause ──
                 if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                    logger.warning(
-                        f"Too many errors ({consecutive_errors}) for "
-                        f"user {user_id}, auto-pausing"
-                    )
+                    logger.warning(f"Too many errors ({consecutive_errors}), auto-pausing")
                     await log_error(user_id, "Auto-Pause", f"Reached {consecutive_errors} consecutive account errors.")
                     break
 
-                # Send live update to channel
+                # Send cycle report to channel
                 await log_broadcast_cycle(user_id, cycle_sent, cycle_failed)
 
                 cycle_jitter = random.uniform(60, 180)
                 total_sleep = interval + cycle_jitter
-                logger.info(
-                    f"Cycle done for user {user_id}: "
-                    f"sent={cycle_sent} failed={cycle_failed} "
-                    f"sleeping {total_sleep:.0f}s"
-                )
-                await log_broadcast_cycle(user_id, cycle_sent, cycle_failed)
+                logger.info(f"Cycle done: sent={cycle_sent} failed={cycle_failed} sleeping {total_sleep:.0f}s")
                 await asyncio.sleep(total_sleep)
 
             except asyncio.CancelledError:
@@ -291,11 +266,7 @@ async def _broadcast_loop(user_id: int, interval: int):
             except Exception:
                 consecutive_errors += 1
                 backoff = _get_backoff_delay(consecutive_errors)
-                logger.error(
-                    f"Loop error for user {user_id}, "
-                    f"backoff {backoff:.0f}s (errors={consecutive_errors})",
-                    exc_info=True,
-                )
+                logger.error(f"Loop error, backoff {backoff:.0f}s", exc_info=True)
                 await asyncio.sleep(backoff)
 
     except asyncio.CancelledError:
@@ -316,38 +287,29 @@ async def _send_to_groups(
     ad_message: Optional[str],
     ad_media_type: Optional[str],
     ad_media_file_id: Optional[str],
+    phone_masked: str,
 ) -> tuple[int, int]:
-    """
-    Send ad to target groups with smart delays.
-    Returns (sent_count, failed_count).
-    """
+    """Send ad to target groups with smart delays and live logging."""
     sent = 0
     failed = 0
 
     for group in groups:
-        # Night mode check mid-cycle
         if _is_night_time():
             logger.info("Night mode hit mid-cycle, stopping sends")
             break
 
         identifier = group.get("identifier", "")
-        link_type = group.get("link_type", "")
-
+        
         try:
-            # Resolve the entity
             entity = await _resolve_entity(client, group)
             if entity is None:
                 failed += 1
                 await update_group_failed(user_id, identifier)
+                await log_message_sent(user_id, identifier, phone_masked, False, "Entity Resolution Failed")
                 continue
 
-            # Send the message
             if ad_media_type in ("photo", "video") and ad_media_file_id:
-                await client.send_file(
-                    entity,
-                    ad_media_file_id,
-                    caption=ad_message or "",
-                )
+                await client.send_file(entity, ad_media_file_id, caption=ad_message or "")
             elif ad_message:
                 await client.send_message(entity, ad_message)
             else:
@@ -356,35 +318,40 @@ async def _send_to_groups(
             sent += 1
             await increment_sent(user_id)
             await update_group_sent(user_id, identifier)
+            await log_message_sent(user_id, identifier, phone_masked, True)
             logger.info(f"Sent to {identifier}")
 
-            # ── Smart delay between sends ────────────────────
-            delay = _get_send_delay()
-            await asyncio.sleep(delay)
+            # Smart delay
+            await asyncio.sleep(_get_send_delay())
 
         except FloodWaitError as e:
             wait = min(e.seconds + 30, FLOOD_BACKOFF_MAX)
             logger.warning(f"FloodWait {e.seconds}s for {identifier}")
+            await log_message_sent(user_id, identifier, phone_masked, False, f"FloodWait ({e.seconds}s)")
             await asyncio.sleep(wait)
             failed += 1
         except SlowModeWaitError as e:
             logger.info(f"SlowMode {e.seconds}s in {identifier}")
+            await log_message_sent(user_id, identifier, phone_masked, False, f"SlowMode ({e.seconds}s)")
             await asyncio.sleep(e.seconds + 10)
             failed += 1
         except (ChatWriteForbiddenError, UserBannedInChannelError):
-            logger.info(f"Cannot post in {identifier} — disabling")
+            logger.info(f"Forbidden in {identifier}")
             await disable_group(user_id, identifier, "write_forbidden")
             await increment_failed(user_id)
+            await log_message_sent(user_id, identifier, phone_masked, False, "Forbidden")
             failed += 1
         except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
-            logger.info(f"Invalid/private group {identifier} — disabling")
+            logger.info(f"Invalid/private {identifier}")
             await disable_group(user_id, identifier, "invalid_or_private")
             await increment_failed(user_id)
+            await log_message_sent(user_id, identifier, phone_masked, False, "Invalid/Private")
             failed += 1
         except Exception as e:
-            logger.error(f"Send error for {identifier}: {type(e).__name__}")
+            logger.error(f"Error sending to {identifier}: {e}")
             await update_group_failed(user_id, identifier)
             await increment_failed(user_id)
+            await log_message_sent(user_id, identifier, phone_masked, False, str(e))
             failed += 1
 
     return sent, failed
@@ -399,15 +366,7 @@ async def _resolve_entity(client, group: dict):
     try:
         if link_type == "username":
             return await client.get_entity(f"@{identifier}")
-        elif link_type == "invite":
-            # For invite links, try to get entity from link
-            return await client.get_entity(link)
-        elif link_type == "folder":
-            # Folder links need special handling — join via folder
-            # then iterate dialogs to find new groups
-            return None  # Handled separately by folder joining
-        else:
-            return await client.get_entity(link)
+        return await client.get_entity(link)
     except Exception as e:
         logger.warning(f"Cannot resolve {identifier}: {type(e).__name__}")
         return None

@@ -156,3 +156,20 @@ async def log_groups_added(user_id: int, added: int, failed: int):
         f"  ⏰ Time: {_now_str()}\n"
         f"{_divider()}"
     )
+
+
+async def log_message_sent(user_id: int, group: str, account: str, success: bool, error: str = None):
+    status = "✅ DELIVERED" if success else "❌ FAILED"
+    text = (
+        f"<b>ENGINE: {status}</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  📱 Account: <code>{account}</code>\n"
+        f"  📂 Target: <code>{group}</code>\n"
+    )
+    if error:
+        text += f"  ⚠️ Error: {error}\n"
+    text += f"  ⏰ Time: {_now_str()}\n{_divider()}"
+    
+    await log_to_channel(text)
+
