@@ -270,7 +270,11 @@ async def _broadcast_loop(user_id: int, interval: int):
                         f"Too many errors ({consecutive_errors}) for "
                         f"user {user_id}, auto-pausing"
                     )
+                    await log_error(user_id, "Auto-Pause", f"Reached {consecutive_errors} consecutive account errors.")
                     break
+
+                # Send live update to channel
+                await log_broadcast_cycle(user_id, cycle_sent, cycle_failed)
 
                 cycle_jitter = random.uniform(60, 180)
                 total_sleep = interval + cycle_jitter

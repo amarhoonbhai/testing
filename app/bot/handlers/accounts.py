@@ -240,11 +240,13 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await _send_menu(
         update, context,
-        "        ─── ✕ ───\n"
-        "    <b>Operation Cancelled</b>\n"
-        "        ─── ✕ ───\n"
+        "<b>K U R U P  A D S</b>\n"
+        "────────────────────────\n"
+        "<b>TERMINATED</b>\n"
         "\n"
-        "   Returned to dashboard.",
+        "The operation has been cancelled.\n"
+        "Returning to Command Center.\n"
+        "────────────────────────",
         keyboards.back_keyboard("dashboard"),
     )
     return ConversationHandler.END
@@ -295,11 +297,12 @@ async def delete_accounts_callback(update: Update, context: ContextTypes.DEFAULT
 
     await _send_menu(
         update, context,
-        "        ─── 🗑 ───\n"
-        "    <b>Remove Account</b>\n"
-        "        ─── 🗑 ───\n"
+        "<b>K U R U P  A D S</b>\n"
+        "────────────────────────\n"
+        "<b>REMOVE ASSET</b>\n"
         "\n"
-        "   Select the account to disconnect:",
+        "Select the account to disconnect:\n"
+        "────────────────────────",
         keyboards.delete_accounts_keyboard(accounts),
     )
 

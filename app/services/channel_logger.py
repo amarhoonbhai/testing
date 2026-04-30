@@ -1,8 +1,8 @@
 """
-Telegram channel logger — sends all activity logs to the logs channel.
+Premium Telegram channel logger — Kurup Ads.
 
-All user actions, broadcast events, and system events are sent to
-the configured LOGS_CHANNEL_ID for centralized monitoring.
+Sends all system activity to the centralized logs channel
+using a matching professional aesthetic.
 """
 
 import logging
@@ -19,7 +19,7 @@ _tz = pytz.timezone(TIMEZONE)
 
 
 def set_bot(bot):
-    """Set the bot instance for sending logs. Called during startup."""
+    """Set the bot instance for sending logs."""
     global _bot
     _bot = bot
 
@@ -43,91 +43,116 @@ def _now_str() -> str:
     return datetime.now(_tz).strftime("%H:%M:%S")
 
 
+def _divider() -> str:
+    return "────────────────────────"
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
-#  USER EVENTS
+#  SYSTEM EVENTS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def log_user_start(user_id: int, username: str, first_name: str):
     await log_to_channel(
-        f"🟢 <b>USER START</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Name: {first_name}\n"
-        f"├ Username: @{username}\n"
-        f"└ Time: {_now_str()}"
+        f"<b>SYSTEM: USER ACCESS</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: {first_name}\n"
+        f"  🆔 User ID: <code>{user_id}</code>\n"
+        f"  🔗 Handle: @{username}\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}"
     )
 
 
 async def log_account_added(user_id: int, phone_masked: str):
     await log_to_channel(
-        f"📱 <b>ACCOUNT ADDED</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Account: <code>{phone_masked}</code>\n"
-        f"└ Time: {_now_str()}"
+        f"<b>SYSTEM: ASSET LINKED</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  📱 Account: <code>{phone_masked}</code>\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}"
     )
 
 
 async def log_account_deleted(user_id: int, phone_masked: str):
     await log_to_channel(
-        f"🗑️ <b>ACCOUNT DELETED</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Account: <code>{phone_masked}</code>\n"
-        f"└ Time: {_now_str()}"
+        f"<b>SYSTEM: ASSET REMOVED</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  📱 Account: <code>{phone_masked}</code>\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}"
     )
 
 
 async def log_ads_started(user_id: int, accounts: int, groups: int, interval: int):
     await log_to_channel(
-        f"▶️ <b>ADS STARTED</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Accounts: {accounts}\n"
-        f"├ Groups: {groups}\n"
-        f"├ Interval: {interval}s\n"
-        f"└ Time: {_now_str()}"
+        f"<b>ENGINE: BROADCAST ACTIVATED</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  📱 Active Assets: {accounts}\n"
+        f"  📂 Target Pool: {groups}\n"
+        f"  ⏱ Cycle Interval: {interval}s\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}",
+        silent=False
     )
 
 
 async def log_ads_stopped(user_id: int):
     await log_to_channel(
-        f"⏸️ <b>ADS STOPPED</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"└ Time: {_now_str()}"
+        f"<b>ENGINE: BROADCAST TERMINATED</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}",
+        silent=False
     )
 
 
 async def log_broadcast_cycle(user_id: int, sent: int, failed: int):
     await log_to_channel(
-        f"📊 <b>CYCLE REPORT</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Sent: {sent}\n"
-        f"├ Failed: {failed}\n"
-        f"└ Time: {_now_str()}"
+        f"<b>ENGINE: CYCLE COMPLETE</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  ✅ Delivered: {sent}\n"
+        f"  ❌ Errors: {failed}\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}"
     )
 
 
 async def log_night_mode(user_id: int, action: str):
-    emoji = "🌙" if action == "start" else "☀️"
+    status = "ENGAGED" if action == "start" else "DISENGAGED"
     await log_to_channel(
-        f"{emoji} <b>NIGHT MODE {'ACTIVATED' if action == 'start' else 'ENDED'}</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"└ Time: {_now_str()}"
+        f"<b>SYSTEM: NIGHT GUARD {status}</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}"
     )
 
 
 async def log_error(user_id: int, error_type: str, details: str = ""):
     await log_to_channel(
-        f"❌ <b>ERROR</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Type: {error_type}\n"
-        f"├ Details: {details}\n"
-        f"└ Time: {_now_str()}"
+        f"<b>CRITICAL: EXCEPTION</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  ⚠️ Type: {error_type}\n"
+        f"  📄 Detail: {details}\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}",
+        silent=False
     )
 
 
 async def log_groups_added(user_id: int, added: int, failed: int):
     await log_to_channel(
-        f"📂 <b>GROUPS ADDED</b>\n"
-        f"├ User: <code>{user_id}</code>\n"
-        f"├ Added: {added}\n"
-        f"├ Invalid: {failed}\n"
-        f"└ Time: {_now_str()}"
+        f"<b>SYSTEM: TARGETS IMPORTED</b>\n"
+        f"{_divider()}\n"
+        f"  👤 Operator: <code>{user_id}</code>\n"
+        f"  📂 Added: {added}\n"
+        f"  🚫 Failed: {failed}\n"
+        f"  ⏰ Time: {_now_str()}\n"
+        f"{_divider()}"
     )
