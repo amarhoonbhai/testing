@@ -1,7 +1,7 @@
 """
 Inline keyboard builders for all bot screens.
 
-Reusable keyboard functions with consistent layout.
+Professional, clean button labels matching the UI redesign.
 """
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -14,35 +14,33 @@ from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME, REQUIRE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def force_join_keyboard() -> InlineKeyboardMarkup:
-    """Keyboard for force-join verification."""
     buttons = []
     for ch in REQUIRED_CHANNELS:
         buttons.append(
             [InlineKeyboardButton(f"Join @{ch}", url=f"https://t.me/{ch}")]
         )
     buttons.append(
-        [InlineKeyboardButton("✅ Verify", callback_data="check_join")]
+        [InlineKeyboardButton("✓  Verify Membership", callback_data="check_join")]
     )
     return InlineKeyboardMarkup(buttons)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  START / WELCOME
+#  START
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def start_keyboard() -> InlineKeyboardMarkup:
-    """Main start screen keyboard."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 Dashboard", callback_data="dashboard")],
+        [InlineKeyboardButton("⚡  Command Center", callback_data="dashboard")],
         [
-            InlineKeyboardButton("📖 Guide", callback_data="how_to_use"),
-            InlineKeyboardButton("📜 Disclaimer", callback_data="disclaimer"),
+            InlineKeyboardButton("📖  Guide", callback_data="how_to_use"),
+            InlineKeyboardButton("⚖  Terms", callback_data="disclaimer"),
         ],
         [
-            InlineKeyboardButton("📢 Updates", url=f"https://t.me/{CHANNEL_USERNAME}"),
-            InlineKeyboardButton("💬 Support", url=f"https://t.me/{SUPPORT_USERNAME}"),
+            InlineKeyboardButton("📢  Network", url=f"https://t.me/{CHANNEL_USERNAME}"),
+            InlineKeyboardButton("💬  Support", url=f"https://t.me/{SUPPORT_USERNAME}"),
         ],
-        [InlineKeyboardButton("⚡ Powered by", callback_data="powered_by")],
+        [InlineKeyboardButton("⚡  Powered by ‣ Kᴜʀᴜᴘ Aᴅs", callback_data="powered_by")],
     ])
 
 
@@ -51,29 +49,28 @@ def start_keyboard() -> InlineKeyboardMarkup:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def dashboard_keyboard() -> InlineKeyboardMarkup:
-    """Dashboard 2-column layout."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("➕ Add Accounts", callback_data="add_account"),
-            InlineKeyboardButton("📱 My Accounts", callback_data="my_accounts"),
+            InlineKeyboardButton("➕  Link Account", callback_data="add_account"),
+            InlineKeyboardButton("📱  Accounts", callback_data="my_accounts"),
         ],
         [
-            InlineKeyboardButton("📝 Set Ad Message", callback_data="set_ad"),
-            InlineKeyboardButton("⏱️ Set Interval", callback_data="set_interval"),
+            InlineKeyboardButton("📝  Ad Copy", callback_data="set_ad"),
+            InlineKeyboardButton("⏱  Timing", callback_data="set_interval"),
         ],
         [
-            InlineKeyboardButton("📂 Manage Groups", callback_data="manage_groups"),
-            InlineKeyboardButton("📈 Analytics", callback_data="analytics"),
+            InlineKeyboardButton("📂  Targets", callback_data="manage_groups"),
+            InlineKeyboardButton("📊  Report", callback_data="analytics"),
         ],
         [
-            InlineKeyboardButton("▶️ Start Ads", callback_data="start_ads"),
-            InlineKeyboardButton("⏸️ Stop Ads", callback_data="stop_ads"),
+            InlineKeyboardButton("▶  Go Live", callback_data="start_ads"),
+            InlineKeyboardButton("⏸  Halt", callback_data="stop_ads"),
         ],
         [
-            InlineKeyboardButton("🗑️ Delete Accounts", callback_data="delete_accounts"),
-            InlineKeyboardButton("💬 Auto Reply", callback_data="auto_reply"),
+            InlineKeyboardButton("🗑  Remove", callback_data="delete_accounts"),
+            InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
         ],
-        [InlineKeyboardButton("🔙 Back", callback_data="home")],
+        [InlineKeyboardButton("↩  Home", callback_data="home")],
     ])
 
 
@@ -83,8 +80,8 @@ def dashboard_keyboard() -> InlineKeyboardMarkup:
 
 def no_accounts_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📱 Add Account", callback_data="add_account")],
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")],
+        [InlineKeyboardButton("➕  Link Account", callback_data="add_account")],
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
     ])
 
 
@@ -92,19 +89,19 @@ def accounts_list_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
     buttons = []
     for acc in accounts:
         phone = acc["phone_masked"]
-        status_icon = "✅" if acc.get("status") == "active" else "⏸️"
+        dot = "●" if acc.get("status") == "active" else "○"
         buttons.append(
             [InlineKeyboardButton(
-                f"{status_icon} {phone}",
+                f"{dot}  {phone}",
                 callback_data=f"acc_detail:{phone}",
             )]
         )
     buttons.append([
-        InlineKeyboardButton("🔄 Refresh", callback_data="my_accounts"),
-        InlineKeyboardButton("🗑️ Remove", callback_data="delete_accounts"),
+        InlineKeyboardButton("↻  Refresh", callback_data="my_accounts"),
+        InlineKeyboardButton("🗑  Remove", callback_data="delete_accounts"),
     ])
     buttons.append(
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")]
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")]
     )
     return InlineKeyboardMarkup(buttons)
 
@@ -115,12 +112,12 @@ def delete_accounts_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
         phone = acc["phone_masked"]
         buttons.append(
             [InlineKeyboardButton(
-                f"🗑️ {phone}",
+                f"✕  {phone}",
                 callback_data=f"del_acc:{phone}",
             )]
         )
     buttons.append(
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")]
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")]
     )
     return InlineKeyboardMarkup(buttons)
 
@@ -128,8 +125,8 @@ def delete_accounts_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
 def confirm_delete_keyboard(phone_masked: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Yes, Delete", callback_data=f"confirm_del:{phone_masked}"),
-            InlineKeyboardButton("❌ Cancel", callback_data="delete_accounts"),
+            InlineKeyboardButton("✓  Confirm", callback_data=f"confirm_del:{phone_masked}"),
+            InlineKeyboardButton("✕  Abort", callback_data="delete_accounts"),
         ],
     ])
 
@@ -139,30 +136,27 @@ def confirm_delete_keyboard(phone_masked: str) -> InlineKeyboardMarkup:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def groups_keyboard() -> InlineKeyboardMarkup:
-    """Groups management main keyboard."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Add Groups", callback_data="add_groups")],
-        [InlineKeyboardButton("📋 View Groups", callback_data="view_groups")],
-        [InlineKeyboardButton("🗑️ Clear All Groups", callback_data="clear_groups")],
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")],
+        [InlineKeyboardButton("➕  Import Targets", callback_data="add_groups")],
+        [InlineKeyboardButton("📋  View Manifest", callback_data="view_groups")],
+        [InlineKeyboardButton("🗑  Purge All", callback_data="clear_groups")],
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
     ])
 
 
 def groups_list_keyboard() -> InlineKeyboardMarkup:
-    """Groups list view keyboard."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔄 Refresh", callback_data="view_groups")],
-        [InlineKeyboardButton("➕ Add More", callback_data="add_groups")],
-        [InlineKeyboardButton("🔙 Back", callback_data="manage_groups")],
+        [InlineKeyboardButton("↻  Refresh", callback_data="view_groups")],
+        [InlineKeyboardButton("➕  Import More", callback_data="add_groups")],
+        [InlineKeyboardButton("↩  Back", callback_data="manage_groups")],
     ])
 
 
 def confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
-    """Confirmation for clearing all groups."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Yes, Clear All", callback_data="confirm_clear_groups"),
-            InlineKeyboardButton("❌ Cancel", callback_data="manage_groups"),
+            InlineKeyboardButton("✓  Purge All", callback_data="confirm_clear_groups"),
+            InlineKeyboardButton("✕  Abort", callback_data="manage_groups"),
         ],
     ])
 
@@ -172,13 +166,13 @@ def confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def auto_reply_keyboard(enabled: bool) -> InlineKeyboardMarkup:
-    toggle_text = "🔴 Disable" if enabled else "✅ Enable"
+    toggle_text = "○  Disable" if enabled else "●  Enable"
     toggle_data = "ar_disable" if enabled else "ar_enable"
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(toggle_text, callback_data=toggle_data)],
-        [InlineKeyboardButton("📝 Set Reply Text", callback_data="ar_set_text")],
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")],
+        [InlineKeyboardButton("✏  Compose Reply", callback_data="ar_set_text")],
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
     ])
 
 
@@ -188,8 +182,8 @@ def auto_reply_keyboard(enabled: bool) -> InlineKeyboardMarkup:
 
 def analytics_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔄 Refresh", callback_data="analytics")],
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")],
+        [InlineKeyboardButton("↻  Refresh", callback_data="analytics")],
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
     ])
 
 
@@ -199,13 +193,13 @@ def analytics_keyboard() -> InlineKeyboardMarkup:
 
 def back_keyboard(callback_data: str = "dashboard") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back", callback_data=callback_data)],
+        [InlineKeyboardButton("↩  Back", callback_data=callback_data)],
     ])
 
 
 def cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("❌ Cancel", callback_data="cancel_conv")],
+        [InlineKeyboardButton("✕  Cancel", callback_data="cancel_conv")],
     ])
 
 
@@ -214,23 +208,22 @@ def cancel_keyboard() -> InlineKeyboardMarkup:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def admin_keyboard() -> InlineKeyboardMarkup:
-    """Admin panel main keyboard."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👥 Users", callback_data="admin_users"),
-            InlineKeyboardButton("🏥 Health", callback_data="admin_health"),
+            InlineKeyboardButton("👥  Users", callback_data="admin_users"),
+            InlineKeyboardButton("🏥  Health", callback_data="admin_health"),
         ],
         [
-            InlineKeyboardButton("📊 Broadcast Stats", callback_data="admin_bstats"),
+            InlineKeyboardButton("📊  Broadcast Intel", callback_data="admin_bstats"),
         ],
-        [InlineKeyboardButton("🔄 Refresh", callback_data="admin")],
-        [InlineKeyboardButton("🔙 Back", callback_data="dashboard")],
+        [InlineKeyboardButton("↻  Refresh", callback_data="admin")],
+        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
     ])
 
 
 def admin_back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back to Admin", callback_data="admin")],
+        [InlineKeyboardButton("↩  Admin Panel", callback_data="admin")],
     ])
 
 
@@ -240,14 +233,13 @@ def admin_back_keyboard() -> InlineKeyboardMarkup:
 
 def guide_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📜 Disclaimer", callback_data="disclaimer")],
-        [InlineKeyboardButton("🔙 Back", callback_data="home")],
+        [InlineKeyboardButton("⚖  Terms of Use", callback_data="disclaimer")],
+        [InlineKeyboardButton("↩  Home", callback_data="home")],
     ])
 
 
 def disclaimer_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📖 Guide", callback_data="how_to_use")],
-        [InlineKeyboardButton("🔙 Back", callback_data="home")],
+        [InlineKeyboardButton("📖  Operations Guide", callback_data="how_to_use")],
+        [InlineKeyboardButton("↩  Home", callback_data="home")],
     ])
-

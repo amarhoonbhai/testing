@@ -1,19 +1,14 @@
 """
-Message templates for all bot screens.
+Message templates — Kurup Ads Premium UI.
 
-Premium glassmorphic UI using unicode aesthetics.
-Every screen has a unique visual identity.
+Distinctive, minimal design language with professional copy.
 """
 
 from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME, MIN_INTERVAL
 
-# ── Premium UI Glyphs ────────────────────────────────────────────────────────
-_H = "══════════════════════════"  # header bar
-_S = "──────────────────────────"  # separator
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  WELCOME / START
+#  WELCOME
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def welcome_text(
@@ -27,41 +22,43 @@ def welcome_text(
         name += f" {last_name}"
 
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⌞ <b>@{BOT_USERNAME}</b> ⌝\n"
-        f"     <i>Premium Ads Engine</i>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✦ ───\n"
+        f"   <b>‣ Kᴜʀᴜᴘ Aᴅs  Eɴɢɪɴᴇ</b>\n"
+        f"        ─── ✦ ───\n"
         f"\n"
-        f"  ✦ Welcome, <b>{name}</b>!\n"
+        f"   Greetings, <b>{name}</b>\n"
         f"\n"
-        f"  ╭─ <b>Your Profile</b>\n"
-        f"  │ 🆔  <code>{user_id}</code>\n"
-        f"  │ 👤  @{username or '—'}\n"
-        f"  ╰{_S}\n"
+        f"   ┊ ɪᴅ     <code>{user_id}</code>\n"
+        f"   ┊ ᴛᴀɢ    @{username or '—'}\n"
         f"\n"
-        f"  ╭─ <b>Features</b>\n"
-        f"  │ ▸ Smart Ad Broadcasting\n"
-        f"  │ ▸ Night Mode 🌙 (12–5 AM)\n"
-        f"  │ ▸ Multi-Account Engine\n"
-        f"  │ ▸ Anti-Freeze Shield 🛡️\n"
-        f"  ╰{_S}\n"
+        f"   ━━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"  💬 @{SUPPORT_USERNAME}  •  📢 @{CHANNEL_USERNAME}"
+        f"   Your all-in-one broadcast\n"
+        f"   automation suite.\n"
+        f"\n"
+        f"   ┊ Encrypted sessions\n"
+        f"   ┊ Intelligent scheduling\n"
+        f"   ┊ Multi-account relay\n"
+        f"   ┊ Night-safe operations\n"
+        f"\n"
+        f"   ━━━━━━━━━━━━━━━━━━━━━\n"
+        f"   @{SUPPORT_USERNAME}  ·  @{CHANNEL_USERNAME}"
     )
 
 
 def force_join_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     🔒 <b>VERIFICATION</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 🔒 ───\n"
+        f"    <b>Mᴇᴍʙᴇʀsʜɪᴘ Rᴇǫᴜɪʀᴇᴅ</b>\n"
+        f"        ─── 🔒 ───\n"
         f"\n"
-        f"  Join these channels to proceed:\n"
+        f"   To activate your dashboard,\n"
+        f"   join the following networks:\n"
         f"\n"
-        f"  ▸ @philobots\n"
-        f"  ▸ @sellinghub0\n"
+        f"   ┊ @philobots\n"
+        f"   ┊ @sellinghub0\n"
         f"\n"
-        f"  Tap <b>Verify</b> when done ✓"
+        f"   Tap <b>Verify</b> once completed."
     )
 
 
@@ -78,28 +75,28 @@ def dashboard_text(
     group_count: int = 0,
     night_paused: bool = False,
 ) -> str:
-    ad_icon = "✅" if ad_set else "⨯"
+    ad_flag = "Configured" if ad_set else "Pending"
 
     if night_paused:
-        status = "🌙 SLEEPING"
+        state = "🌙 Night Standby"
     elif ads_status == "running":
-        status = "🟢 LIVE"
+        state = "● Broadcasting"
     else:
-        status = "⏸ PAUSED"
+        state = "○ Idle"
 
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⚡ <b>COMMAND CENTER</b>\n"
-        f"     @{BOT_USERNAME}\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⚡ ───\n"
+        f"    <b>Cᴏᴍᴍᴀɴᴅ Cᴇɴᴛᴇʀ</b>\n"
+        f"        ─── ⚡ ───\n"
         f"\n"
-        f"  ╭─ <b>Live Stats</b>\n"
-        f"  │ 📱  Accounts   <b>{account_count}/{max_accounts}</b>\n"
-        f"  │ 📂  Groups     <b>{group_count}</b>\n"
-        f"  │ 📝  Ad         <b>{ad_icon}</b>\n"
-        f"  │ ⏱  Interval   <b>{interval // 60}m</b>\n"
-        f"  │ 📡  Status     <b>{status}</b>\n"
-        f"  ╰{_S}"
+        f"   ┊ ᴀᴄᴄᴏᴜɴᴛs   {account_count} / {max_accounts}\n"
+        f"   ┊ ᴛᴀʀɢᴇᴛs    {group_count} groups\n"
+        f"   ┊ ᴀᴅ ᴄᴏᴘʏ    {ad_flag}\n"
+        f"   ┊ ᴄʏᴄʟᴇ      {interval // 60} min\n"
+        f"   ┊ sᴛᴀᴛᴜs     {state}\n"
+        f"\n"
+        f"   ━━━━━━━━━━━━━━━━━━━━━\n"
+        f"   <i>Select an operation below.</i>"
     )
 
 
@@ -109,109 +106,114 @@ def dashboard_text(
 
 def add_account_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📱 <b>HOST ACCOUNT</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📱 ───\n"
+        f"    <b>Lɪɴᴋ Nᴇᴡ Aᴄᴄᴏᴜɴᴛ</b>\n"
+        f"        ─── 📱 ───\n"
         f"\n"
-        f"  Enter phone with country code:\n"
+        f"   Provide your number with\n"
+        f"   international prefix:\n"
         f"\n"
-        f"  <code>+1234567890</code>\n"
+        f"   <code>+919876543210</code>\n"
         f"\n"
-        f"  🔐 <i>End-to-end encrypted</i>"
+        f"   🔐 <i>AES-256 encrypted vault</i>"
     )
 
 
 def otp_prompt_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     🔑 <b>ENTER OTP</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 🔑 ───\n"
+        f"    <b>Aᴜᴛʜᴇɴᴛɪᴄᴀᴛɪᴏɴ</b>\n"
+        f"        ─── 🔑 ───\n"
         f"\n"
-        f"  Code sent to your Telegram.\n"
-        f"  Enter it below:\n"
+        f"   A verification code was\n"
+        f"   dispatched to your Telegram.\n"
         f"\n"
-        f"  ⚠️ <i>Never share this code</i>"
+        f"   Enter it below.\n"
+        f"\n"
+        f"   ⚠ <i>Do not share this code</i>"
     )
 
 
 def password_2fa_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     🔐 <b>2FA PASSWORD</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 🔐 ───\n"
+        f"    <b>Tᴡᴏ-Fᴀᴄᴛᴏʀ Aᴜᴛʜ</b>\n"
+        f"        ─── 🔐 ───\n"
         f"\n"
-        f"  Account has 2FA enabled.\n"
-        f"  Enter your cloud password:\n"
+        f"   This account requires\n"
+        f"   a cloud password.\n"
         f"\n"
-        f"  🔒 <i>Password is never stored</i>"
+        f"   Enter it now.\n"
+        f"\n"
+        f"   🔒 <i>Discarded after use</i>"
     )
 
 
 def account_added_text(phone_masked: str) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ✅ <b>ACCOUNT LIVE</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✓ ───\n"
+        f"    <b>Aᴄᴄᴏᴜɴᴛ Aᴄᴛɪᴠᴀᴛᴇᴅ</b>\n"
+        f"        ─── ✓ ───\n"
         f"\n"
-        f"  ╭─ Details\n"
-        f"  │ 📱  <code>{phone_masked}</code>\n"
-        f"  │ 📡  Active\n"
-        f"  │ 🔐  Encrypted\n"
-        f"  │ 🏷  ‣ Kᴜʀᴜᴘ Aᴅs branded\n"
-        f"  ╰{_S}\n"
+        f"   ┊ ɴᴜᴍʙᴇʀ   <code>{phone_masked}</code>\n"
+        f"   ┊ sᴛᴀᴛᴜs   Online\n"
+        f"   ┊ sᴇssɪᴏɴ  Encrypted\n"
+        f"   ┊ ᴘʀᴏꜰɪʟᴇ  ‣ Kᴜʀᴜᴘ Aᴅs\n"
         f"\n"
-        f"  <i>Ready for broadcasting</i>"
+        f"   <i>Account is deployment-ready.</i>"
     )
 
 
 def no_accounts_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📱 <b>NO ACCOUNTS</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📱 ───\n"
+        f"    <b>Nᴏ Aᴄᴄᴏᴜɴᴛs Fᴏᴜɴᴅ</b>\n"
+        f"        ─── 📱 ───\n"
         f"\n"
-        f"  Add an account to begin!"
+        f"   Link an account to begin\n"
+        f"   your first broadcast."
     )
 
 
 def accounts_list_text(accounts: list[dict]) -> str:
     lines = [
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈",
-        f"     📱 <b>MY ACCOUNTS</b>",
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈",
+        f"        ─── 📱 ───",
+        f"    <b>Lɪɴᴋᴇᴅ Aᴄᴄᴏᴜɴᴛs</b>",
+        f"        ─── 📱 ───",
         f"",
     ]
     for i, acc in enumerate(accounts, 1):
         if acc.get("status") == "active":
-            s = "🟢"
+            dot = "●"
         elif acc.get("status") == "error":
-            s = "🔴"
+            dot = "✕"
         else:
-            s = "🟡"
-        lines.append(f"  {s}  {i}. <code>{acc['phone_masked']}</code>")
+            dot = "○"
+        lines.append(f"   {dot}  {i}. <code>{acc['phone_masked']}</code>")
     return "\n".join(lines)
 
 
 def delete_confirm_text(phone_masked: str) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⚠️ <b>CONFIRM DELETE</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⚠ ───\n"
+        f"    <b>Cᴏɴꜰɪʀᴍ Rᴇᴍᴏᴠᴀʟ</b>\n"
+        f"        ─── ⚠ ───\n"
         f"\n"
-        f"  Remove <code>{phone_masked}</code> ?\n"
+        f"   Disconnect <code>{phone_masked}</code>?\n"
         f"\n"
-        f"  <i>This cannot be undone.</i>"
+        f"   Session data will be purged.\n"
+        f"   <i>This is irreversible.</i>"
     )
 
 
 def account_deleted_text(phone_masked: str) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     🗑 <b>ACCOUNT REMOVED</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✓ ───\n"
+        f"    <b>Aᴄᴄᴏᴜɴᴛ Pᴜʀɢᴇᴅ</b>\n"
+        f"        ─── ✓ ───\n"
         f"\n"
-        f"  <code>{phone_masked}</code> deleted.\n"
-        f"  Session securely destroyed."
+        f"   <code>{phone_masked}</code>\n"
+        f"   Session destroyed securely."
     )
 
 
@@ -221,72 +223,75 @@ def account_deleted_text(phone_masked: str) -> str:
 
 def groups_text(total: int, active: int, disabled: int) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📂 <b>GROUPS</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📂 ───\n"
+        f"    <b>Bʀᴏᴀᴅᴄᴀsᴛ Tᴀʀɢᴇᴛs</b>\n"
+        f"        ─── 📂 ───\n"
         f"\n"
-        f"  ╭─ Overview\n"
-        f"  │ 📊  Total    <b>{total}</b>\n"
-        f"  │ 🟢  Active   <b>{active}</b>\n"
-        f"  │ 🔴  Disabled <b>{disabled}</b>\n"
-        f"  ╰{_S}"
+        f"   ┊ ᴛᴏᴛᴀʟ       {total}\n"
+        f"   ┊ ᴀᴄᴛɪᴠᴇ      {active}\n"
+        f"   ┊ ᴅɪsᴀʙʟᴇᴅ    {disabled}\n"
+        f"\n"
+        f"   <i>Manage your delivery endpoints.</i>"
     )
 
 
 def add_groups_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ➕ <b>ADD GROUPS</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ➕ ───\n"
+        f"    <b>Aᴅᴅ Tᴀʀɢᴇᴛs</b>\n"
+        f"        ─── ➕ ───\n"
         f"\n"
-        f"  Send links — <b>one per line</b>:\n"
+        f"   Paste invite or public links,\n"
+        f"   <b>one per line</b>.\n"
         f"\n"
-        f"  ▸ <code>https://t.me/group</code>\n"
-        f"  ▸ <code>https://t.me/+invite</code>\n"
-        f"  ▸ <code>https://t.me/addlist/folder</code>\n"
-        f"  ▸ <code>@username</code>\n"
+        f"   Accepted formats:\n"
+        f"   ┊ <code>t.me/channel</code>\n"
+        f"   ┊ <code>t.me/+inviteHash</code>\n"
+        f"   ┊ <code>t.me/addlist/folder</code>\n"
+        f"   ┊ <code>@username</code>\n"
         f"\n"
-        f"  💡 <i>Paste multiple at once</i>"
+        f"   <i>Batch import supported.</i>"
     )
 
 
 def groups_added_text(added: int, failed: int) -> str:
     lines = [
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈",
-        f"     ✅ <b>GROUPS UPDATED</b>",
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈",
+        f"        ─── ✓ ───",
+        f"    <b>Tᴀʀɢᴇᴛs Uᴘᴅᴀᴛᴇᴅ</b>",
+        f"        ─── ✓ ───",
         f"",
-        f"  ▸ Added: <b>{added}</b>",
+        f"   ┊ Imported   {added}",
     ]
     if failed:
-        lines.append(f"  ▸ Invalid: <b>{failed}</b>")
+        lines.append(f"   ┊ Rejected   {failed}")
     return "\n".join(lines)
 
 
 def no_groups_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📂 <b>NO GROUPS</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📂 ───\n"
+        f"    <b>Nᴏ Tᴀʀɢᴇᴛs Sᴇᴛ</b>\n"
+        f"        ─── 📂 ───\n"
         f"\n"
-        f"  Add groups to start!"
+        f"   Import group links to\n"
+        f"   configure delivery endpoints."
     )
 
 
 def groups_list_text(groups: list[dict]) -> str:
     lines = [
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈",
-        f"     📋 <b>GROUP LIST</b>",
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈",
+        f"        ─── 📋 ───",
+        f"    <b>Tᴀʀɢᴇᴛ Mᴀɴɪꜰᴇsᴛ</b>",
+        f"        ─── 📋 ───",
         f"",
     ]
     for i, g in enumerate(groups[:50], 1):
-        s = "🟢" if g.get("status") == "active" else "🔴"
+        dot = "●" if g.get("status") == "active" else "✕"
         ident = g.get("identifier", "?")
         sent = g.get("send_count", 0)
-        lines.append(f"  {s}  {i}. <code>{ident}</code>  ×{sent}")
+        lines.append(f"   {dot}  {i}. <code>{ident}</code>  ·  {sent} sent")
     if len(groups) > 50:
-        lines.append(f"\n  <i>+ {len(groups) - 50} more</i>")
+        lines.append(f"\n   <i>+ {len(groups) - 50} more targets</i>")
     return "\n".join(lines)
 
 
@@ -296,85 +301,89 @@ def groups_list_text(groups: list[dict]) -> str:
 
 def set_ad_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📝 <b>SET AD</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📝 ───\n"
+        f"    <b>Cᴏᴍᴘᴏsᴇ Aᴅ Cᴏᴘʏ</b>\n"
+        f"        ─── 📝 ───\n"
         f"\n"
-        f"  Send your ad content:\n"
+        f"   Forward or compose your\n"
+        f"   broadcast creative now.\n"
         f"\n"
-        f"  ▸ Text message\n"
-        f"  ▸ Photo + caption\n"
-        f"  ▸ Video + caption\n"
+        f"   Accepted media:\n"
+        f"   ┊ Text\n"
+        f"   ┊ Photo + caption\n"
+        f"   ┊ Video + caption\n"
         f"\n"
-        f"  💡 <i>Include links for best CTR</i>"
+        f"   <i>Rich formatting preserved.</i>"
     )
 
 
 def ad_saved_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ✅ <b>AD SAVED</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✓ ───\n"
+        f"    <b>Cʀᴇᴀᴛɪᴠᴇ Sᴀᴠᴇᴅ</b>\n"
+        f"        ─── ✓ ───\n"
         f"\n"
-        f"  Ready for next broadcast cycle."
+        f"   Your ad copy is queued\n"
+        f"   for the next cycle."
     )
 
 
 def set_interval_text() -> str:
     m = MIN_INTERVAL // 60
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⏱ <b>SET INTERVAL</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⏱ ───\n"
+        f"    <b>Cʏᴄʟᴇ Tɪᴍɪɴɢ</b>\n"
+        f"        ─── ⏱ ───\n"
         f"\n"
-        f"  Enter delay in seconds.\n"
-        f"  Min: <b>{MIN_INTERVAL}s</b> ({m} min)\n"
+        f"   Set broadcast cycle duration\n"
+        f"   in seconds.\n"
         f"\n"
-        f"  ╭─ Presets\n"
-        f"  │ <code>{MIN_INTERVAL}</code>  →  {m} min\n"
-        f"  │ <code>1800</code>  →  30 min\n"
-        f"  │ <code>3600</code>  →  1 hour\n"
-        f"  │ <code>7200</code>  →  2 hours\n"
-        f"  ╰{_S}"
+        f"   Minimum: <b>{MIN_INTERVAL}s</b> ({m} min)\n"
+        f"\n"
+        f"   ┊ <code>{MIN_INTERVAL}</code>   {m} min\n"
+        f"   ┊ <code>1800</code>  30 min\n"
+        f"   ┊ <code>3600</code>  1 hour\n"
+        f"   ┊ <code>7200</code>  2 hours"
     )
 
 
 def interval_saved_text(seconds: int) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ✅ <b>INTERVAL SET</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✓ ───\n"
+        f"    <b>Tɪᴍɪɴɢ Cᴏɴꜰɪɢᴜʀᴇᴅ</b>\n"
+        f"        ─── ✓ ───\n"
         f"\n"
-        f"  ⏱ <b>{seconds}s</b>  ({seconds // 60} min)"
+        f"   Cycle interval: <b>{seconds}s</b>\n"
+        f"   ({seconds // 60} minutes per rotation)"
     )
 
 
 def ads_started_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ▶️ <b>ADS LIVE</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ▶ ───\n"
+        f"    <b>Bʀᴏᴀᴅᴄᴀsᴛ Lɪᴠᴇ</b>\n"
+        f"        ─── ▶ ───\n"
         f"\n"
-        f"  Broadcasting is <b>active</b>.\n"
+        f"   Delivery pipeline activated.\n"
         f"\n"
-        f"  ╭─ Shields\n"
-        f"  │ 🌙  Night pause  12–5 AM\n"
-        f"  │ 🛡  Anti-freeze  ON\n"
-        f"  │ ⏱  Smart delays  ON\n"
-        f"  ╰{_S}\n"
+        f"   ┊ 🌙  Night guard   12–5 AM\n"
+        f"   ┊ 🛡  Flood shield  Active\n"
+        f"   ┊ ⏱   Smart pacing  300s+\n"
         f"\n"
-        f"  ⚠️ <i>Respect Telegram ToS</i>"
+        f"   <i>Ensure your content complies\n"
+        f"   with Telegram guidelines.</i>"
     )
 
 
 def ads_stopped_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⏸ <b>ADS PAUSED</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⏸ ───\n"
+        f"    <b>Bʀᴏᴀᴅᴄᴀsᴛ Hᴀʟᴛᴇᴅ</b>\n"
+        f"        ─── ⏸ ───\n"
         f"\n"
-        f"  Broadcasting stopped.\n"
-        f"  No messages until resumed."
+        f"   Delivery pipeline paused.\n"
+        f"   No further dispatches until\n"
+        f"   you resume operations."
     )
 
 
@@ -391,29 +400,27 @@ def analytics_text(
     group_count: int = 0,
 ) -> str:
     if current_status == "running":
-        s = "🟢 LIVE"
+        state = "● Broadcasting"
     elif current_status == "night_paused":
-        s = "🌙 SLEEPING"
+        state = "🌙 Night Standby"
     else:
-        s = "⏸ PAUSED"
+        state = "○ Idle"
 
     total = total_sent + failed_count
-    rate = f"{(total_sent / total * 100):.0f}%" if total else "—"
+    rate = f"{(total_sent / total * 100):.1f}%" if total else "—"
 
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📊 <b>ANALYTICS</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📊 ───\n"
+        f"    <b>Pᴇʀꜰᴏʀᴍᴀɴᴄᴇ Rᴇᴘᴏʀᴛ</b>\n"
+        f"        ─── 📊 ───\n"
         f"\n"
-        f"  ╭─ Performance\n"
-        f"  │ 📤  Sent       <b>{total_sent}</b>\n"
-        f"  │ ❌  Failed     <b>{failed_count}</b>\n"
-        f"  │ 📈  Rate       <b>{rate}</b>\n"
-        f"  │ 📱  Accounts   <b>{active_accounts}</b>\n"
-        f"  │ 📂  Groups     <b>{group_count}</b>\n"
-        f"  │ 🕐  Last       <b>{last_broadcast}</b>\n"
-        f"  │ 📡  Status     <b>{s}</b>\n"
-        f"  ╰{_S}"
+        f"   ┊ ᴅᴇʟɪᴠᴇʀᴇᴅ   {total_sent}\n"
+        f"   ┊ ꜰᴀɪʟᴇᴅ      {failed_count}\n"
+        f"   ┊ sᴜᴄᴄᴇss     {rate}\n"
+        f"   ┊ ᴀᴄᴄᴏᴜɴᴛs    {active_accounts}\n"
+        f"   ┊ ᴛᴀʀɢᴇᴛs     {group_count}\n"
+        f"   ┊ ʟᴀsᴛ ᴄʏᴄʟᴇ  {last_broadcast}\n"
+        f"   ┊ sᴛᴀᴛᴜs      {state}"
     )
 
 
@@ -422,39 +429,37 @@ def analytics_text(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def auto_reply_text(enabled: bool, reply_text: str | None) -> str:
-    status = "🟢 ON" if enabled else "🔴 OFF"
-    current = reply_text if reply_text else "<i>Not set</i>"
+    flag = "● Enabled" if enabled else "○ Disabled"
+    current = reply_text if reply_text else "<i>Not configured</i>"
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     💬 <b>AUTO REPLY</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 💬 ───\n"
+        f"    <b>Aᴜᴛᴏ-Rᴇsᴘᴏɴᴅᴇʀ</b>\n"
+        f"        ─── 💬 ───\n"
         f"\n"
-        f"  ╭─ Config\n"
-        f"  │ Status: <b>{status}</b>\n"
-        f"  │ Text: {current}\n"
-        f"  ╰{_S}"
+        f"   ┊ sᴛᴀᴛᴇ    {flag}\n"
+        f"   ┊ ᴍᴇssᴀɢᴇ  {current}"
     )
 
 
 def set_auto_reply_prompt_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ✏️ <b>SET REPLY TEXT</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✏ ───\n"
+        f"    <b>Cᴏᴍᴘᴏsᴇ Rᴇᴘʟʏ</b>\n"
+        f"        ─── ✏ ───\n"
         f"\n"
-        f"  Send the auto-reply message.\n"
-        f"  <i>Sent when someone DMs\n"
-        f"  your hosted account.</i>"
+        f"   Compose the auto-response\n"
+        f"   for incoming DMs on your\n"
+        f"   linked accounts."
     )
 
 
 def auto_reply_saved_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ✅ <b>REPLY SAVED</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✓ ───\n"
+        f"    <b>Rᴇsᴘᴏɴᴅᴇʀ Uᴘᴅᴀᴛᴇᴅ</b>\n"
+        f"        ─── ✓ ───\n"
         f"\n"
-        f"  Auto-reply updated."
+        f"   Auto-response configured."
     )
 
 
@@ -464,78 +469,86 @@ def auto_reply_saved_text() -> str:
 
 def how_to_use_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     📖 <b>USER GUIDE</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── 📖 ───\n"
+        f"    <b>Oᴘᴇʀᴀᴛɪᴏɴs Gᴜɪᴅᴇ</b>\n"
+        f"        ─── 📖 ───\n"
         f"\n"
-        f"  <b>① Add Account</b>\n"
-        f"     Dashboard → Add → Phone → OTP\n"
+        f"   <b>Phase 1 — Link Account</b>\n"
+        f"   Provide phone → Verify OTP\n"
+        f"   → Profile auto-branded\n"
         f"\n"
-        f"  <b>② Add Groups</b>\n"
-        f"     Dashboard → Groups → Paste links\n"
+        f"   <b>Phase 2 — Import Targets</b>\n"
+        f"   Manage Groups → Paste links\n"
+        f"   → Batch import confirmed\n"
         f"\n"
-        f"  <b>③ Set Ad Message</b>\n"
-        f"     Dashboard → Set Ad → Send content\n"
+        f"   <b>Phase 3 — Compose Creative</b>\n"
+        f"   Set Ad → Send text/media\n"
+        f"   → Queued for delivery\n"
         f"\n"
-        f"  <b>④ Set Interval</b>\n"
-        f"     Min {MIN_INTERVAL}s ({MIN_INTERVAL // 60} min)\n"
+        f"   <b>Phase 4 — Configure Timing</b>\n"
+        f"   Set Interval → Min {MIN_INTERVAL}s\n"
+        f"   → Pacing auto-applied\n"
         f"\n"
-        f"  <b>⑤ Start Broadcasting</b>\n"
-        f"     Dashboard → Start Ads ▶️\n"
+        f"   <b>Phase 5 — Go Live</b>\n"
+        f"   Start Ads → Pipeline active\n"
         f"\n"
-        f"  ╭─ 🛡 <b>Safety</b>\n"
-        f"  │ ▸ Night mode 12–5 AM IST\n"
-        f"  │ ▸ 300s smart delays\n"
-        f"  │ ▸ FloodWait protection\n"
-        f"  │ ▸ Encrypted sessions\n"
-        f"  │ ▸ ‣ Kᴜʀᴜᴘ Aᴅs branding\n"
-        f"  ╰{_S}"
+        f"   ━━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n"
+        f"   <b>Built-in Safeguards</b>\n"
+        f"   ┊ Night standby  12–5 AM\n"
+        f"   ┊ Intelligent pacing  300s+\n"
+        f"   ┊ Flood protection  Auto\n"
+        f"   ┊ Session encryption  Fernet\n"
+        f"   ┊ Profile branding  ‣ Kᴜʀᴜᴘ Aᴅs"
     )
 
 
 def disclaimer_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⚖️ <b>DISCLAIMER</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⚖ ───\n"
+        f"    <b>Tᴇʀᴍs ᴏꜰ Usᴇ</b>\n"
+        f"        ─── ⚖ ───\n"
         f"\n"
-        f"  This bot is for <b>legitimate\n"
-        f"  opt-in marketing</b> only.\n"
+        f"   This platform is engineered\n"
+        f"   exclusively for <b>permission-\n"
+        f"   based marketing</b>.\n"
         f"\n"
-        f"  By using this bot you agree:\n"
+        f"   By proceeding, you acknowledge:\n"
         f"\n"
-        f"  ① Only broadcast to groups\n"
-        f"     you own or have permission.\n"
+        f"   ┊ Broadcast only to groups where\n"
+        f"     you hold posting rights.\n"
         f"\n"
-        f"  ② Comply with Telegram ToS.\n"
+        f"   ┊ Full compliance with Telegram's\n"
+        f"     Terms of Service is mandatory.\n"
         f"\n"
-        f"  ③ You are responsible for\n"
-        f"     all content you broadcast.\n"
+        f"   ┊ You bear sole responsibility\n"
+        f"     for distributed content.\n"
         f"\n"
-        f"  ④ Spamming & scraping are\n"
-        f"     strictly prohibited.\n"
+        f"   ┊ Unsolicited messaging and\n"
+        f"     scraping are prohibited.\n"
         f"\n"
-        f"  ⑤ Developers hold no liability\n"
-        f"     for misuse of this tool.\n"
+        f"   ┊ The development team disclaims\n"
+        f"     liability for policy violations.\n"
         f"\n"
-        f"  ⚠️ <b>Violations may cause\n"
-        f"  Telegram account restrictions.</b>"
+        f"   <b>Non-compliance may trigger\n"
+        f"   platform-level restrictions.</b>"
     )
 
 
 def powered_by_text() -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⚡ <b>POWERED BY</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⚡ ───\n"
+        f"    <b>‣ Kᴜʀᴜᴘ Aᴅs  Nᴇᴛᴡᴏʀᴋ</b>\n"
+        f"        ─── ⚡ ───\n"
         f"\n"
-        f"  @{BOT_USERNAME}\n"
-        f"  <i>Premium Telegram Automation</i>\n"
+        f"   @{BOT_USERNAME}\n"
+        f"   <i>Enterprise-grade broadcast\n"
+        f"   automation for Telegram.</i>\n"
         f"\n"
-        f"  💬  @{SUPPORT_USERNAME}\n"
-        f"  📢  @{CHANNEL_USERNAME}\n"
+        f"   ┊ Support   @{SUPPORT_USERNAME}\n"
+        f"   ┊ Updates   @{CHANNEL_USERNAME}\n"
         f"\n"
-        f"  <i>Built with ❤️ by ‣ Kᴜʀᴜᴘ Aᴅs</i>"
+        f"   <i>Engineered for performance.</i>"
     )
 
 
@@ -545,20 +558,20 @@ def powered_by_text() -> str:
 
 def error_text(message: str) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ❌ <b>ERROR</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ✕ ───\n"
+        f"    <b>Oᴘᴇʀᴀᴛɪᴏɴ Fᴀɪʟᴇᴅ</b>\n"
+        f"        ─── ✕ ───\n"
         f"\n"
-        f"  {message}"
+        f"   {message}"
     )
 
 
 def max_accounts_text(max_count: int) -> str:
     return (
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
-        f"     ⚠️ <b>LIMIT REACHED</b>\n"
-        f"  ◈━━━━━━━━━━━━━━━━━━━━━━━◈\n"
+        f"        ─── ⚠ ───\n"
+        f"    <b>Cᴀᴘᴀᴄɪᴛʏ Rᴇᴀᴄʜᴇᴅ</b>\n"
+        f"        ─── ⚠ ───\n"
         f"\n"
-        f"  Max <b>{max_count}</b> accounts.\n"
-        f"  Delete one to add new."
+        f"   Maximum of <b>{max_count}</b> accounts.\n"
+        f"   Remove one to link another."
     )
