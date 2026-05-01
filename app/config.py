@@ -54,7 +54,7 @@ MIN_INTERVAL: int = _safe_int(os.getenv("MIN_INTERVAL"), 1200)   # 20 minutes mi
 DEFAULT_INTERVAL: int = 1200  # 20 minutes
 
 # ── Rate Limiting (Anti-Freeze Protection) ──────────────────────────────────
-SEND_GAP_SECONDS: int = _safe_int(os.getenv("SEND_GAP_SECONDS"), 300)  # 5 min between msgs
+SEND_GAP_SECONDS: int = _safe_int(os.getenv("SEND_GAP_SECONDS"), 45)  # 45s between msgs
 SEND_JITTER_MIN: int = _safe_int(os.getenv("SEND_JITTER_MIN"), 30)     # Random jitter range
 SEND_JITTER_MAX: int = _safe_int(os.getenv("SEND_JITTER_MAX"), 90)     # Random jitter range
 FLOOD_BACKOFF_BASE: int = _safe_int(os.getenv("FLOOD_BACKOFF_BASE"), 60)

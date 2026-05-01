@@ -39,25 +39,36 @@ async def set_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receive_ad_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive the ad message (text, photo, or video)."""
+    """Receive the ad message (text, photo, video, or forward)."""
     user_id = update.effective_user.id
     fields = {}
 
-    if update.message.photo:
+    # Check for forwarded message first
+    if update.message.forward_date:
+        fields["ad_mode"] = "forward"
+        fields["ad_forward_cid"] = update.message.chat_id
+        fields["ad_forward_mid"] = update.message.message_id
+        fields["ad_message"] = update.message.text or update.message.caption or "Forwarded Content"
+        fields["ad_media_type"] = None
+        fields["ad_media_file_id"] = None
+    elif update.message.photo:
+        fields["ad_mode"] = "direct"
         fields["ad_media_type"] = "photo"
         fields["ad_media_file_id"] = update.message.photo[-1].file_id
         fields["ad_message"] = update.message.caption or ""
     elif update.message.video:
+        fields["ad_mode"] = "direct"
         fields["ad_media_type"] = "video"
         fields["ad_media_file_id"] = update.message.video.file_id
         fields["ad_message"] = update.message.caption or ""
     elif update.message.text:
+        fields["ad_mode"] = "direct"
         fields["ad_media_type"] = None
         fields["ad_media_file_id"] = None
         fields["ad_message"] = update.message.text
     else:
         await update.message.reply_text(
-            messages.error_text("Unsupported format. Send text, photo, or video."),
+            messages.error_text("Unsupported format. Send text, photo, video, or forward a message."),
             parse_mode="HTML",
         )
         return WAITING_AD
@@ -181,8 +192,26 @@ async def view_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = await get_user(user_id)
 
     msg = user.get("ad_message")
+    mode = user.get("ad_mode", "direct")
     media_type = user.get("ad_media_type")
     media_id = user.get("ad_media_file_id")
+    forward_mid = user.get("ad_forward_mid")
+
+    if mode == "forward" and forward_mid:
+        await _send_menu(
+            update, context,
+            f"<b>AD PREVIEW (FORWARD)</b>\n"
+            f"────────────────────────\n"
+            f"\n"
+            f"The bot will forward your message\n"
+            f"directly to all target groups.\n"
+            f"\n"
+            f"<b>Content Preview:</b>\n"
+            f"<i>{msg[:100]}...</i>\n"
+            f"────────────────────────",
+            keyboards.back_keyboard("dashboard")
+        )
+        return
 
     if not msg and not media_id:
         await _send_menu(

@@ -219,15 +219,7 @@ async def _broadcast_loop(user_id: int, interval: int):
                 cycle_sent = 0
                 cycle_failed = 0
 
-                # Split groups across available active accounts (Load Balancing)
-                num_accounts = len(active_accounts)
-                chunk_size = (len(groups) + num_accounts - 1) // num_accounts
-
-                for i, account in enumerate(active_accounts):
-                    account_groups = groups[i * chunk_size : (i + 1) * chunk_size]
-                    if not account_groups:
-                        continue
-
+                for account in active_accounts:
                     try:
                         session_str = decrypt_session(account["encrypted_session"])
                         client = await get_client_from_session(session_str)
@@ -237,8 +229,8 @@ async def _broadcast_loop(user_id: int, interval: int):
                             await enforce_branding(client)
 
                             sent, failed = await _send_to_groups(
-                                client, user_id, account_groups,
-                                ad_message, ad_media_type, ad_media_file_id,
+                                client, user_id, groups,
+                                user, # Pass full user for mode/forwarding fields
                                 account["phone_masked"]
                             )
                             cycle_sent += sent
@@ -292,14 +284,19 @@ async def _send_to_groups(
     client,
     user_id: int,
     groups: list[dict],
-    ad_message: Optional[str],
-    ad_media_type: Optional[str],
-    ad_media_file_id: Optional[str],
+    user: dict,
     phone_masked: str,
 ) -> tuple[int, int]:
     """Send ad to target groups with smart delays and live logging."""
     sent = 0
     failed = 0
+
+    ad_mode = user.get("ad_mode", "direct")
+    ad_message = user.get("ad_message")
+    ad_media_type = user.get("ad_media_type")
+    ad_media_file_id = user.get("ad_media_file_id")
+    forward_cid = user.get("ad_forward_cid")
+    forward_mid = user.get("ad_forward_mid")
 
     for group in groups:
         if _is_night_time():
@@ -316,7 +313,11 @@ async def _send_to_groups(
                 await log_message_sent(user_id, identifier, phone_masked, False, "Entity Resolution Failed")
                 continue
 
-            if ad_media_type in ("photo", "video") and ad_media_file_id:
+            if ad_mode == "forward" and forward_mid:
+                # Forward from the user's chat with the bot
+                from app.config import BOT_USERNAME
+                await client.forward_messages(entity, forward_mid, BOT_USERNAME)
+            elif ad_media_type in ("photo", "video") and ad_media_file_id:
                 await client.send_file(entity, ad_media_file_id, caption=ad_message or "")
             elif ad_message:
                 await client.send_message(entity, ad_message)

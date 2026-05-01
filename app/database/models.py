@@ -26,6 +26,9 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
         "plan": "free",
         "max_accounts": MAX_ACCOUNTS,
         "ad_message": None,
+        "ad_mode": "direct",         # "direct" or "forward"
+        "ad_forward_cid": None,      # Source chat ID for forwarding
+        "ad_forward_mid": None,      # Message ID for forwarding
         "ad_media_type": None,       # "photo", "video", or None
         "ad_media_file_id": None,
         "interval_seconds": DEFAULT_INTERVAL,
