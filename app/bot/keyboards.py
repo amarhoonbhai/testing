@@ -17,10 +17,10 @@ def force_join_keyboard() -> InlineKeyboardMarkup:
     buttons = []
     for ch in REQUIRED_CHANNELS:
         buttons.append(
-            [InlineKeyboardButton(f"Join @{ch}", url=f"https://t.me/{ch}")]
+            [InlineKeyboardButton(f"‣ Jᴏɪɴ @{ch}", url=f"https://t.me/{ch}")]
         )
     buttons.append(
-        [InlineKeyboardButton("✓  Verify Membership", callback_data="check_join")]
+        [InlineKeyboardButton("✓  Vᴇʀɪғʏ Mᴇᴍʙᴇʀsʜɪᴘ", callback_data="check_join")]
     )
     return InlineKeyboardMarkup(buttons)
 
@@ -31,16 +31,16 @@ def force_join_keyboard() -> InlineKeyboardMarkup:
 
 def start_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚡  Command Center", callback_data="dashboard")],
+        [InlineKeyboardButton("⚡  Cᴏᴍᴍᴀɴᴅ Cᴇɴᴛᴇʀ", callback_data="dashboard")],
         [
-            InlineKeyboardButton("📖  Guide", callback_data="how_to_use"),
-            InlineKeyboardButton("⚖  Terms", callback_data="disclaimer"),
+            InlineKeyboardButton("📖  Gᴜɪᴅᴇ", callback_data="how_to_use"),
+            InlineKeyboardButton("⚖  Tᴇʀᴍs", callback_data="disclaimer"),
         ],
         [
-            InlineKeyboardButton("📢  Network", url=f"https://t.me/{CHANNEL_USERNAME}"),
-            InlineKeyboardButton("💬  Support", url=f"https://t.me/{SUPPORT_USERNAME}"),
+            InlineKeyboardButton("📢  Nᴇᴛᴡᴏʀᴋ", url=f"https://t.me/{CHANNEL_USERNAME}"),
+            InlineKeyboardButton("💬  Sᴜᴘᴘᴏʀᴛ", url=f"https://t.me/{SUPPORT_USERNAME}"),
         ],
-        [InlineKeyboardButton("⚡  Powered by ‣ Kᴜʀᴜᴘ Aᴅs", callback_data="powered_by")],
+        [InlineKeyboardButton("⚡  Pᴏᴡᴇʀᴇᴅ ʙʏ ‣ Kᴜʀᴜᴘ Aᴅs", callback_data="powered_by")],
     ])
 
 
@@ -51,31 +51,31 @@ def start_keyboard() -> InlineKeyboardMarkup:
 def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton("➕  Link Account", callback_data="add_account"),
-            InlineKeyboardButton("📱  Accounts", callback_data="my_accounts"),
+            InlineKeyboardButton("➕  Lɪɴᴋ Aᴄᴄᴏᴜɴᴛ", callback_data="add_account"),
+            InlineKeyboardButton("📱  Aᴄᴄᴏᴜɴᴛs", callback_data="my_accounts"),
         ],
         [
-            InlineKeyboardButton("📢  Ad Console", callback_data="manage_ads"),
-            InlineKeyboardButton("⏱  Timing", callback_data="set_interval"),
+            InlineKeyboardButton("📢  Aᴅ Cᴏɴsᴏʟᴇ", callback_data="manage_ads"),
+            InlineKeyboardButton("⏱  Sᴄʜᴇᴅᴜʟᴇ", callback_data="set_interval"),
         ],
         [
-            InlineKeyboardButton("📂  Targets", callback_data="manage_groups"),
-            InlineKeyboardButton("📊  Report", callback_data="analytics"),
+            InlineKeyboardButton("📂  Tᴀʀɢᴇᴛs", callback_data="manage_groups"),
+            InlineKeyboardButton("📊  Rᴇᴘᴏʀᴛ", callback_data="analytics"),
         ],
         [
-            InlineKeyboardButton("▶  Go Live", callback_data="start_ads"),
-            InlineKeyboardButton("⏸  Halt", callback_data="stop_ads"),
+            InlineKeyboardButton("▶  Gᴏ Lɪᴠᴇ", callback_data="start_ads"),
+            InlineKeyboardButton("⏸  Hᴀʟᴛ", callback_data="stop_ads"),
         ],
         [
-            InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
-            InlineKeyboardButton("🗑  Remove Accounts", callback_data="delete_accounts"),
+            InlineKeyboardButton("💬  Rᴇsᴘᴏɴᴅᴇʀ", callback_data="auto_reply"),
+            InlineKeyboardButton("🗑  Pᴜʀɢᴇ Aᴄᴄs", callback_data="delete_accounts"),
         ],
     ]
     
     if is_owner:
-        buttons.append([InlineKeyboardButton("⚙  Admin Console", callback_data="admin")])
+        buttons.append([InlineKeyboardButton("⚙  Aᴅᴍɪɴ Pᴀɴᴇʟ", callback_data="admin")])
     
-    buttons.append([InlineKeyboardButton("↩  Home", callback_data="home")])
+    buttons.append([InlineKeyboardButton("↩  Hᴏᴍᴇ", callback_data="home")])
     
     return InlineKeyboardMarkup(buttons)
 
@@ -87,24 +87,24 @@ def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
 def ads_list_keyboard(ads: list[dict]) -> InlineKeyboardMarkup:
     buttons = []
     for ad in ads:
-        label = ad.get("ad_message", "Media Ad")[:20] + "..."
+        label = ad.get("ad_message", "Media Ad")[:15] + "..."
         buttons.append([
             InlineKeyboardButton(f"👁 {label}", callback_data=f"view_ad:{ad['id']}"),
             InlineKeyboardButton("🗑", callback_data=f"del_ad:{ad['id']}"),
         ])
     
     if len(ads) < 3:
-        buttons.append([InlineKeyboardButton("➕  Add Another Ad", callback_data="add_ad")])
+        buttons.append([InlineKeyboardButton("➕  Aᴅᴅ Cʀᴇᴀᴛɪᴠᴇ", callback_data="add_ad")])
     
-    buttons.append([InlineKeyboardButton("↩  Back", callback_data="dashboard")])
+    buttons.append([InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")])
     return InlineKeyboardMarkup(buttons)
 
 
 def confirm_delete_ad_keyboard(ad_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✓  Confirm Purge", callback_data=f"confirm_del_ad:{ad_id}"),
-            InlineKeyboardButton("✕  Abort", callback_data="manage_ads"),
+            InlineKeyboardButton("✓  Cᴏɴғɪʀᴍ Pᴜʀɢᴇ", callback_data=f"confirm_del_ad:{ad_id}"),
+            InlineKeyboardButton("✕  Aʙᴏʀᴛ", callback_data="manage_ads"),
         ],
     ])
 
@@ -115,8 +115,8 @@ def confirm_delete_ad_keyboard(ad_id: str) -> InlineKeyboardMarkup:
 
 def no_accounts_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕  Link Account", callback_data="add_account")],
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
+        [InlineKeyboardButton("➕  Lɪɴᴋ Aᴄᴄᴏᴜɴᴛ", callback_data="add_account")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")],
     ])
 
 
@@ -132,11 +132,11 @@ def accounts_list_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
             )]
         )
     buttons.append([
-        InlineKeyboardButton("↻  Refresh", callback_data="my_accounts"),
-        InlineKeyboardButton("🗑  Remove", callback_data="delete_accounts"),
+        InlineKeyboardButton("↻  Rᴇғʀᴇsʜ", callback_data="my_accounts"),
+        InlineKeyboardButton("🗑  Rᴇᴍᴏᴠᴇ", callback_data="delete_accounts"),
     ])
     buttons.append(
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")]
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")]
     )
     return InlineKeyboardMarkup(buttons)
 
@@ -152,7 +152,7 @@ def delete_accounts_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
             )]
         )
     buttons.append(
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")]
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")]
     )
     return InlineKeyboardMarkup(buttons)
 
@@ -160,8 +160,8 @@ def delete_accounts_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
 def confirm_delete_keyboard(phone_masked: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✓  Confirm", callback_data=f"confirm_del:{phone_masked}"),
-            InlineKeyboardButton("✕  Abort", callback_data="delete_accounts"),
+            InlineKeyboardButton("✓  Cᴏɴғɪʀᴍ", callback_data=f"confirm_del:{phone_masked}"),
+            InlineKeyboardButton("✕  Aʙᴏʀᴛ", callback_data="delete_accounts"),
         ],
     ])
 
@@ -172,26 +172,26 @@ def confirm_delete_keyboard(phone_masked: str) -> InlineKeyboardMarkup:
 
 def groups_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕  Import Targets", callback_data="add_groups")],
-        [InlineKeyboardButton("📋  View Manifest", callback_data="view_groups")],
-        [InlineKeyboardButton("🗑  Purge All", callback_data="clear_groups")],
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
+        [InlineKeyboardButton("➕  Iᴍᴘᴏʀᴛ Tᴀʀɢᴇᴛs", callback_data="add_groups")],
+        [InlineKeyboardButton("📋  Vɪᴇᴡ Mᴀɴɪғᴇsᴛ", callback_data="view_groups")],
+        [InlineKeyboardButton("🗑  Pᴜʀɢᴇ Aʟʟ", callback_data="clear_groups")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")],
     ])
 
 
 def groups_list_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("↻  Refresh", callback_data="view_groups")],
-        [InlineKeyboardButton("➕  Import More", callback_data="add_groups")],
-        [InlineKeyboardButton("↩  Back", callback_data="manage_groups")],
+        [InlineKeyboardButton("↻  Rᴇғʀᴇsʜ", callback_data="view_groups")],
+        [InlineKeyboardButton("➕  Iᴍᴘᴏʀᴛ Mᴏʀᴇ", callback_data="add_groups")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="manage_groups")],
     ])
 
 
 def confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✓  Purge All", callback_data="confirm_clear_groups"),
-            InlineKeyboardButton("✕  Abort", callback_data="manage_groups"),
+            InlineKeyboardButton("✓  Pᴜʀɢᴇ Aʟʟ", callback_data="confirm_clear_groups"),
+            InlineKeyboardButton("✕  Aʙᴏʀᴛ", callback_data="manage_groups"),
         ],
     ])
 
@@ -199,9 +199,9 @@ def confirm_clear_groups_keyboard() -> InlineKeyboardMarkup:
 def groups_after_add_keyboard() -> InlineKeyboardMarkup:
     """Shown after successfully adding groups — lets user add more or go back."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕  Add More Groups", callback_data="add_groups")],
-        [InlineKeyboardButton("📋  View All Targets", callback_data="view_groups")],
-        [InlineKeyboardButton("↩  Back to Groups", callback_data="manage_groups")],
+        [InlineKeyboardButton("➕  Aᴅᴅ Mᴏʀᴇ Tᴀʀɢᴇᴛs", callback_data="add_groups")],
+        [InlineKeyboardButton("📋  Vɪᴇᴡ Aʟʟ Pᴏᴏʟs", callback_data="view_groups")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ ᴛᴏ Mᴀɴᴀɢᴇᴍᴇɴᴛ", callback_data="manage_groups")],
     ])
 
 
@@ -210,13 +210,13 @@ def groups_after_add_keyboard() -> InlineKeyboardMarkup:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def auto_reply_keyboard(enabled: bool) -> InlineKeyboardMarkup:
-    toggle_text = "○  Disable" if enabled else "●  Enable"
+    toggle_text = "○  Dɪsᴀʙʟᴇ" if enabled else "●  Eɴᴀʙʟᴇ"
     toggle_data = "ar_disable" if enabled else "ar_enable"
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(toggle_text, callback_data=toggle_data)],
-        [InlineKeyboardButton("✏  Compose Reply", callback_data="ar_set_text")],
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
+        [InlineKeyboardButton("✏  Cᴏᴍᴘᴏsᴇ Rᴇsᴘᴏɴsᴇ", callback_data="ar_set_text")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")],
     ])
 
 
@@ -226,8 +226,8 @@ def auto_reply_keyboard(enabled: bool) -> InlineKeyboardMarkup:
 
 def analytics_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("↻  Refresh", callback_data="analytics")],
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
+        [InlineKeyboardButton("↻  Rᴇғʀᴇsʜ Rᴇᴘᴏʀᴛ", callback_data="analytics")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")],
     ])
 
 
@@ -237,13 +237,13 @@ def analytics_keyboard() -> InlineKeyboardMarkup:
 
 def back_keyboard(callback_data: str = "dashboard") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("↩  Back", callback_data=callback_data)],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data=callback_data)],
     ])
 
 
 def cancel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✕  Cancel", callback_data="cancel_conv")],
+        [InlineKeyboardButton("✕  Cᴀɴᴄᴇʟ", callback_data="cancel_conv")],
     ])
 
 
@@ -254,20 +254,20 @@ def cancel_keyboard() -> InlineKeyboardMarkup:
 def admin_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👥  Users", callback_data="admin_users"),
-            InlineKeyboardButton("🏥  Health", callback_data="admin_health"),
+            InlineKeyboardButton("👥  Usᴇʀs", callback_data="admin_users"),
+            InlineKeyboardButton("🏥  Hᴇᴀʟᴛʜ", callback_data="admin_health"),
         ],
         [
-            InlineKeyboardButton("📊  Broadcast Intel", callback_data="admin_bstats"),
+            InlineKeyboardButton("📊  Bʀᴏᴀᴅᴄᴀsᴛ Iɴᴛᴇʟ", callback_data="admin_bstats"),
         ],
-        [InlineKeyboardButton("↻  Refresh", callback_data="admin")],
-        [InlineKeyboardButton("↩  Back", callback_data="dashboard")],
+        [InlineKeyboardButton("↻  Rᴇғʀᴇsʜ Sᴛᴀᴛs", callback_data="admin")],
+        [InlineKeyboardButton("↩  Bᴀᴄᴋ", callback_data="dashboard")],
     ])
 
 
 def admin_back_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("↩  Admin Panel", callback_data="admin")],
+        [InlineKeyboardButton("↩  Aᴅᴍɪɴ Pᴀɴᴇʟ", callback_data="admin")],
     ])
 
 
@@ -277,13 +277,13 @@ def admin_back_keyboard() -> InlineKeyboardMarkup:
 
 def guide_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚖  Terms of Use", callback_data="disclaimer")],
-        [InlineKeyboardButton("↩  Home", callback_data="home")],
+        [InlineKeyboardButton("⚖  Tᴇʀᴍs ᴏғ Usᴇ", callback_data="disclaimer")],
+        [InlineKeyboardButton("↩  Hᴏᴍᴇ", callback_data="home")],
     ])
 
 
 def disclaimer_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📖  Operations Guide", callback_data="how_to_use")],
-        [InlineKeyboardButton("↩  Home", callback_data="home")],
+        [InlineKeyboardButton("📖  Oᴘᴇʀᴀᴛɪᴏɴs Gᴜɪᴅᴇ", callback_data="how_to_use")],
+        [InlineKeyboardButton("↩  Hᴏᴍᴇ", callback_data="home")],
     ])
