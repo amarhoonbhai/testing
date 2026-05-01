@@ -55,21 +55,22 @@ def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📱  Accounts", callback_data="my_accounts"),
         ],
         [
-            InlineKeyboardButton("📝  Ad Copy", callback_data="set_ad"),
-            InlineKeyboardButton("⏱  Timing", callback_data="set_interval"),
+            InlineKeyboardButton("👁  View Ad", callback_data="view_ad"),
+            InlineKeyboardButton("📝  Set Ad", callback_data="set_ad"),
         ],
         [
+            InlineKeyboardButton("⏱  Timing", callback_data="set_interval"),
             InlineKeyboardButton("📂  Targets", callback_data="manage_groups"),
+        ],
+        [
             InlineKeyboardButton("📊  Report", callback_data="analytics"),
+            InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
         ],
         [
             InlineKeyboardButton("▶  Go Live", callback_data="start_ads"),
             InlineKeyboardButton("⏸  Halt", callback_data="stop_ads"),
         ],
-        [
-            InlineKeyboardButton("🗑  Remove", callback_data="delete_accounts"),
-            InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
-        ],
+        [InlineKeyboardButton("🗑  Remove Accounts", callback_data="delete_accounts")],
     ]
     
     if is_owner:

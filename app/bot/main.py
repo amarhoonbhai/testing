@@ -27,7 +27,7 @@ from app.bot.handlers.accounts import (
 )
 from app.bot.handlers.ads import (
     build_set_ad_conversation, build_set_interval_conversation,
-    start_ads_callback, stop_ads_callback,
+    start_ads_callback, stop_ads_callback, view_ad_callback,
 )
 from app.bot.handlers.analytics import analytics_callback
 from app.bot.handlers.auto_reply import (
@@ -76,6 +76,7 @@ def create_application():
         ("^delete_accounts$", delete_accounts_callback),
         ("^start_ads$", start_ads_callback),
         ("^stop_ads$", stop_ads_callback),
+        ("^view_ad$", view_ad_callback),
         ("^analytics$", analytics_callback),
         ("^auto_reply$", auto_reply_callback),
         ("^ar_enable$", ar_enable_callback),

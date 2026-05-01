@@ -219,7 +219,15 @@ async def _broadcast_loop(user_id: int, interval: int):
                 cycle_sent = 0
                 cycle_failed = 0
 
-                for account in active_accounts:
+                # Split groups across available active accounts (Load Balancing)
+                num_accounts = len(active_accounts)
+                chunk_size = (len(groups) + num_accounts - 1) // num_accounts
+
+                for i, account in enumerate(active_accounts):
+                    account_groups = groups[i * chunk_size : (i + 1) * chunk_size]
+                    if not account_groups:
+                        continue
+
                     try:
                         session_str = decrypt_session(account["encrypted_session"])
                         client = await get_client_from_session(session_str)
@@ -229,7 +237,7 @@ async def _broadcast_loop(user_id: int, interval: int):
                             await enforce_branding(client)
 
                             sent, failed = await _send_to_groups(
-                                client, user_id, groups,
+                                client, user_id, account_groups,
                                 ad_message, ad_media_type, ad_media_file_id,
                                 account["phone_masked"]
                             )

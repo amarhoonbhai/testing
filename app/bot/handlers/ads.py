@@ -173,6 +173,54 @@ async def start_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 @require_join
+async def view_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Preview the current ad creative."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+
+    msg = user.get("ad_message")
+    media_type = user.get("ad_media_type")
+    media_id = user.get("ad_media_file_id")
+
+    if not msg and not media_id:
+        await _send_menu(
+            update, context,
+            "<b>K U R U P  A D S</b>\n"
+            "────────────────────────\n"
+            "<b>NO AD CREATIVE</b>\n"
+            "\n"
+            "You haven't set an ad yet.\n"
+            "────────────────────────",
+            keyboards.back_keyboard("dashboard")
+        )
+        return
+
+    # Send the ad as a preview
+    if media_type == "photo" and media_id:
+        await update.effective_chat.send_photo(
+            photo=media_id,
+            caption=f"<b>AD PREVIEW</b>\n────────────────────────\n\n{msg}",
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("dashboard")
+        )
+    elif media_type == "video" and media_id:
+        await update.effective_chat.send_video(
+            video=media_id,
+            caption=f"<b>AD PREVIEW</b>\n────────────────────────\n\n{msg}",
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("dashboard")
+        )
+    else:
+        await _send_menu(
+            update, context,
+            f"<b>AD PREVIEW</b>\n────────────────────────\n\n{msg}",
+            keyboards.back_keyboard("dashboard")
+        )
+
+
+@require_join
 async def stop_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Stop advertising."""
     query = update.callback_query
