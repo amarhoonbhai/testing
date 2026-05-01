@@ -1,6 +1,7 @@
 """
 Ads handler — Set Ad Message, Set Interval, Start/Stop Ads.
 Uses ConversationHandler for multi-step flows.
+Supports up to 3 ads.
 """
 
 import logging
@@ -13,6 +14,7 @@ from telegram.ext import (
 from app.config import MIN_INTERVAL
 from app.database.models import (
     get_user, update_user, get_user_accounts, get_account_count, get_group_count,
+    add_user_ad, delete_user_ad,
 )
 from app.services.broadcast_service import start_broadcast, stop_broadcast
 from app.services.channel_logger import log_ads_started, log_ads_stopped
@@ -26,46 +28,179 @@ WAITING_AD, WAITING_INTERVAL = range(2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  SET AD MESSAGE
+#  AD MANAGEMENT HUB
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @require_join
-async def set_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def manage_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Entry: Show ads management console."""
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    ads = user.get("ads", [])
+
+    text = (
+        f"<b>K U R U P  A D S</b>\n"
+        f"────────────────────────\n"
+        f"<b>AD CONSOLE</b>\n"
+        f"\n"
+        f"  Total Ads: {len(ads)} / 3\n"
+        f"  Rotation: Sequential\n"
+        f"\n"
+        f"Manage your broadcast creatives below:\n"
+        f"────────────────────────"
+    )
+    await _send_menu(update, context, text, keyboards.ads_list_keyboard(ads))
+
+
+@require_join
+async def view_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Preview a specific ad creative."""
+    query = update.callback_query
+    await query.answer()
+    ad_id = query.data.split(":")[1]
+    
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    ads = user.get("ads", [])
+    
+    ad = next((a for a in ads if a["id"] == ad_id), None)
+    if not ad:
+        await query.message.reply_text("Ad not found.")
+        return
+
+    msg = ad.get("ad_message", "")
+    mode = ad.get("ad_mode", "direct")
+    media_type = ad.get("ad_media_type")
+    media_id = ad.get("ad_media_file_id")
+    forward_mid = ad.get("ad_forward_mid")
+
+    caption = f"<b>AD PREVIEW ({mode.upper()})</b>\n────────────────────────\n\n{msg}"
+
+    if mode == "forward" and forward_mid:
+        from app.config import BOT_USERNAME
+        # For preview, we just show text since we can't easily forward to user
+        # without potentially violating privacy or needing session
+        await update.effective_chat.send_message(
+            f"<b>AD PREVIEW (FORWARD)</b>\n────────────────────────\n\n"
+            f"<i>This message will be forwarded from your chat history.</i>\n\n"
+            f"{msg}",
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("manage_ads")
+        )
+    elif media_type == "photo" and media_id:
+        await update.effective_chat.send_photo(
+            photo=media_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("manage_ads")
+        )
+    elif media_type == "video" and media_id:
+        await update.effective_chat.send_video(
+            video=media_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("manage_ads")
+        )
+    else:
+        await update.effective_chat.send_message(
+            caption,
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("manage_ads")
+        )
+
+
+@require_join
+async def del_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirm delete ad."""
+    query = update.callback_query
+    await query.answer()
+    ad_id = query.data.split(":")[1]
+    
+    await _send_menu(
+        update, context,
+        "<b>K U R U P  A D S</b>\n"
+        "────────────────────────\n"
+        "<b>CONFIRM DELETION</b>\n"
+        "\n"
+        "Are you sure you want to remove this ad?\n"
+        "────────────────────────",
+        keyboards.confirm_delete_ad_keyboard(ad_id)
+    )
+
+
+async def confirm_del_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Execute ad deletion."""
+    query = update.callback_query
+    await query.answer()
+    ad_id = query.data.split(":")[1]
+    user_id = query.from_user.id
+    
+    await delete_user_ad(user_id, ad_id)
+    await manage_ads_callback(update, context)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ADD AD CONVERSATION
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@require_join
+async def add_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Entry: ask user for ad content."""
     query = update.callback_query
     await query.answer()
-    await _send_menu(update, context, messages.set_ad_text(), keyboards.cancel_keyboard())
+    
+    user_id = query.from_user.id
+    user = await get_user(user_id)
+    if len(user.get("ads", [])) >= 3:
+        await query.message.reply_text("Maximum limit of 3 ads reached.")
+        return ConversationHandler.END
+
+    await _send_menu(
+        update, context,
+        "<b>K U R U P  A D S</b>\n"
+        "────────────────────────\n"
+        "<b>NEW CREATIVE</b>\n"
+        "\n"
+        "Send your ad content. Supports:\n"
+        "  ‣ Text\n"
+        "  ‣ Photo + Caption\n"
+        "  ‣ Video + Caption\n"
+        "  ‣ Forwarded Message\n"
+        "────────────────────────",
+        keyboards.cancel_keyboard()
+    )
     return WAITING_AD
 
 
 async def receive_ad_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Receive the ad message (text, photo, video, or forward)."""
     user_id = update.effective_user.id
-    fields = {}
+    ad_data = {}
 
-    # Check for forwarded message first
     if update.message.forward_date:
-        fields["ad_mode"] = "forward"
-        fields["ad_forward_cid"] = update.message.chat_id
-        fields["ad_forward_mid"] = update.message.message_id
-        fields["ad_message"] = update.message.text or update.message.caption or "Forwarded Content"
-        fields["ad_media_type"] = None
-        fields["ad_media_file_id"] = None
+        ad_data["ad_mode"] = "forward"
+        ad_data["ad_forward_cid"] = update.message.chat_id
+        ad_data["ad_forward_mid"] = update.message.message_id
+        ad_data["ad_message"] = update.message.text or update.message.caption or "Forwarded Content"
+        ad_data["ad_media_type"] = None
+        ad_data["ad_media_file_id"] = None
     elif update.message.photo:
-        fields["ad_mode"] = "direct"
-        fields["ad_media_type"] = "photo"
-        fields["ad_media_file_id"] = update.message.photo[-1].file_id
-        fields["ad_message"] = update.message.caption or ""
+        ad_data["ad_mode"] = "direct"
+        ad_data["ad_media_type"] = "photo"
+        ad_data["ad_media_file_id"] = update.message.photo[-1].file_id
+        ad_data["ad_message"] = update.message.caption or ""
     elif update.message.video:
-        fields["ad_mode"] = "direct"
-        fields["ad_media_type"] = "video"
-        fields["ad_media_file_id"] = update.message.video.file_id
-        fields["ad_message"] = update.message.caption or ""
+        ad_data["ad_mode"] = "direct"
+        ad_data["ad_media_type"] = "video"
+        ad_data["ad_media_file_id"] = update.message.video.file_id
+        ad_data["ad_message"] = update.message.caption or ""
     elif update.message.text:
-        fields["ad_mode"] = "direct"
-        fields["ad_media_type"] = None
-        fields["ad_media_file_id"] = None
-        fields["ad_message"] = update.message.text
+        ad_data["ad_mode"] = "direct"
+        ad_data["ad_media_type"] = None
+        ad_data["ad_media_file_id"] = None
+        ad_data["ad_message"] = update.message.text
     else:
         await update.message.reply_text(
             messages.error_text("Unsupported format. Send text, photo, video, or forward a message."),
@@ -73,21 +208,25 @@ async def receive_ad_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         return WAITING_AD
 
-    await update_user(user_id, **fields)
+    await add_user_ad(user_id, ad_data)
     await update.message.reply_text(
-        messages.ad_saved_text(), parse_mode="HTML",
-        reply_markup=keyboards.back_keyboard("dashboard"),
+        "<b>✅ CREATIVE SAVED</b>\n"
+        "────────────────────────\n"
+        "Your ad has been added to the console.\n"
+        "────────────────────────",
+        parse_mode="HTML",
+        reply_markup=keyboards.back_keyboard("manage_ads"),
     )
     return ConversationHandler.END
 
 
 def build_set_ad_conversation() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CallbackQueryHandler(set_ad_callback, pattern="^set_ad$")],
+        entry_points=[CallbackQueryHandler(add_ad_callback, pattern="^add_ad$")],
         states={
             WAITING_AD: [
                 MessageHandler(
-                    filters.TEXT | filters.PHOTO | filters.VIDEO & ~filters.COMMAND,
+                    filters.TEXT | filters.PHOTO | filters.VIDEO | filters.FORWARDED,
                     receive_ad_message,
                 ),
             ],
@@ -95,7 +234,7 @@ def build_set_ad_conversation() -> ConversationHandler:
         fallbacks=[
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"),
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^dashboard$"),
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^home$"),
+            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^manage_ads$"),
         ],
         per_user=True, per_chat=True, per_message=False,
     )
@@ -153,7 +292,6 @@ def build_set_interval_conversation() -> ConversationHandler:
         fallbacks=[
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"),
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^dashboard$"),
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^home$"),
         ],
         per_user=True, per_chat=True, per_message=False,
     )
@@ -169,11 +307,15 @@ async def start_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
+    
+    user = await get_user(user_id)
+    if not user.get("ads"):
+        await query.message.reply_text("You haven't set any ads yet.")
+        return
 
     result = await start_broadcast(user_id)
 
     if result["success"]:
-        user = await get_user(user_id)
         accounts = await get_user_accounts(user_id)
         groups = await get_group_count(user_id)
         active = sum(1 for a in accounts if a.get("status") == "active")
@@ -181,72 +323,6 @@ async def start_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await _send_menu(update, context, messages.ads_started_text(), keyboards.back_keyboard("dashboard"))
     else:
         await _send_menu(update, context, messages.error_text(result["error"]), keyboards.back_keyboard("dashboard"))
-
-
-@require_join
-async def view_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Preview the current ad creative."""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    user = await get_user(user_id)
-
-    msg = user.get("ad_message")
-    mode = user.get("ad_mode", "direct")
-    media_type = user.get("ad_media_type")
-    media_id = user.get("ad_media_file_id")
-    forward_mid = user.get("ad_forward_mid")
-
-    if mode == "forward" and forward_mid:
-        await _send_menu(
-            update, context,
-            f"<b>AD PREVIEW (FORWARD)</b>\n"
-            f"────────────────────────\n"
-            f"\n"
-            f"The bot will forward your message\n"
-            f"directly to all target groups.\n"
-            f"\n"
-            f"<b>Content Preview:</b>\n"
-            f"<i>{msg[:100]}...</i>\n"
-            f"────────────────────────",
-            keyboards.back_keyboard("dashboard")
-        )
-        return
-
-    if not msg and not media_id:
-        await _send_menu(
-            update, context,
-            "<b>K U R U P  A D S</b>\n"
-            "────────────────────────\n"
-            "<b>NO AD CREATIVE</b>\n"
-            "\n"
-            "You haven't set an ad yet.\n"
-            "────────────────────────",
-            keyboards.back_keyboard("dashboard")
-        )
-        return
-
-    # Send the ad as a preview
-    if media_type == "photo" and media_id:
-        await update.effective_chat.send_photo(
-            photo=media_id,
-            caption=f"<b>AD PREVIEW</b>\n────────────────────────\n\n{msg}",
-            parse_mode="HTML",
-            reply_markup=keyboards.back_keyboard("dashboard")
-        )
-    elif media_type == "video" and media_id:
-        await update.effective_chat.send_video(
-            video=media_id,
-            caption=f"<b>AD PREVIEW</b>\n────────────────────────\n\n{msg}",
-            parse_mode="HTML",
-            reply_markup=keyboards.back_keyboard("dashboard")
-        )
-    else:
-        await _send_menu(
-            update, context,
-            f"<b>AD PREVIEW</b>\n────────────────────────\n\n{msg}",
-            keyboards.back_keyboard("dashboard")
-        )
 
 
 @require_join

@@ -27,7 +27,8 @@ from app.bot.handlers.accounts import (
 )
 from app.bot.handlers.ads import (
     build_set_ad_conversation, build_set_interval_conversation,
-    start_ads_callback, stop_ads_callback, view_ad_callback,
+    start_ads_callback, stop_ads_callback, manage_ads_callback,
+    view_ad_callback, del_ad_callback, confirm_del_ad_callback,
 )
 from app.bot.handlers.analytics import analytics_callback
 from app.bot.handlers.auto_reply import (
@@ -76,7 +77,7 @@ def create_application():
         ("^delete_accounts$", delete_accounts_callback),
         ("^start_ads$", start_ads_callback),
         ("^stop_ads$", stop_ads_callback),
-        ("^view_ad$", view_ad_callback),
+        ("^manage_ads$", manage_ads_callback),
         ("^analytics$", analytics_callback),
         ("^auto_reply$", auto_reply_callback),
         ("^ar_enable$", ar_enable_callback),
@@ -98,6 +99,9 @@ def create_application():
     # Dynamic callbacks with parameters
     app.add_handler(CallbackQueryHandler(del_acc_callback, pattern=r"^del_acc:"))
     app.add_handler(CallbackQueryHandler(confirm_del_callback, pattern=r"^confirm_del:"))
+    app.add_handler(CallbackQueryHandler(view_ad_callback, pattern=r"^view_ad:"))
+    app.add_handler(CallbackQueryHandler(del_ad_callback, pattern=r"^del_ad:"))
+    app.add_handler(CallbackQueryHandler(confirm_del_ad_callback, pattern=r"^confirm_del_ad:"))
 
     return app
 

@@ -287,16 +287,12 @@ async def _send_to_groups(
     user: dict,
     phone_masked: str,
 ) -> tuple[int, int]:
-    """Send ad to target groups with smart delays and live logging."""
+    """Send all user ads to target groups with smart delays and live logging."""
     sent = 0
     failed = 0
-
-    ad_mode = user.get("ad_mode", "direct")
-    ad_message = user.get("ad_message")
-    ad_media_type = user.get("ad_media_type")
-    ad_media_file_id = user.get("ad_media_file_id")
-    forward_cid = user.get("ad_forward_cid")
-    forward_mid = user.get("ad_forward_mid")
+    ads = user.get("ads", [])
+    if not ads:
+        return 0, 0
 
     for group in groups:
         if _is_night_time():
@@ -308,29 +304,38 @@ async def _send_to_groups(
         try:
             entity = await _resolve_entity(client, group)
             if entity is None:
-                failed += 1
+                failed += len(ads)
                 await update_group_failed(user_id, identifier)
                 await log_message_sent(user_id, identifier, phone_masked, False, "Entity Resolution Failed")
                 continue
 
-            if ad_mode == "forward" and forward_mid:
-                # Forward from the user's chat with the bot
-                from app.config import BOT_USERNAME
-                await client.forward_messages(entity, forward_mid, BOT_USERNAME)
-            elif ad_media_type in ("photo", "video") and ad_media_file_id:
-                await client.send_file(entity, ad_media_file_id, caption=ad_message or "")
-            elif ad_message:
-                await client.send_message(entity, ad_message)
-            else:
-                continue
+            for ad in ads:
+                ad_mode = ad.get("ad_mode", "direct")
+                ad_message = ad.get("ad_message")
+                ad_media_type = ad.get("ad_media_type")
+                ad_media_file_id = ad.get("ad_media_file_id")
+                forward_mid = ad.get("ad_forward_mid")
 
-            sent += 1
-            await increment_sent(user_id)
-            await update_group_sent(user_id, identifier)
-            await log_message_sent(user_id, identifier, phone_masked, True)
-            logger.info(f"Sent to {identifier}")
+                if ad_mode == "forward" and forward_mid:
+                    from app.config import BOT_USERNAME
+                    await client.forward_messages(entity, forward_mid, BOT_USERNAME)
+                elif ad_media_type in ("photo", "video") and ad_media_file_id:
+                    await client.send_file(entity, ad_media_file_id, caption=ad_message or "")
+                elif ad_message:
+                    await client.send_message(entity, ad_message)
+                else:
+                    continue
 
-            # Smart delay
+                sent += 1
+                await increment_sent(user_id)
+                await update_group_sent(user_id, identifier)
+                await log_message_sent(user_id, identifier, phone_masked, True)
+                logger.info(f"Sent ad to {identifier}")
+
+                # Gap between multiple ads in the same group
+                await asyncio.sleep(2) 
+
+            # Smart delay between groups
             await asyncio.sleep(_get_send_delay())
 
         except FloodWaitError as e:

@@ -55,22 +55,21 @@ def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📱  Accounts", callback_data="my_accounts"),
         ],
         [
-            InlineKeyboardButton("👁  View Ad", callback_data="view_ad"),
-            InlineKeyboardButton("📝  Set Ad", callback_data="set_ad"),
-        ],
-        [
+            InlineKeyboardButton("📢  Ad Console", callback_data="manage_ads"),
             InlineKeyboardButton("⏱  Timing", callback_data="set_interval"),
-            InlineKeyboardButton("📂  Targets", callback_data="manage_groups"),
         ],
         [
+            InlineKeyboardButton("📂  Targets", callback_data="manage_groups"),
             InlineKeyboardButton("📊  Report", callback_data="analytics"),
-            InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
         ],
         [
             InlineKeyboardButton("▶  Go Live", callback_data="start_ads"),
             InlineKeyboardButton("⏸  Halt", callback_data="stop_ads"),
         ],
-        [InlineKeyboardButton("🗑  Remove Accounts", callback_data="delete_accounts")],
+        [
+            InlineKeyboardButton("💬  Responder", callback_data="auto_reply"),
+            InlineKeyboardButton("🗑  Remove Accounts", callback_data="delete_accounts"),
+        ],
     ]
     
     if is_owner:
@@ -79,6 +78,35 @@ def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
     buttons.append([InlineKeyboardButton("↩  Home", callback_data="home")])
     
     return InlineKeyboardMarkup(buttons)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AD MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def ads_list_keyboard(ads: list[dict]) -> InlineKeyboardMarkup:
+    buttons = []
+    for ad in ads:
+        label = ad.get("ad_message", "Media Ad")[:20] + "..."
+        buttons.append([
+            InlineKeyboardButton(f"👁 {label}", callback_data=f"view_ad:{ad['id']}"),
+            InlineKeyboardButton("🗑", callback_data=f"del_ad:{ad['id']}"),
+        ])
+    
+    if len(ads) < 3:
+        buttons.append([InlineKeyboardButton("➕  Add Another Ad", callback_data="add_ad")])
+    
+    buttons.append([InlineKeyboardButton("↩  Back", callback_data="dashboard")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def confirm_delete_ad_keyboard(ad_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✓  Confirm Purge", callback_data=f"confirm_del_ad:{ad_id}"),
+            InlineKeyboardButton("✕  Abort", callback_data="manage_ads"),
+        ],
+    ])
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

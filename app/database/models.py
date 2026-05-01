@@ -25,12 +25,7 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
         "telegram_user_id": telegram_user_id,
         "plan": "free",
         "max_accounts": MAX_ACCOUNTS,
-        "ad_message": None,
-        "ad_mode": "direct",         # "direct" or "forward"
-        "ad_forward_cid": None,      # Source chat ID for forwarding
-        "ad_forward_mid": None,      # Message ID for forwarding
-        "ad_media_type": None,       # "photo", "video", or None
-        "ad_media_file_id": None,
+        "ads": [],                  # Array of ad objects
         "interval_seconds": DEFAULT_INTERVAL,
         "ads_status": "paused",
         "auto_reply_enabled": False,
@@ -66,6 +61,34 @@ async def update_user(telegram_user_id: int, **fields) -> dict:
         {"$set": fields},
     )
     return await get_user(telegram_user_id)
+
+
+async def add_user_ad(telegram_user_id: int, ad_data: dict) -> bool:
+    """Add an ad to the user's list (max 3)."""
+    db = get_db()
+    user = await get_user(telegram_user_id)
+    if not user or len(user.get("ads", [])) >= 3:
+        return False
+    
+    import uuid
+    ad_data["id"] = str(uuid.uuid4())[:8]
+    ad_data["created_at"] = datetime.utcnow()
+    
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$push": {"ads": ad_data}}
+    )
+    return True
+
+
+async def delete_user_ad(telegram_user_id: int, ad_id: str) -> bool:
+    """Remove a specific ad by ID."""
+    db = get_db()
+    result = await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$pull": {"ads": {"id": ad_id}}}
+    )
+    return result.modified_count > 0
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
