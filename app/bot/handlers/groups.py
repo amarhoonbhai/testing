@@ -61,18 +61,51 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
 
     # Split by newlines, filter empty
-    links = [line.strip() for line in text.split("\n") if line.strip()]
+    initial_links = [line.strip() for line in text.split("\n") if line.strip()]
 
-    if not links:
+    if not initial_links:
         await update.message.reply_text(
             messages.error_text("No valid links found. Send one link per line."),
             parse_mode="HTML",
         )
         return WAITING_LINKS
 
-    result = await add_groups_bulk(user_id, links)
+    final_links = []
+    status_msg = await update.message.reply_text("<i>🔍 Analyzing links...</i>", parse_mode="HTML")
+
+    from app.database.models import parse_telegram_link, get_user_accounts
+    from app.services.encryption_service import decrypt_session
+    from app.services.telethon_service import get_client_from_session, expand_folder_link
+
+    accounts = await get_user_accounts(user_id)
+    active_acc = next((a for a in accounts if a.get("status") == "active"), None)
+
+    for link in initial_links:
+        parsed = parse_telegram_link(link)
+        if parsed and parsed["type"] == "folder":
+            if not active_acc:
+                await update.message.reply_text(
+                    messages.error_text("Connect at least one active account to expand Folder links."),
+                    parse_mode="HTML"
+                )
+                continue
+            
+            # Expand folder
+            try:
+                session = decrypt_session(active_acc["encrypted_session"])
+                async with await get_client_from_session(session) as client:
+                    folder_links = await expand_folder_link(client, parsed["identifier"])
+                    final_links.extend(folder_links)
+            except Exception as e:
+                logger.error(f"Folder expansion failed: {e}")
+                final_links.append(link) # Fallback to original
+        else:
+            final_links.append(link)
+
+    result = await add_groups_bulk(user_id, final_links)
     await log_groups_added(user_id, result["added"], result["failed"])
 
+    await status_msg.delete()
     await update.message.reply_text(
         messages.groups_added_text(result["added"], result["failed"]),
         parse_mode="HTML",

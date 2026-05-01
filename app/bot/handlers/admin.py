@@ -145,28 +145,31 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     db = get_db()
-    accounts = await db.accounts.find({}).to_list(100)
+    accounts = await db.accounts.find({}).sort("health", 1).to_list(100)
 
     lines = [
         f"        ─── 🏥 ───",
         f"    <b>Account Health</b>",
         f"        ─── 🏥 ───",
         f"",
+        f"  Score  |  Status  |  Account",
+        f"  ───────┼──────────┼─────────",
     ]
+    for acc in accounts:
+        phone = acc.get("phone_masked", "???")
+        health = acc.get("health", 100)
+        status = acc.get("status", "active")
+        
+        icon = "🟢" if health > 70 else "🟡" if health > 30 else "🔴"
+        dot = "●" if status == "active" else "✕" if status == "error" else "○"
+        
+        lines.append(f"  {icon} {health}%  |  {dot} {status.upper():<7} |  {phone}")
 
-    for acc in accounts[:30]:
-        phone = acc.get("phone_masked", "***")
-        status = acc.get("status", "?")
-        uid = acc.get("user_id", "?")
+    if not accounts:
+        lines.append("   <i>No accounts linked yet.</i>")
 
-        if status == "active":
-            dot = "●"
-        elif status == "error":
-            dot = "✕"
-        else:
-            dot = "○"
-
-        lines.append(f"   {dot}  <code>{phone}</code>  user:<code>{uid}</code>")
+    text = "\n".join(lines)
+    await _send_menu(update, context, text, keyboards.admin_back_keyboard())
 
     total = len(accounts)
     if total > 30:

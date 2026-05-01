@@ -117,6 +117,9 @@ async def add_account(
         "phone_masked": phone_masked,
         "encrypted_session": encrypted_session,
         "status": "active",
+        "health": 100,              # 0-100 health score
+        "success_count": 0,
+        "failure_count": 0,
         "created_at": now,
     }
 
@@ -162,6 +165,28 @@ async def update_account_status(
         {"user_id": user_id, "phone_masked": phone_masked},
         {"$set": {"status": status, "updated_at": datetime.utcnow()}},
     )
+
+
+async def update_account_health(user_id: int, phone_masked: str, delta: int) -> int:
+    """Increment/decrement account health score (0-100)."""
+    db = get_db()
+    acc = await db.accounts.find_one({"user_id": user_id, "phone_masked": phone_masked})
+    if not acc:
+        return 100
+    
+    new_health = max(0, min(100, acc.get("health", 100) + delta))
+    
+    update_data = {"health": new_health, "updated_at": datetime.utcnow()}
+    if delta > 0:
+        update_data["success_count"] = acc.get("success_count", 0) + 1
+    elif delta < 0:
+        update_data["failure_count"] = acc.get("failure_count", 0) + 1
+        
+    await db.accounts.update_one(
+        {"user_id": user_id, "phone_masked": phone_masked},
+        {"$set": update_data}
+    )
+    return new_health
 
 
 async def get_account_count(user_id: int) -> int:

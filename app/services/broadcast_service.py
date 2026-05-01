@@ -45,6 +45,7 @@ from app.database.models import (
     increment_sent, increment_failed, update_user,
     update_account_status, update_group_sent,
     update_group_failed, disable_group, get_group_count,
+    update_account_health, delete_group,
 )
 from app.services.encryption_service import decrypt_session
 from app.services.telethon_service import get_client_from_session
@@ -307,6 +308,7 @@ async def _send_to_groups(
                 failed += len(ads)
                 await update_group_failed(user_id, identifier)
                 await log_message_sent(user_id, identifier, phone_masked, False, "Entity Resolution Failed")
+                await update_account_health(user_id, phone_masked, -1)
                 continue
 
             for ad in ads:
@@ -330,6 +332,7 @@ async def _send_to_groups(
                 await increment_sent(user_id)
                 await update_group_sent(user_id, identifier)
                 await log_message_sent(user_id, identifier, phone_masked, True)
+                await update_account_health(user_id, phone_masked, 1)
                 logger.info(f"Sent ad to {identifier}")
 
                 # Gap between multiple ads in the same group
@@ -342,31 +345,33 @@ async def _send_to_groups(
             wait = min(e.seconds + 30, FLOOD_BACKOFF_MAX)
             logger.warning(f"FloodWait {e.seconds}s for {identifier}")
             await log_message_sent(user_id, identifier, phone_masked, False, f"FloodWait ({e.seconds}s)")
+            await update_account_health(user_id, phone_masked, -10)
             await asyncio.sleep(wait)
-            failed += 1
+            failed += len(ads)
         except SlowModeWaitError as e:
             logger.info(f"SlowMode {e.seconds}s in {identifier}")
             await log_message_sent(user_id, identifier, phone_masked, False, f"SlowMode ({e.seconds}s)")
             await asyncio.sleep(e.seconds + 10)
-            failed += 1
+            failed += len(ads)
         except (ChatWriteForbiddenError, UserBannedInChannelError):
-            logger.info(f"Forbidden in {identifier}")
-            await disable_group(user_id, identifier, "write_forbidden")
+            logger.info(f"Forbidden in {identifier} -> Auto-Cleaning")
+            await delete_group(user_id, identifier)
             await increment_failed(user_id)
-            await log_message_sent(user_id, identifier, phone_masked, False, "Forbidden")
-            failed += 1
+            await log_message_sent(user_id, identifier, phone_masked, False, "Forbidden (Auto-Cleaned)")
+            await update_account_health(user_id, phone_masked, -5)
+            failed += len(ads)
         except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
-            logger.info(f"Invalid/private {identifier}")
-            await disable_group(user_id, identifier, "invalid_or_private")
+            logger.info(f"Invalid/private {identifier} -> Auto-Cleaning")
+            await delete_group(user_id, identifier)
             await increment_failed(user_id)
-            await log_message_sent(user_id, identifier, phone_masked, False, "Invalid/Private")
-            failed += 1
+            await log_message_sent(user_id, identifier, phone_masked, False, "Invalid/Private (Auto-Cleaned)")
+            failed += len(ads)
         except Exception as e:
             logger.error(f"Error sending to {identifier}: {e}")
             await update_group_failed(user_id, identifier)
             await increment_failed(user_id)
             await log_message_sent(user_id, identifier, phone_masked, False, str(e))
-            failed += 1
+            failed += len(ads)
 
     return sent, failed
 
