@@ -111,11 +111,11 @@ async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         uid = u.get("telegram_user_id", "?")
         uname = u.get("username", "—")
         status = u.get("ads_status", "paused")
-        dot = "●" if status == "running" else "○"
-        lines.append(f"   {dot}  {i}. <code>{uid}</code>  @{uname}")
+        status_text = "Running" if status == "running" else "Idle"
+        lines.append(f"   {i}. <code>{uid}</code> @{uname} → {status_text}")
 
     text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.admin_back_keyboard())
+    await _send_menu(update, context, text, keyboards.back_keyboard("admin"))
 
 
 async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -128,35 +128,21 @@ async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TY
     accounts = await db.accounts.find({}).sort("health", 1).to_list(100)
 
     lines = [
-        f"        ─── 🏥 ───",
-        f"    <b>Account Health</b>",
-        f"        ─── 🏥 ───",
-        f"",
-        f"  Score  |  Status  |  Account",
-        f"  ───────┼──────────┼─────────",
+        f"<b>Account Health Manifest</b>",
+        f"━━━━━━━━━━━━━━━━━━━━━\n",
     ]
     for acc in accounts:
         phone = acc.get("phone_masked", "???")
         health = acc.get("health", 100)
         status = acc.get("status", "active")
         
-        icon = "🟢" if health > 70 else "🟡" if health > 30 else "🔴"
-        dot = "●" if status == "active" else "✕" if status == "error" else "○"
-        
-        lines.append(f"  {icon} {health}%  |  {dot} {status.upper():<7} |  {phone}")
+        lines.append(f"▸ <code>{phone}</code> → {health}% ({status.upper()})")
 
     if not accounts:
-        lines.append("   <i>No accounts linked yet.</i>")
+        lines.append("↳ <i>No accounts linked yet.</i>")
 
     text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.admin_back_keyboard())
-
-    total = len(accounts)
-    if total > 30:
-        lines.append(f"\n   <i>+ {total - 30} more</i>")
-
-    text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.admin_back_keyboard())
+    await _send_menu(update, context, text, keyboards.back_keyboard("admin"))
 
 
 async def admin_broadcast_stats_callback(
@@ -172,10 +158,8 @@ async def admin_broadcast_stats_callback(
     stats = await cursor.to_list(20)
 
     lines = [
-        f"        ─── 📊 ───",
-        f"    <b>Top Broadcasters</b>",
-        f"        ─── 📊 ───",
-        f"",
+        f"<b>Broadcaster Performance</b>",
+        f"━━━━━━━━━━━━━━━━━━━━━\n",
     ]
 
     for i, s in enumerate(stats, 1):
@@ -185,12 +169,13 @@ async def admin_broadcast_stats_callback(
         last = s.get("last_broadcast_at")
         last_str = last.strftime("%m/%d %H:%M") if last else "Never"
         lines.append(
-            f"   {i}. <code>{uid}</code>  "
-            f"sent:{sent}  fail:{failed}  {last_str}"
+            f" {i}. <code>{uid}</code>\n"
+            f" ┃ Sent → {sent} | Fail → {failed}\n"
+            f" ↳ Last → {last_str}"
         )
 
     text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.admin_back_keyboard())
+    await _send_menu(update, context, text, keyboards.back_keyboard("admin"))
 
 
 def _success_rate(sent: int, failed: int) -> str:

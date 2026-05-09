@@ -245,7 +245,7 @@ def build_set_ad_conversation() -> ConversationHandler:
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^dashboard$"),
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^manage_ads$"),
         ],
-        per_user=True, per_chat=True, per_message=False,
+        per_user=True, per_chat=True, per_message=True,
     )
 
 
@@ -302,7 +302,7 @@ def build_set_interval_conversation() -> ConversationHandler:
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"),
             CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^dashboard$"),
         ],
-        per_user=True, per_chat=True, per_message=False,
+        per_user=True, per_chat=True, per_message=True,
     )
 
 

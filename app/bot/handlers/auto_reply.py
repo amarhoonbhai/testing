@@ -105,5 +105,5 @@ def build_auto_reply_conversation() -> ConversationHandler:
                 lambda u, c: ConversationHandler.END, pattern="^auto_reply$"
             ),
         ],
-        per_user=True, per_chat=True, per_message=False,
+        per_user=True, per_chat=True, per_message=True,
     )
