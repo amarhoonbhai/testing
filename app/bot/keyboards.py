@@ -45,10 +45,6 @@ def dashboard_keyboard(is_owner: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton("📊  Rᴇᴘᴏʀᴛ", callback_data="analytics"),
         ],
         [
-            InlineKeyboardButton("▶  Gᴏ Lɪᴠᴇ", callback_data="start_ads"),
-            InlineKeyboardButton("⏸  Hᴀʟᴛ", callback_data="stop_ads"),
-        ],
-        [
             InlineKeyboardButton("💬  Rᴇsᴘᴏɴᴅᴇʀ", callback_data="auto_reply"),
             InlineKeyboardButton("🗑  Pᴜʀɢᴇ Aᴄᴄs", callback_data="delete_accounts"),
         ],

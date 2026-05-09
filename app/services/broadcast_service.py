@@ -68,37 +68,49 @@ def is_broadcasting(user_id: int) -> bool:
     return task is not None and not task.done()
 
 
+# ── ORCHESTRATOR ──
+
+async def start_orchestrator():
+    """Background task to auto-start/stop broadcasts based on user settings."""
+    logger.info("System Orchestrator: ACTIVATED")
+    while True:
+        try:
+            from app.database.mongo import get_db
+            db = get_db()
+            async for user_doc in db.users.find({}):
+                user_id = user_doc["user_id"]
+                
+                # Check criteria for auto-start
+                accounts = await get_user_accounts(user_id)
+                active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
+                groups_count = await get_group_count(user_id)
+                ads = user_doc.get("ads", [])
+                
+                should_run = len(active_accounts) > 0 and groups_count > 0 and len(ads) > 0
+                
+                if should_run and not is_broadcasting(user_id):
+                    await start_broadcast(user_id)
+                elif not should_run and is_broadcasting(user_id):
+                    await stop_broadcast(user_id)
+                    
+        except Exception as e:
+            logger.error(f"Orchestrator error: {e}")
+            
+        await asyncio.sleep(60) # Scan every minute
+
+
 async def start_broadcast(user_id: int) -> dict:
     """Start the parallel broadcast loop for a user."""
     user = await get_user(user_id)
-    if not user:
-        return {"success": False, "error": "User not found."}
-
-    if not user.get("ads"):
-        return {"success": False, "error": "No ads configured. Add at least one ad."}
-
-    accounts = await get_user_accounts(user_id)
-    active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
-    if not active_accounts:
-        return {"success": False, "error": "No active accounts. Check account health."}
-
-    group_count = await get_group_count(user_id)
-    if group_count == 0:
-        return {"success": False, "error": "Target pool is empty. Add groups first."}
-
+    if not user: return {"success": False}
+    
     interval = max(user.get("interval_seconds", MIN_INTERVAL), MIN_INTERVAL)
-
-    # Stop existing task if any
     await stop_broadcast(user_id)
 
-    # Create and start new task
     task = asyncio.create_task(_broadcast_loop(user_id, interval))
     _active_tasks[user_id] = task
-
     await update_user(user_id, ads_status="running")
-    logger.info(f"Parallel broadcast started for {user_id} (interval={interval}s)")
-
-    return {"success": True, "error": None}
+    return {"success": True}
 
 
 async def stop_broadcast(user_id: int) -> dict:
@@ -106,13 +118,9 @@ async def stop_broadcast(user_id: int) -> dict:
     task = _active_tasks.pop(user_id, None)
     if task and not task.done():
         task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
+        try: await task
+        except asyncio.CancelledError: pass
     await update_user(user_id, ads_status="paused")
-    logger.info(f"Broadcast terminated for {user_id}")
     return {"success": True}
 
 
@@ -251,7 +259,12 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
                     await increment_failed(user_id)
                     await update_account_health(user_id, phone, -2)
                     
-                    # Stop account if too many errors occur in this cycle
+                    if "FloodWait" in (error_msg or ""):
+                        # Adaptive Backoff: If account is flooding, take a longer pause
+                        wait_time = int(error_msg.split("(")[1].split("s")[0]) if "(" in (error_msg or "") else 60
+                        logger.warning(f"Adaptive Backoff for {phone}: Sleeping {wait_time}s")
+                        await asyncio.sleep(min(wait_time + 10, 300)) # Max 5 min pause for account task
+                    
                     if "Unauthorized" in (error_msg or "") or "Deactivated" in (error_msg or ""):
                         await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, error_msg)
                         return sent, failed
@@ -277,28 +290,44 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
     ads = user.get("ads", [])
     if not ads: return False, "No ads"
     
-    # In sharded mode, we only send ONE ad per group per cycle to avoid spam
-    ad = random.choice(ads) 
-    
-    try:
-        entity = await _resolve_entity_with_retry(client, group)
-        if not entity:
-            await log_message_sent(user_id, identifier, phone, False, "Resolution Failed")
-            return False, "Resolution Failed"
+    # Handle multiple messages with gaps
+    results = []
+    for i, ad in enumerate(ads):
+        try:
+            # If multiple ads, add a gap between them for the same group
+            if i > 0:
+                inner_gap = random.uniform(30, 60) # 30-60s gap between multiple messages
+                await asyncio.sleep(inner_gap)
+            
+            entity = await _resolve_entity_with_retry(client, group)
+            if not entity:
+                results.append(False)
+                continue
 
-        # Core Sending
-        ad_mode = ad.get("ad_mode", "direct")
-        if ad_mode == "forward" and ad.get("ad_forward_mid"):
-            from app.config import BOT_USERNAME
-            await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME)
-        elif ad.get("ad_media_type") in ("photo", "video") and ad.get("ad_media_file_id"):
-            await client.send_file(entity, ad.get("ad_media_file_id"), caption=ad.get("ad_message") or "")
-        else:
-            await client.send_message(entity, ad.get("ad_message") or "Kurup Ads")
+            # Core Sending
+            ad_mode = ad.get("ad_mode", "direct")
+            if ad_mode == "forward" and ad.get("ad_forward_mid"):
+                from app.config import BOT_USERNAME
+                await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME)
+            elif ad.get("ad_media_type") in ("photo", "video") and ad.get("ad_media_file_id"):
+                await client.send_file(entity, ad.get("ad_media_file_id"), caption=ad.get("ad_message") or "")
+            else:
+                await client.send_message(entity, ad.get("ad_message") or "Kurup Ads")
 
-        await update_group_sent(user_id, identifier)
-        await log_message_sent(user_id, identifier, phone, True)
-        return True, None
+            results.append(True)
+            await update_group_sent(user_id, identifier)
+            await log_message_sent(user_id, identifier, phone, True)
+
+        except FloodWaitError as e:
+            logger.warning(f"FloodWait on {phone} during multi-ad: {e.seconds}s")
+            await update_account_status(user_id, phone, ACCOUNT_HEALTH_LIMITED, f"FloodWait {e.seconds}s")
+            return False, f"FloodWait ({e.seconds}s)"
+        except Exception as e:
+            logger.error(f"Error sending ad {i} to {identifier}: {e}")
+            results.append(False)
+
+    success = any(results)
+    return success, None if success else "All ads failed"
 
     except FloodWaitError as e:
         logger.warning(f"FloodWait on {phone}: {e.seconds}s")

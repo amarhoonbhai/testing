@@ -73,9 +73,11 @@ def dashboard_text(
         f"{_stat_line('Creatives', 'Ready' if ad_set else 'Missing', '🎨')}"
         f"{_stat_line('Cycle', f'{interval // 60}m', '⏱')}"
         f"\n"
-        f"<b>LIVE STATUS</b>\n"
         f"┊ Status    {status_icon} <b>{status_text}</b>\n"
-        f"┊ Progress  <code>{active_in_cycle} active tasks</code>"
+        f"┊ Progress  <code>{active_in_cycle} active tasks</code>\n"
+        f"\n"
+        f"<i>Engine auto-activates when Assets,\n"
+        f"Targets, and Creatives are ready.</i>"
         f"{_footer()}"
     )
 

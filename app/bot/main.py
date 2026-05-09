@@ -133,6 +133,10 @@ async def main():
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
 
+    # Initialize sharding orchestrator
+    from app.services.broadcast_service import start_orchestrator
+    asyncio.create_task(start_orchestrator())
+
     logger.info("Bot is running! Press Ctrl+C to stop.")
 
     # Keep running until interrupted
