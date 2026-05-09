@@ -4,7 +4,7 @@ Database models — CRUD operations for users, accounts, analytics, and groups.
 All functions operate on the shared Motor database instance.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import re
 
@@ -179,10 +179,6 @@ async def lock_account(phone_masked: str, worker_id: str) -> bool:
     """Try to lock an account for a worker."""
     db = get_db()
     now = datetime.utcnow()
-    # Lock expires in 10 minutes if not released (safety)
-    expiry = now + timedelta(minutes=10)
-    
-    from datetime import timedelta
     expiry = now + timedelta(minutes=10)
 
     result = await db.accounts.update_one(
@@ -577,9 +573,6 @@ async def claim_job(worker_id: str, lease_seconds: int) -> Optional[dict]:
     """
     db = get_db()
     now = datetime.utcnow()
-    locked_until = now + timedelta(seconds=lease_seconds) if 'timedelta' in globals() else now # Wait, need timedelta
-    
-    from datetime import timedelta
     locked_until = now + timedelta(seconds=lease_seconds)
 
     # Find job that is:

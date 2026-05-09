@@ -113,13 +113,28 @@ async def process_job(job: dict):
 
 async def _resolve_entity(client, group):
     """Try to resolve group entity using cached numeric ID or link."""
+    # Try multiple ways to resolve, as Telethon might need a join or link resolution first
+    identifier = group.get("identifier")
+    numeric_id = group.get("numeric_id")
+    link = group.get("link")
+
     try:
-        if group.get("numeric_id"):
-            return await client.get_entity(group["numeric_id"])
-        return await client.get_entity(group["identifier"])
+        if numeric_id:
+            # Note: numeric_id might fail if the account hasn't "seen" the group
+            return await client.get_entity(numeric_id)
     except Exception:
-        try: return await client.get_entity(group["link"])
-        except: return None
+        pass
+
+    try:
+        # Resolve by username or link
+        return await client.get_entity(identifier or link)
+    except Exception:
+        try:
+            # Final attempt with the full link
+            return await client.get_entity(link)
+        except Exception as e:
+            logger.error(f"Resolution failed for {identifier}: {e}")
+            return None
 
 
 async def _safe_send_ad(client, user_id, group, ad, entity, phone):

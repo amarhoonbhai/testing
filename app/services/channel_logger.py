@@ -62,7 +62,7 @@ async def log_user_start(user_id: int, username: str, first_name: str):
 
 async def log_account_added(user_id: int, phone: str):
     await log_to_channel(
-        f"<b>SYSTEM ‣ ASSET LINKED</b>\n"
+        f"<b>SYSTEM ‣ ACCOUNT LINKED</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
         f"┊ Account   <code>{phone}</code>\n"
@@ -74,7 +74,7 @@ async def log_account_added(user_id: int, phone: str):
 
 async def log_account_deleted(user_id: int, phone: str):
     await log_to_channel(
-        f"<b>SYSTEM ‣ ASSET REMOVED</b>\n"
+        f"<b>SYSTEM ‣ ACCOUNT REMOVED</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
         f"┊ Account   <code>{phone}</code>\n"
@@ -86,11 +86,11 @@ async def log_account_deleted(user_id: int, phone: str):
 
 async def log_ads_started(user_id: int, accounts: int, groups: int, interval: int):
     await log_to_channel(
-        f"<b>ENGINE ‣ BROADCAST INITIATED</b>\n"
+        f"<b>CAMPAIGN ‣ BROADCAST INITIATED</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
-        f"┊ Assets    {accounts} active\n"
-        f"┊ Targets   {groups} groups\n"
+        f"┊ Accounts  {accounts} active\n"
+        f"┊ Groups    {groups} groups\n"
         f"┊ Interval  {interval // 60} min\n"
         f"┊ Time      {_now_str()}\n"
         f"{_divider()}",
@@ -100,7 +100,7 @@ async def log_ads_started(user_id: int, accounts: int, groups: int, interval: in
 
 async def log_ads_stopped(user_id: int):
     await log_to_channel(
-        f"<b>ENGINE ‣ BROADCAST HALTED</b>\n"
+        f"<b>CAMPAIGN ‣ BROADCAST HALTED</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
         f"┊ Status    <b>PAUSED</b>\n"
@@ -113,7 +113,7 @@ async def log_ads_stopped(user_id: int):
 async def log_broadcast_cycle(user_id: int, sent: int, failed: int):
     status = "SUCCESS" if failed == 0 else "PARTIAL" if sent > 0 else "CRITICAL"
     await log_to_channel(
-        f"<b>ENGINE ‣ CYCLE COMPLETE [{status}]</b>\n"
+        f"<b>CAMPAIGN ‣ CYCLE COMPLETE [{status}]</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
         f"┊ Delivered <b>{sent}</b>\n"
@@ -128,11 +128,11 @@ async def log_message_sent(user_id: int, group: str, account: str, success: bool
     if success: return 
     
     await log_to_channel(
-        f"<b>ENGINE ‣ DELIVERY EXCEPTION</b>\n"
+        f"<b>CAMPAIGN ‣ DELIVERY EXCEPTION</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
         f"┊ Account   <code>{account}</code>\n"
-        f"┊ Target    <code>{group}</code>\n"
+        f"┊ Group     <code>{group}</code>\n"
         f"┊ Reason    <i>{error or 'Unknown'}</i>\n"
         f"┊ Time      {_now_str()}\n"
         f"{_divider()}"
@@ -154,7 +154,7 @@ async def log_error(user_id: int, error_type: str, details: str = ""):
 
 async def log_groups_added(user_id: int, added: int, failed: int):
     await log_to_channel(
-        f"<b>SYSTEM ‣ TARGETS IMPORTED</b>\n"
+        f"<b>SYSTEM ‣ GROUPS IMPORTED</b>\n"
         f"{_divider()}\n"
         f"┊ Operator  <code>{user_id}</code>\n"
         f"┊ Added     <b>{added}</b>\n"
