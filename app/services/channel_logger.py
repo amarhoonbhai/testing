@@ -72,6 +72,18 @@ async def log_account_added(user_id: int, phone: str):
     )
 
 
+async def log_account_deleted(user_id: int, phone: str):
+    await log_to_channel(
+        f"<b>SYSTEM ‣ ASSET REMOVED</b>\n"
+        f"{_divider()}\n"
+        f"┊ Operator  <code>{user_id}</code>\n"
+        f"┊ Account   <code>{phone}</code>\n"
+        f"┊ Status    <b>DELETED</b>\n"
+        f"┊ Time      {_now_str()}\n"
+        f"{_divider()}"
+    )
+
+
 async def log_ads_started(user_id: int, accounts: int, groups: int, interval: int):
     await log_to_channel(
         f"<b>ENGINE ‣ BROADCAST INITIATED</b>\n"
@@ -80,6 +92,18 @@ async def log_ads_started(user_id: int, accounts: int, groups: int, interval: in
         f"┊ Assets    {accounts} active\n"
         f"┊ Targets   {groups} groups\n"
         f"┊ Interval  {interval // 60} min\n"
+        f"┊ Time      {_now_str()}\n"
+        f"{_divider()}",
+        silent=False
+    )
+
+
+async def log_ads_stopped(user_id: int):
+    await log_to_channel(
+        f"<b>ENGINE ‣ BROADCAST HALTED</b>\n"
+        f"{_divider()}\n"
+        f"┊ Operator  <code>{user_id}</code>\n"
+        f"┊ Status    <b>PAUSED</b>\n"
         f"┊ Time      {_now_str()}\n"
         f"{_divider()}",
         silent=False
@@ -125,4 +149,28 @@ async def log_error(user_id: int, error_type: str, details: str = ""):
         f"┊ Time      {_now_str()}\n"
         f"{_divider()}",
         silent=False
+    )
+
+
+async def log_groups_added(user_id: int, added: int, failed: int):
+    await log_to_channel(
+        f"<b>SYSTEM ‣ TARGETS IMPORTED</b>\n"
+        f"{_divider()}\n"
+        f"┊ Operator  <code>{user_id}</code>\n"
+        f"┊ Added     <b>{added}</b>\n"
+        f"┊ Failed    <b>{failed}</b>\n"
+        f"┊ Time      {_now_str()}\n"
+        f"{_divider()}"
+    )
+
+
+async def log_night_mode(user_id: int, action: str):
+    status = "ENGAGED" if action == "start" else "DISENGAGED"
+    await log_to_channel(
+        f"<b>SYSTEM ‣ NIGHT GUARD {status}</b>\n"
+        f"{_divider()}\n"
+        f"┊ Operator  <code>{user_id}</code>\n"
+        f"┊ Status    <b>{status}</b>\n"
+        f"┊ Time      {_now_str()}\n"
+        f"{_divider()}"
     )
