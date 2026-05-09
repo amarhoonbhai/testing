@@ -208,24 +208,41 @@ def parse_telegram_link(link: str) -> dict | None:
     Parse a Telegram link and extract entity info.
     Supports:
       - https://t.me/username
+      - https://t.me/username/123 (Forum Topic)
+      - https://t.me/c/12345/678 (Private Forum Topic)
+      - https://t.me/c/12345 (Private Channel)
       - https://t.me/+inviteHash
       - https://t.me/joinchat/inviteHash
-      - https://t.me/addlist/folderSlug  (folder links)
+      - https://t.me/addlist/folderSlug
       - @username
-    Returns dict with type and identifier, or None if invalid.
     """
-    link = link.strip()
+    link = link.strip().rstrip("/")
 
     # @username format
     if link.startswith("@"):
         return {"type": "username", "identifier": link[1:], "raw": link}
 
-    # Folder link: t.me/addlist/xxx
+    # Forum Topic: t.me/username/123
+    m = re.match(r"https?://t\.me/([a-zA-Z0-9_]+)/(\d+)$", link)
+    if m:
+        return {"type": "topic", "identifier": m.group(1), "topic_id": int(m.group(2)), "raw": link}
+
+    # Private Topic: t.me/c/(\d+)/(\d+)
+    m = re.match(r"https?://t\.me/c/(\d+)/(\d+)$", link)
+    if m:
+        return {"type": "private_topic", "identifier": int(m.group(1)), "topic_id": int(m.group(2)), "raw": link}
+
+    # Private Channel: t.me/c/(\d+)$
+    m = re.match(r"https?://t\.me/c/(\d+)$", link)
+    if m:
+        return {"type": "private_chat", "identifier": int(m.group(1)), "raw": link}
+
+    # Folder link
     m = re.match(r"https?://t\.me/addlist/(.+)", link)
     if m:
         return {"type": "folder", "identifier": m.group(1), "raw": link}
 
-    # Invite link: t.me/+xxx or t.me/joinchat/xxx
+    # Invite link
     m = re.match(r"https?://t\.me/\+(.+)", link)
     if m:
         return {"type": "invite", "identifier": m.group(1), "raw": link}
@@ -233,7 +250,7 @@ def parse_telegram_link(link: str) -> dict | None:
     if m:
         return {"type": "invite", "identifier": m.group(1), "raw": link}
 
-    # Public username: t.me/username
+    # Public username
     m = re.match(r"https?://t\.me/([a-zA-Z0-9_]+)$", link)
     if m:
         return {"type": "username", "identifier": m.group(1), "raw": link}
@@ -258,6 +275,7 @@ async def add_group(user_id: int, link: str) -> dict | None:
         "link": parsed["raw"],
         "link_type": parsed["type"],
         "identifier": parsed["identifier"],
+        "topic_id": parsed.get("topic_id"),
         "status": "active",
         "last_sent_at": None,
         "send_count": 0,
@@ -266,7 +284,7 @@ async def add_group(user_id: int, link: str) -> dict | None:
     }
 
     await db.groups.update_one(
-        {"user_id": user_id, "identifier": parsed["identifier"]},
+        {"user_id": user_id, "identifier": parsed["identifier"], "topic_id": parsed.get("topic_id")},
         {"$set": doc},
         upsert=True,
     )

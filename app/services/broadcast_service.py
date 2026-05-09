@@ -311,13 +311,19 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
 
             # Core Sending
             ad_mode = ad.get("ad_mode", "direct")
+            topic_id = group.get("topic_id")
+            
+            send_kwargs = {}
+            if topic_id:
+                send_kwargs["reply_to"] = topic_id
+
             if ad_mode == "forward" and ad.get("ad_forward_mid"):
                 from app.config import BOT_USERNAME
-                await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME)
+                await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME, **send_kwargs)
             elif ad.get("ad_media_type") in ("photo", "video") and ad.get("ad_media_file_id"):
-                await client.send_file(entity, ad.get("ad_media_file_id"), caption=ad.get("ad_message") or "")
+                await client.send_file(entity, ad.get("ad_media_file_id"), caption=ad.get("ad_message") or "", **send_kwargs)
             else:
-                await client.send_message(entity, ad.get("ad_message") or "Kurup Ads")
+                await client.send_message(entity, ad.get("ad_message") or "Kurup Ads", **send_kwargs)
 
             results.append(True)
             await update_group_sent(user_id, identifier)
@@ -327,6 +333,12 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
             logger.warning(f"FloodWait on {phone}: {e.seconds}s")
             await update_account_status(user_id, phone, ACCOUNT_HEALTH_LIMITED, f"FloodWait {e.seconds}s")
             return False, f"FloodWait ({e.seconds}s)"
+
+        except SlowModeWaitError as e:
+            logger.warning(f"SlowMode on {identifier}: {e.seconds}s")
+            await asyncio.sleep(e.seconds)
+            # Retry immediately for this specific ad
+            return await _send_to_target(client, user_id, group, user, phone)
 
         except (ChatWriteForbiddenError, UserBannedInChannelError):
             try:
@@ -361,6 +373,13 @@ async def _resolve_entity_with_retry(client, group: dict, retry: bool = True):
         # Try direct resolution
         if link_type == "username":
             return await client.get_entity(f"@{identifier}")
+        if link_type in ("private_chat", "private_topic"):
+            # Try to resolve numeric ID (must be int)
+            try:
+                # Private IDs often need -100 prefix for get_entity
+                return await client.get_entity(int(f"-100{identifier}"))
+            except Exception:
+                return await client.get_entity(int(identifier))
         return await client.get_entity(link)
     except Exception:
         if not retry: return None
@@ -374,7 +393,7 @@ async def _resolve_entity_with_retry(client, group: dict, retry: bool = True):
                 hash_val = identifier.split("+")[-1] if "+" in identifier else identifier
                 if "joinchat/" in hash_val: hash_val = hash_val.split("/")[-1]
                 await client(ImportChatInviteRequest(hash_val))
-            else:
+            elif link_type != "folder": # Don't try to "join" a folder link directly
                 await client(JoinChannelRequest(link))
             
             # Recursive call with retry=False to avoid infinite loops
