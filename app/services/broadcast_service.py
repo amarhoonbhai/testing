@@ -81,7 +81,7 @@ async def start_orchestrator():
             from app.database.mongo import get_db
             db = get_db()
             async for user_doc in db.users.find({}):
-                user_id = user_doc["user_id"]
+                user_id = user_doc["telegram_user_id"]
                 
                 # Check criteria for auto-start
                 accounts = await get_user_accounts(user_id)
@@ -337,7 +337,7 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
     return sent, failed
 
 
-async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: str) -> tuple[bool, Optional[str]]:
+async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: str, is_retry: bool = False) -> tuple[bool, Optional[str]]:
     """Handles sending to a specific target with retry/recovery logic."""
     identifier = group.get("identifier", "")
     numeric_id = group.get("numeric_id")
@@ -396,14 +396,20 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
             logger.warning(f"SlowMode on {identifier}: {e.seconds}s")
             await asyncio.sleep(e.seconds)
             # Retry immediately for this specific ad
-            return await _send_to_target(client, user_id, group, user, phone)
+            return await _send_to_target(client, user_id, group, user, phone, is_retry=True)
 
         except (ChatWriteForbiddenError, UserBannedInChannelError):
+            if is_retry:
+                # Already tried joining/retrying, still forbidden
+                await disable_group(user_id, identifier, "Forbidden (Permanently)", numeric_id=numeric_id)
+                await log_message_sent(user_id, identifier, phone, False, "Forbidden")
+                return False, "Forbidden"
+                
             try:
                 from telethon.tl.functions.channels import JoinChannelRequest
                 await client(JoinChannelRequest(identifier))
-                # Skip the inner gap for retry
-                return await _send_to_target(client, user_id, group, user, phone)
+                # Retry once after joining
+                return await _send_to_target(client, user_id, group, user, phone, is_retry=True)
             except Exception:
                 await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)", numeric_id=numeric_id)
                 await log_message_sent(user_id, identifier, phone, False, "Forbidden")
