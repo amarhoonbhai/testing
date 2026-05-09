@@ -94,19 +94,12 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
             session = decrypt_session(active_acc["encrypted_session"])
             async with await get_client_from_session(session) as client:
                 if parsed["type"] == "folder":
-                    # Expand folder
-                    folder_links = await expand_folder_link(client, parsed["identifier"])
-                    # For folder links, we resolve their IDs too
-                    for f_link in folder_links:
-                        try:
-                            entity = await client.get_entity(f_link)
-                            final_links.append({"link": f_link, "id": entity.id})
-                        except Exception:
-                            final_links.append(f_link)
+                    # Expand folder (now returns list of dicts with IDs)
+                    folder_data = await expand_folder_link(client, parsed["identifier"])
+                    final_links.extend(folder_data)
                 else:
                     # Resolve single link ID
                     try:
-                        # Use the most specific identifier for resolution
                         resolve_target = link
                         if parsed["type"] == "username":
                             resolve_target = f"@{parsed['identifier']}"
@@ -116,6 +109,7 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
                         entity = await client.get_entity(resolve_target)
                         final_links.append({"link": link, "id": entity.id})
                     except Exception:
+                        # Fallback: add without ID if resolution fails
                         final_links.append(link)
         except Exception as e:
             logger.error(f"Resolution failed for {link}: {e}")

@@ -249,15 +249,15 @@ async def get_account_dialogs(client: TelegramClient) -> list[dict]:
     return dialogs
 
 
-async def expand_folder_link(client: TelegramClient, slug: str) -> list[str]:
+async def expand_folder_link(client: TelegramClient, slug: str) -> list[dict]:
     """
-    Expand a Telegram folder link (t.me/addlist/slug) into a list of group links.
-    Returns list of t.me/username or t.me/c/id links.
+    Expand a Telegram folder link (t.me/addlist/slug) into a list of group data.
+    Returns list of {"link": str, "id": int}
     """
     from telethon.tl.functions.chatlists import GetChatlistInviteRequest
     from telethon.tl.types import Chat, Channel
     
-    links = []
+    results = []
     try:
         # Get the invite info
         invite = await client(GetChatlistInviteRequest(slug))
@@ -265,13 +265,15 @@ async def expand_folder_link(client: TelegramClient, slug: str) -> list[str]:
         # Peer entities are in invite.peers
         for peer in invite.peers:
             if isinstance(peer, (Chat, Channel)):
+                data = {"id": peer.id}
                 if getattr(peer, "username", None):
-                    links.append(f"https://t.me/{peer.username}")
+                    data["link"] = f"https://t.me/{peer.username}"
                 else:
                     # Private group: t.me/c/id
-                    links.append(f"https://t.me/c/{peer.id}")
+                    data["link"] = f"https://t.me/c/{peer.id}"
+                results.append(data)
                     
     except Exception as e:
         logger.error(f"Failed to expand folder {slug}: {e}")
         
-    return links
+    return results
