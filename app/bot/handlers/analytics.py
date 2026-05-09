@@ -36,10 +36,7 @@ async def analytics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = messages.analytics_text(
         total_sent=stats.get("total_sent", 0),
         failed_count=stats.get("failed_count", 0),
-        active_accounts=active_accounts,
-        last_broadcast=last_broadcast,
-        current_status=current_status,
-        group_count=group_count,
+        last_sent=last_broadcast,
     )
 
     await _send_menu(update, context, text, keyboards.analytics_keyboard())

@@ -14,7 +14,7 @@ from telegram.ext import ContextTypes
 
 from app.config import OWNER_ID, TIMEZONE, BOT_USERNAME
 from app.database.mongo import get_db
-from app.bot import keyboards
+from app.bot import keyboards, messages
 from app.bot.handlers.start import _send_menu
 from app.services.broadcast_service import get_active_broadcast_count
 
@@ -76,38 +76,18 @@ async def _show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Active broadcasts
     active_broadcasts = get_active_broadcast_count()
 
-    now = datetime.now(_tz).strftime("%Y-%m-%d %H:%M:%S IST")
+    stats = {
+        "total_users": total_users,
+        "running_users": running_users,
+        "total_accounts": total_accounts,
+        "active_accounts": active_accounts,
+        "error_accounts": error_accounts,
+        "total_groups": total_groups,
+        "global_sent": global_sent,
+        "success_rate": _success_rate(global_sent, global_failed),
+    }
 
-    text = (
-        f"<b>K U R U P  A D S</b>\n"
-        f"────────────────────────\n"
-        f"<b>ADMIN CONSOLE</b>\n"
-        f"@{BOT_USERNAME}\n"
-        f"\n"
-        f"<b>USERS</b>\n"
-        f"  Total: {total_users}\n"
-        f"  Active: {running_users}\n"
-        f"  Paused: {paused_users}\n"
-        f"\n"
-        f"<b>ASSETS</b>\n"
-        f"  Total: {total_accounts}\n"
-        f"  Active: {active_accounts} ✅\n"
-        f"  Errors: {error_accounts} ❌\n"
-        f"\n"
-        f"<b>TARGETS</b>\n"
-        f"  Total: {total_groups}\n"
-        f"  Active: {active_groups}\n"
-        f"\n"
-        f"<b>PERFORMANCE</b>\n"
-        f"  Sent: {global_sent}\n"
-        f"  Fail: {global_failed}\n"
-        f"  Live: {active_broadcasts}\n"
-        f"  Rate: {_success_rate(global_sent, global_failed)}\n"
-        f"\n"
-        f"────────────────────────\n"
-        f"🕐 {now}"
-    )
-
+    text = messages.admin_panel_text(stats)
     await _send_menu(update, context, text, keyboards.admin_keyboard())
 
 

@@ -35,14 +35,26 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Check if user is the owner
     is_owner = (user_id == OWNER_ID)
 
+    # Fetch extended stats
+    groups = await get_user_groups(user_id)
+    active_groups = sum(1 for g in groups if g.get("status") == "active")
+    
+    accounts = await get_user_accounts(user_id)
+    healthy_accounts = sum(1 for a in accounts if a.get("status") == "active")
+
+    # Get active tasks count
+    from app.services.broadcast_service import get_active_broadcast_count
+    active_in_cycle = get_active_broadcast_count() if ads_status == "running" else 0
+
     text = messages.dashboard_text(
         account_count=account_count,
         max_accounts=max_accounts,
         ad_set=ad_set,
         interval=interval,
         ads_status=ads_status,
-        group_count=group_count,
+        group_count=len(groups),
         night_paused=night_paused,
+        active_in_cycle=active_in_cycle,
     )
 
     await _send_menu(

@@ -137,13 +137,9 @@ async def clear_groups_callback(update: Update, context: ContextTypes.DEFAULT_TY
     """Ask confirmation to clear all groups."""
     await _send_menu(
         update, context,
-        "<b>K U R U P  A D S</b>\n"
-        "────────────────────────\n"
-        "<b>CONFIRM PURGE</b>\n"
-        "\n"
-        "This will remove ALL your broadcast\n"
-        "target groups. Proceed?\n"
-        "────────────────────────",
+        messages._header("CONFIRM PURGE") + 
+        "This will remove ALL your broadcast\ntarget groups. Proceed?" + 
+        messages._footer(),
         keyboards.confirm_clear_groups_keyboard(),
     )
 
@@ -160,12 +156,9 @@ async def confirm_clear_groups_callback(
 
     await _send_menu(
         update, context,
-        "<b>K U R U P  A D S</b>\n"
-        "────────────────────────\n"
-        "<b>POOL CLEARED</b>\n"
-        "\n"
-        f"Successfully removed <b>{deleted}</b> targets.\n"
-        "────────────────────────",
+        messages._header("POOL CLEARED") + 
+        f"Successfully removed <b>{deleted}</b> targets." + 
+        messages._footer(),
         keyboards.back_keyboard("manage_groups"),
     )
 

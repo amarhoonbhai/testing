@@ -40,17 +40,7 @@ async def manage_ads_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = await get_user(user_id)
     ads = user.get("ads", [])
 
-    text = (
-        f"<b>K U R U P  A D S</b>\n"
-        f"────────────────────────\n"
-        f"<b>AD CONSOLE</b>\n"
-        f"\n"
-        f"  Total Ads: {len(ads)} / 3\n"
-        f"  Rotation: Sequential\n"
-        f"\n"
-        f"Manage your broadcast creatives below:\n"
-        f"────────────────────────"
-    )
+    text = messages.ads_console_text(len(ads))
     await _send_menu(update, context, text, keyboards.ads_list_keyboard(ads))
 
 
@@ -159,16 +149,7 @@ async def add_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await _send_menu(
         update, context,
-        "<b>K U R U P  A D S</b>\n"
-        "────────────────────────\n"
-        "<b>NEW CREATIVE</b>\n"
-        "\n"
-        "Send your ad content. Supports:\n"
-        "  ‣ Text\n"
-        "  ‣ Photo + Caption\n"
-        "  ‣ Video + Caption\n"
-        "  ‣ Forwarded Message\n"
-        "────────────────────────",
+        messages.ads_console_text(len(user.get("ads", []))) + "\n\n<i>Send your ad content (Text/Media/Forward)</i>",
         keyboards.cancel_keyboard()
     )
     return WAITING_AD
@@ -210,10 +191,7 @@ async def receive_ad_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     await add_user_ad(user_id, ad_data)
     await update.message.reply_text(
-        "<b>✅ CREATIVE SAVED</b>\n"
-        "────────────────────────\n"
-        "Your ad has been added to the console.\n"
-        "────────────────────────",
+        messages.success_text("CREATIVE SAVED\n\nYour ad has been added to the console."),
         parse_mode="HTML",
         reply_markup=keyboards.back_keyboard("manage_ads"),
     )

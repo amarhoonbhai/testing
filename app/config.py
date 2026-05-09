@@ -61,6 +61,14 @@ FLOOD_BACKOFF_BASE: int = _safe_int(os.getenv("FLOOD_BACKOFF_BASE"), 60)
 FLOOD_BACKOFF_MAX: int = _safe_int(os.getenv("FLOOD_BACKOFF_MAX"), 3600)  # Max 1 hour
 MAX_CONSECUTIVE_ERRORS: int = _safe_int(os.getenv("MAX_CONSECUTIVE_ERRORS"), 5)
 
+# ── Health & Sharding ──────────────────────────────────────────────────────
+ACCOUNT_HEALTH_ACTIVE = "active"
+ACCOUNT_HEALTH_LIMITED = "limited"   # FloodWait/Temporary restriction
+ACCOUNT_HEALTH_FAILED = "failed"     # Unauthorized/Banned
+ACCOUNT_HEALTH_FORBIDDEN = "forbidden" # Forbidden to post (ChatWriteForbidden)
+
+MAX_SHARD_SIZE: int = 50  # Max groups per account per cycle to avoid spam detection
+
 # ── Night Mode (IST) ────────────────────────────────────────────────────────
 NIGHT_MODE_ENABLED: bool = os.getenv("NIGHT_MODE_ENABLED", "true").lower() == "true"
 NIGHT_MODE_START_HOUR: int = _safe_int(os.getenv("NIGHT_MODE_START"), 0)   # 12:00 AM

@@ -1,25 +1,19 @@
 """
-Broadcast service — Production-grade ad broadcasting engine.
+Broadcast service — Production-grade parallel sharding engine.
 
 Features:
-- Night mode: Auto-pause 12:00 AM – 5:00 AM IST, auto-restart after
-- Group-based targeting: Sends only to user-configured groups
-- Smart delays: 300s gap between sends + random jitter (30-90s)
-- Anti-freeze: Exponential backoff on FloodWait, max consecutive error limit
-- Per-user asyncio tasks with clean lifecycle management
-
-SAFETY:
-- Min 1200s (20 min) between broadcast cycles
-- 300s + jitter between individual message sends
-- Auto-pause on excessive errors
-- Respects Telegram FloodWait headers
+- Group Sharding: Distributes groups across active accounts to avoid duplicates.
+- Parallel Execution: Runs all accounts simultaneously for maximum speed.
+- Auto-Join Recovery: Attempts to join groups on 'Forbidden' errors.
+- Account Health Tracking: Distinguishes between flood, auth, and permission errors.
+- Structured Reporting: Sends detailed cycle summaries to the logs channel.
 """
 
 import asyncio
 import logging
 import random
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Dict
 
 import pytz
 from telethon.errors import (
@@ -39,6 +33,8 @@ from app.config import (
     MIN_INTERVAL, FLOOD_BACKOFF_BASE, FLOOD_BACKOFF_MAX,
     MAX_CONSECUTIVE_ERRORS, NIGHT_MODE_ENABLED,
     NIGHT_MODE_START_HOUR, NIGHT_MODE_END_HOUR, TIMEZONE,
+    ACCOUNT_HEALTH_ACTIVE, ACCOUNT_HEALTH_LIMITED,
+    ACCOUNT_HEALTH_FAILED, ACCOUNT_HEALTH_FORBIDDEN,
 )
 from app.database.models import (
     get_user, get_user_accounts, get_active_groups,
@@ -73,25 +69,22 @@ def is_broadcasting(user_id: int) -> bool:
 
 
 async def start_broadcast(user_id: int) -> dict:
-    """Start the broadcast loop for a user. Returns success/error dict."""
+    """Start the parallel broadcast loop for a user."""
     user = await get_user(user_id)
     if not user:
         return {"success": False, "error": "User not found."}
 
-    if not user.get("ad_message") and not user.get("ad_media_file_id"):
-        return {"success": False, "error": "No ad message set. Set one first."}
+    if not user.get("ads"):
+        return {"success": False, "error": "No ads configured. Add at least one ad."}
 
     accounts = await get_user_accounts(user_id)
-    if not accounts:
-        return {"success": False, "error": "No hosted accounts. Add one first."}
-
-    active_accounts = [a for a in accounts if a.get("status") == "active"]
+    active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
     if not active_accounts:
-        return {"success": False, "error": "No active accounts available."}
+        return {"success": False, "error": "No active accounts. Check account health."}
 
     group_count = await get_group_count(user_id)
     if group_count == 0:
-        return {"success": False, "error": "No groups added. Add groups first."}
+        return {"success": False, "error": "Target pool is empty. Add groups first."}
 
     interval = max(user.get("interval_seconds", MIN_INTERVAL), MIN_INTERVAL)
 
@@ -103,7 +96,7 @@ async def start_broadcast(user_id: int) -> dict:
     _active_tasks[user_id] = task
 
     await update_user(user_id, ads_status="running")
-    logger.info(f"Broadcast started for user {user_id} (interval={interval}s)")
+    logger.info(f"Parallel broadcast started for {user_id} (interval={interval}s)")
 
     return {"success": True, "error": None}
 
@@ -119,7 +112,7 @@ async def stop_broadcast(user_id: int) -> dict:
             pass
 
     await update_user(user_id, ads_status="paused")
-    logger.info(f"Broadcast stopped for user {user_id}")
+    logger.info(f"Broadcast terminated for {user_id}")
     return {"success": True}
 
 
@@ -129,11 +122,10 @@ def get_active_broadcast_count() -> int:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  NIGHT MODE
+#  NIGHT MODE & UTILS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _is_night_time() -> bool:
-    """Check if current time is within night mode window (IST)."""
     if not NIGHT_MODE_ENABLED:
         return False
     now = datetime.now(_tz)
@@ -141,279 +133,231 @@ def _is_night_time() -> bool:
 
 
 def _seconds_until_night_ends() -> int:
-    """Calculate seconds until night mode ends."""
     now = datetime.now(_tz)
-    end_today = now.replace(
-        hour=NIGHT_MODE_END_HOUR, minute=0, second=0, microsecond=0
-    )
+    end_today = now.replace(hour=NIGHT_MODE_END_HOUR, minute=0, second=0, microsecond=0)
     if now < end_today:
         return int((end_today - now).total_seconds())
-    # Already past end hour today — night ends tomorrow
     from datetime import timedelta
     end_tomorrow = end_today + timedelta(days=1)
     return int((end_tomorrow - now).total_seconds())
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  SMART DELAY
-# ═══════════════════════════════════════════════════════════════════════════════
-
 def _get_send_delay() -> float:
-    """Get delay between individual sends: base gap + random jitter."""
     jitter = random.uniform(SEND_JITTER_MIN, SEND_JITTER_MAX)
     return SEND_GAP_SECONDS + jitter
 
 
-def _get_backoff_delay(consecutive_errors: int) -> float:
-    """Exponential backoff: base * 2^errors, capped at max."""
-    delay = FLOOD_BACKOFF_BASE * (2 ** min(consecutive_errors, 6))
-    return min(delay, FLOOD_BACKOFF_MAX)
+def _shard_groups(groups: List[Dict], n: int) -> List[List[Dict]]:
+    """Split a list of groups into N shards for parallel processing."""
+    if n <= 0: return []
+    random.shuffle(groups)
+    return [groups[i::n] for i in range(n)]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  MAIN BROADCAST LOOP
+#  CORE ENGINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def _broadcast_loop(user_id: int, interval: int):
-    """Main broadcast loop with night mode and safety controls."""
-    consecutive_errors = 0
-
+    """Orchestrator for parallel broadcast cycles."""
     try:
         while True:
-            try:
-                # ── Night Mode Check ─────────────────────────────
-                if _is_night_time():
-                    wait_secs = _seconds_until_night_ends()
-                    logger.info(
-                        f"Night mode active for user {user_id}, "
-                        f"sleeping {wait_secs}s until morning"
-                    )
-                    await update_user(user_id, night_mode_paused=True)
-                    await log_night_mode(user_id, "start")
-                    await asyncio.sleep(wait_secs + 60)
-                    await update_user(user_id, night_mode_paused=False)
-                    await log_night_mode(user_id, "end")
-                    logger.info(f"Night mode ended for user {user_id}, resuming")
-                    continue
+            # ── Night Mode check ──
+            if _is_night_time():
+                wait = _seconds_until_night_ends()
+                await update_user(user_id, night_mode_paused=True)
+                await log_night_mode(user_id, "start")
+                await asyncio.sleep(wait + 60)
+                await update_user(user_id, night_mode_paused=False)
+                await log_night_mode(user_id, "end")
+                continue
 
-                # ── Validate user state ──────────────────────────
-                user = await get_user(user_id)
-                if not user or user.get("ads_status") != "running":
-                    break
+            # ── State check ──
+            user = await get_user(user_id)
+            if not user or user.get("ads_status") != "running":
+                break
 
-                ad_message = user.get("ad_message")
-                ad_media_type = user.get("ad_media_type")
-                ad_media_file_id = user.get("ad_media_file_id")
+            accounts = await get_user_accounts(user_id)
+            active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
+            if not active_accounts:
+                logger.warning(f"Engine halt for {user_id}: No active accounts left")
+                await log_error(user_id, "Engine Halt", "No active accounts remaining.")
+                break
 
-                accounts = await get_user_accounts(user_id)
-                active_accounts = [a for a in accounts if a.get("status") == "active"]
-                if not active_accounts:
-                    logger.warning(f"No active accounts for user {user_id}")
-                    break
+            groups = await get_active_groups(user_id)
+            if not groups:
+                logger.warning(f"Engine halt for {user_id}: Target pool empty")
+                break
 
-                groups = await get_active_groups(user_id)
-                if not groups:
-                    logger.warning(f"No active groups for user {user_id}")
-                    break
+            # ── Sharding & Parallel Tasks ──
+            shards = _shard_groups(groups, len(active_accounts))
+            tasks = []
+            for i, account in enumerate(active_accounts):
+                if i < len(shards) and shards[i]:
+                    tasks.append(_run_account_task(user_id, account, shards[i], user))
 
-                # ── Send to groups using accounts ────────────────
-                cycle_sent = 0
-                cycle_failed = 0
+            logger.info(f"Cycle started: {len(tasks)} parallel tasks for {user_id}")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                for account in active_accounts:
-                    try:
-                        session_str = decrypt_session(account["encrypted_session"])
-                        client = await get_client_from_session(session_str)
+            # Aggregate results
+            cycle_sent = 0
+            cycle_failed = 0
+            for res in results:
+                if isinstance(res, tuple):
+                    s, f = res
+                    cycle_sent += s
+                    cycle_failed += f
+                elif isinstance(res, Exception):
+                    logger.error(f"Account task error: {res}")
 
-                        try:
-                            # Re-enforce branding each cycle
-                            await enforce_branding(client)
-
-                            sent, failed = await _send_to_groups(
-                                client, user_id, groups,
-                                user, # Pass full user for mode/forwarding fields
-                                account["phone_masked"]
-                            )
-                            cycle_sent += sent
-                            cycle_failed += failed
-                            consecutive_errors = 0
-                        finally:
-                            await client.disconnect()
-
-                    except (ConnectionError, UserDeactivatedBanError, AuthKeyUnregisteredError):
-                        logger.warning(f"Session dead for {account['phone_masked']}")
-                        await update_account_status(user_id, account["phone_masked"], "error")
-                        consecutive_errors += 1
-                    except Exception:
-                        logger.error(f"Account error: {account['phone_masked']}", exc_info=True)
-                        consecutive_errors += 1
-
-                # ── Safety: too many consecutive errors → pause ──
-                if consecutive_errors >= MAX_CONSECUTIVE_ERRORS:
-                    logger.warning(f"Too many errors ({consecutive_errors}), auto-pausing")
-                    await log_error(user_id, "Auto-Pause", f"Reached {consecutive_errors} consecutive account errors.")
-                    break
-
-                # Send cycle report to channel
-                await log_broadcast_cycle(user_id, cycle_sent, cycle_failed)
-
-                cycle_jitter = random.uniform(60, 180)
-                total_sleep = interval + cycle_jitter
-                logger.info(f"Cycle done: sent={cycle_sent} failed={cycle_failed} sleeping {total_sleep:.0f}s")
-                await asyncio.sleep(total_sleep)
-
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                consecutive_errors += 1
-                backoff = _get_backoff_delay(consecutive_errors)
-                logger.error(f"Loop error, backoff {backoff:.0f}s", exc_info=True)
-                await asyncio.sleep(backoff)
+            # Cycle complete report
+            await log_broadcast_cycle(user_id, cycle_sent, cycle_failed)
+            
+            total_sleep = interval + random.uniform(60, 180)
+            logger.info(f"Cycle complete for {user_id}: {cycle_sent} sent, {cycle_failed} failed. Next in {total_sleep:.0f}s")
+            await asyncio.sleep(total_sleep)
 
     except asyncio.CancelledError:
-        logger.info(f"Broadcast cancelled for user {user_id}")
+        logger.info(f"Broadcast loop cancelled for {user_id}")
+    except Exception as e:
+        logger.error(f"Critical loop error for {user_id}: {e}", exc_info=True)
     finally:
         _active_tasks.pop(user_id, None)
         await update_user(user_id, ads_status="paused", night_mode_paused=False)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  GROUP-BASED SENDING
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def _send_to_groups(
-    client,
-    user_id: int,
-    groups: list[dict],
-    user: dict,
-    phone_masked: str,
-) -> tuple[int, int]:
-    """Send all user ads to target groups with smart delays and live logging."""
-    sent = 0
-    failed = 0
-    ads = user.get("ads", [])
-    if not ads:
-        return 0, 0
-
-    for group in groups:
-        if _is_night_time():
-            logger.info("Night mode hit mid-cycle, stopping sends")
-            break
-
-        identifier = group.get("identifier", "")
+async def _run_account_task(user_id: int, account: dict, shard: List[dict], user: dict) -> tuple[int, int]:
+    """Manages a single account's work within a cycle."""
+    phone = account["phone_masked"]
+    sent, failed = 0, 0
+    
+    try:
+        session = decrypt_session(account["encrypted_session"])
+        client = await get_client_from_session(session)
         
         try:
-            entity = await _resolve_entity(client, group)
-            if entity is None:
-                failed += len(ads)
-                await update_group_failed(user_id, identifier)
-                await log_message_sent(user_id, identifier, phone_masked, False, "Entity Resolution Failed")
-                await update_account_health(user_id, phone_masked, -1)
-                continue
-
-            for ad in ads:
-                ad_mode = ad.get("ad_mode", "direct")
-                ad_message = ad.get("ad_message")
-                ad_media_type = ad.get("ad_media_type")
-                ad_media_file_id = ad.get("ad_media_file_id")
-                forward_mid = ad.get("ad_forward_mid")
-
-                if ad_mode == "forward" and forward_mid:
-                    from app.config import BOT_USERNAME
-                    await client.forward_messages(entity, forward_mid, BOT_USERNAME)
-                elif ad_media_type in ("photo", "video") and ad_media_file_id:
-                    await client.send_file(entity, ad_media_file_id, caption=ad_message or "")
-                elif ad_message:
-                    await client.send_message(entity, ad_message)
+            await enforce_branding(client)
+            
+            for group in shard:
+                if _is_night_time(): break
+                
+                success, error_msg = await _send_to_target(client, user_id, group, user, phone)
+                if success:
+                    sent += 1
+                    await increment_sent(user_id)
+                    await update_account_health(user_id, phone, 1)
                 else:
-                    continue
+                    failed += 1
+                    await increment_failed(user_id)
+                    await update_account_health(user_id, phone, -2)
+                    
+                    # Stop account if too many errors occur in this cycle
+                    if "Unauthorized" in (error_msg or "") or "Deactivated" in (error_msg or ""):
+                        await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, error_msg)
+                        return sent, failed
 
-                sent += 1
-                await increment_sent(user_id)
-                await update_group_sent(user_id, identifier)
-                await log_message_sent(user_id, identifier, phone_masked, True)
-                await update_account_health(user_id, phone_masked, 1)
-                logger.info(f"Sent ad to {identifier}")
-
-                # Gap between multiple ads in the same group
-                await asyncio.sleep(2) 
-
-            # Smart delay between groups
-            await asyncio.sleep(_get_send_delay())
-
-        except FloodWaitError as e:
-            wait = min(e.seconds + 30, FLOOD_BACKOFF_MAX)
-            logger.warning(f"FloodWait {e.seconds}s for {identifier}")
-            await log_message_sent(user_id, identifier, phone_masked, False, f"FloodWait ({e.seconds}s)")
-            await update_account_health(user_id, phone_masked, -10)
-            await asyncio.sleep(wait)
-            failed += len(ads)
-        except SlowModeWaitError as e:
-            logger.info(f"SlowMode {e.seconds}s in {identifier}")
-            await log_message_sent(user_id, identifier, phone_masked, False, f"SlowMode ({e.seconds}s)")
-            await asyncio.sleep(e.seconds + 10)
-            failed += len(ads)
-        except (ChatWriteForbiddenError, UserBannedInChannelError):
-            logger.info(f"Forbidden in {identifier} -> Auto-Cleaning")
-            await delete_group(user_id, identifier)
-            await increment_failed(user_id)
-            await log_message_sent(user_id, identifier, phone_masked, False, "Forbidden (Auto-Cleaned)")
-            await update_account_health(user_id, phone_masked, -5)
-            failed += len(ads)
-        except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
-            logger.info(f"Invalid/private {identifier} -> Auto-Cleaning")
-            await delete_group(user_id, identifier)
-            await increment_failed(user_id)
-            await log_message_sent(user_id, identifier, phone_masked, False, "Invalid/Private (Auto-Cleaned)")
-            failed += len(ads)
-        except Exception as e:
-            logger.error(f"Error sending to {identifier}: {e}")
-            await update_group_failed(user_id, identifier)
-            await increment_failed(user_id)
-            await log_message_sent(user_id, identifier, phone_masked, False, str(e))
-            failed += len(ads)
-
+                # Smart delay between targets
+                await asyncio.sleep(_get_send_delay())
+                
+        finally:
+            await client.disconnect()
+            
+    except (AuthKeyUnregisteredError, UserDeactivatedBanError, ConnectionError) as e:
+        logger.warning(f"Account {phone} failed: {type(e).__name__}")
+        await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, str(e))
+    except Exception as e:
+        logger.error(f"Unexpected task error for {phone}: {e}")
+        
     return sent, failed
 
 
-async def _resolve_entity(client, group: dict):
-    """Resolve a group dict to a Telethon entity, joining if needed."""
-    link_type = group.get("link_type", "")
+async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: str) -> tuple[bool, Optional[str]]:
+    """Handles sending to a specific target with retry/recovery logic."""
+    identifier = group.get("identifier", "")
+    ads = user.get("ads", [])
+    if not ads: return False, "No ads"
+    
+    # In sharded mode, we only send ONE ad per group per cycle to avoid spam
+    ad = random.choice(ads) 
+    
+    try:
+        entity = await _resolve_entity_with_retry(client, group)
+        if not entity:
+            await log_message_sent(user_id, identifier, phone, False, "Resolution Failed")
+            return False, "Resolution Failed"
+
+        # Core Sending
+        ad_mode = ad.get("ad_mode", "direct")
+        if ad_mode == "forward" and ad.get("ad_forward_mid"):
+            from app.config import BOT_USERNAME
+            await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME)
+        elif ad.get("ad_media_type") in ("photo", "video") and ad.get("ad_media_file_id"):
+            await client.send_file(entity, ad.get("ad_media_file_id"), caption=ad.get("ad_message") or "")
+        else:
+            await client.send_message(entity, ad.get("ad_message") or "Kurup Ads")
+
+        await update_group_sent(user_id, identifier)
+        await log_message_sent(user_id, identifier, phone, True)
+        return True, None
+
+    except FloodWaitError as e:
+        logger.warning(f"FloodWait on {phone}: {e.seconds}s")
+        if e.seconds > 600: # If > 10 min, mark as limited and move on
+            await update_account_status(user_id, phone, ACCOUNT_HEALTH_LIMITED, f"FloodWait {e.seconds}s")
+        await asyncio.sleep(min(e.seconds + 5, 60))
+        return False, f"FloodWait ({e.seconds}s)"
+
+    except (ChatWriteForbiddenError, UserBannedInChannelError):
+        # Attempt recovery: try joining
+        try:
+            logger.info(f"Attempting recovery join for {identifier} using {phone}")
+            from telethon.tl.functions.channels import JoinChannelRequest
+            await client(JoinChannelRequest(entity if entity else identifier))
+            # Retry once
+            return await _send_to_target(client, user_id, group, user, phone)
+        except Exception as join_err:
+            logger.warning(f"Recovery join failed for {identifier}: {join_err}")
+            await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)")
+            await log_message_sent(user_id, identifier, phone, False, "Forbidden")
+            return False, "Forbidden"
+
+    except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
+        await delete_group(user_id, identifier) # Irrecoverable
+        return False, "Invalid Peer"
+    
+    except Exception as e:
+        logger.error(f"Error sending to {identifier}: {e}")
+        await update_group_failed(user_id, identifier)
+        return False, str(e)
+
+
+async def _resolve_entity_with_retry(client, group: dict, retry: bool = True):
+    """Robust entity resolution with join-on-demand logic."""
     identifier = group.get("identifier", "")
     link = group.get("link", "")
-
+    link_type = group.get("link_type", "")
+    
     try:
+        # Try direct resolution
         if link_type == "username":
             return await client.get_entity(f"@{identifier}")
+        return await client.get_entity(link)
+    except Exception:
+        if not retry: return None
         
-        # For invite links, try joining if get_entity fails
+        # Try joining
         try:
-            return await client.get_entity(link)
-        except (ValueError, Exception):
             from telethon.tl.functions.messages import ImportChatInviteRequest
             from telethon.tl.functions.channels import JoinChannelRequest
             
             if link_type == "invite":
-                # Extract hash if it's a link
-                hash_val = identifier
-                if "+" in identifier:
-                    hash_val = identifier.split("+")[-1]
-                elif "joinchat/" in identifier:
-                    hash_val = identifier.split("joinchat/")[-1]
-                
-                try:
-                    await client(ImportChatInviteRequest(hash_val))
-                    return await client.get_entity(link)
-                except Exception:
-                    pass
-            
-            # Try joining directly if it's a public link/username
-            try:
+                hash_val = identifier.split("+")[-1] if "+" in identifier else identifier
+                if "joinchat/" in hash_val: hash_val = hash_val.split("/")[-1]
+                await client(ImportChatInviteRequest(hash_val))
+            else:
                 await client(JoinChannelRequest(link))
-                return await client.get_entity(link)
-            except Exception:
-                return None
-                
-    except Exception as e:
-        logger.warning(f"Cannot resolve {identifier}: {type(e).__name__}")
-        return None
+            
+            # Recursive call with retry=False to avoid infinite loops
+            return await _resolve_entity_with_retry(client, group, retry=False)
+        except Exception:
+            return None

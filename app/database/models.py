@@ -157,13 +157,17 @@ async def delete_account(user_id: int, phone_masked: str) -> bool:
 
 
 async def update_account_status(
-    user_id: int, phone_masked: str, status: str
+    user_id: int, phone_masked: str, status: str, reason: str = ""
 ) -> None:
-    """Update account status (active/paused/error)."""
+    """Update account status (active/limited/failed/forbidden/error)."""
     db = get_db()
     await db.accounts.update_one(
         {"user_id": user_id, "phone_masked": phone_masked},
-        {"$set": {"status": status, "updated_at": datetime.utcnow()}},
+        {"$set": {
+            "status": status, 
+            "status_reason": reason,
+            "updated_at": datetime.utcnow()
+        }},
     )
 
 
@@ -297,6 +301,8 @@ async def get_active_groups(user_id: int) -> list[dict]:
     """Get only active groups for broadcasting."""
     db = get_db()
     cursor = db.groups.find({"user_id": user_id, "status": "active"})
+    # Sort by last_sent_at to ensure rotation if sharding is interrupted
+    cursor = cursor.sort("last_sent_at", 1)
     return await cursor.to_list(length=10000)
 
 
