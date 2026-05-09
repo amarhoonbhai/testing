@@ -76,8 +76,13 @@ def dashboard_text(
         f"┊ Status    {status_icon} <b>{status_text}</b>\n"
         f"┊ Progress  <code>{active_in_cycle} active tasks</code>\n"
         f"\n"
-        f"<i>Engine auto-activates when Assets,\n"
-        f"Targets, and Creatives are ready.</i>"
+        f"<b>REQUIREMENTS</b>\n"
+        f"{'✅' if account_count > 0 else '❌'}  Active Account\n"
+        f"{'✅' if group_count > 0 else '❌'}  Target Groups\n"
+        f"{'✅' if ad_set else '❌'}  Ad Creatives\n"
+        f"\n"
+        f"<i>Engine auto-activates when all\n"
+        f"requirements above are met.</i>"
         f"{_footer()}"
     )
 

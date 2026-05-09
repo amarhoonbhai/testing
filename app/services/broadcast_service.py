@@ -73,6 +73,9 @@ def is_broadcasting(user_id: int) -> bool:
 async def start_orchestrator():
     """Background task to auto-start/stop broadcasts based on user settings."""
     logger.info("System Orchestrator: ACTIVATED")
+    # Immediate scan on startup
+    await asyncio.sleep(5)
+    
     while True:
         try:
             from app.database.mongo import get_db
@@ -89,14 +92,16 @@ async def start_orchestrator():
                 should_run = len(active_accounts) > 0 and groups_count > 0 and len(ads) > 0
                 
                 if should_run and not is_broadcasting(user_id):
+                    logger.info(f"Orchestrator: Auto-starting broadcast for {user_id}")
                     await start_broadcast(user_id)
                 elif not should_run and is_broadcasting(user_id):
+                    logger.info(f"Orchestrator: Auto-stopping broadcast for {user_id} (Missing requirements)")
                     await stop_broadcast(user_id)
                     
         except Exception as e:
             logger.error(f"Orchestrator error: {e}")
             
-        await asyncio.sleep(60) # Scan every minute
+        await asyncio.sleep(30) # Scan every 30 seconds
 
 
 async def start_broadcast(user_id: int) -> dict:

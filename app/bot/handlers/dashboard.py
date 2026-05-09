@@ -50,7 +50,7 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     active_in_cycle = get_active_broadcast_count() if ads_status == "running" else 0
 
     text = messages.dashboard_text(
-        account_count=account_count,
+        account_count=healthy_accounts,
         max_accounts=max_accounts,
         ad_set=ad_set,
         interval=interval,
