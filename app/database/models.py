@@ -258,7 +258,7 @@ def parse_telegram_link(link: str) -> dict | None:
     return None
 
 
-async def add_group(user_id: int, link: str) -> dict | None:
+async def add_group(user_id: int, link: str, numeric_id: int = None) -> dict | None:
     """
     Add a group/channel link as a broadcast target.
     Returns the parsed group doc or None if invalid link.
@@ -275,6 +275,7 @@ async def add_group(user_id: int, link: str) -> dict | None:
         "link": parsed["raw"],
         "link_type": parsed["type"],
         "identifier": parsed["identifier"],
+        "numeric_id": numeric_id,
         "topic_id": parsed.get("topic_id"),
         "status": "active",
         "last_sent_at": None,
@@ -283,24 +284,33 @@ async def add_group(user_id: int, link: str) -> dict | None:
         "created_at": now,
     }
 
-    await db.groups.update_one(
-        {"user_id": user_id, "identifier": parsed["identifier"], "topic_id": parsed.get("topic_id")},
-        {"$set": doc},
-        upsert=True,
-    )
+    # Match by numeric_id if available, otherwise by identifier + topic
+    query = {"user_id": user_id}
+    if numeric_id:
+        query["numeric_id"] = numeric_id
+    else:
+        query["identifier"] = parsed["identifier"]
+        query["topic_id"] = parsed.get("topic_id")
+
+    await db.groups.update_one(query, {"$set": doc}, upsert=True)
 
     return doc
 
 
-async def add_groups_bulk(user_id: int, links: list[str]) -> dict:
+async def add_groups_bulk(user_id: int, entries: list[str | dict]) -> dict:
     """
-    Add multiple group links at once.
+    Add multiple group links/data at once.
+    'entries' can be a list of strings (links) or dicts ({"link": str, "id": int}).
     Returns dict with added count and failed count.
     """
     added = 0
     failed = 0
-    for link in links:
-        result = await add_group(user_id, link)
+    for entry in entries:
+        if isinstance(entry, dict):
+            result = await add_group(user_id, entry["link"], entry.get("id"))
+        else:
+            result = await add_group(user_id, entry)
+            
         if result:
             added += 1
         else:
@@ -346,11 +356,17 @@ async def delete_all_groups(user_id: int) -> int:
     return result.deleted_count
 
 
-async def update_group_sent(user_id: int, identifier: str) -> None:
+async def update_group_sent(user_id: int, identifier: str, numeric_id: int = None) -> None:
     """Update group after successful send."""
     db = get_db()
+    query = {"user_id": user_id}
+    if numeric_id:
+        query["numeric_id"] = numeric_id
+    else:
+        query["identifier"] = identifier
+
     await db.groups.update_one(
-        {"user_id": user_id, "identifier": identifier},
+        query,
         {
             "$set": {"last_sent_at": datetime.utcnow()},
             "$inc": {"send_count": 1},
@@ -358,20 +374,32 @@ async def update_group_sent(user_id: int, identifier: str) -> None:
     )
 
 
-async def update_group_failed(user_id: int, identifier: str) -> None:
+async def update_group_failed(user_id: int, identifier: str, numeric_id: int = None) -> None:
     """Update group after failed send."""
     db = get_db()
+    query = {"user_id": user_id}
+    if numeric_id:
+        query["numeric_id"] = numeric_id
+    else:
+        query["identifier"] = identifier
+
     await db.groups.update_one(
-        {"user_id": user_id, "identifier": identifier},
+        query,
         {"$inc": {"fail_count": 1}},
     )
 
 
-async def disable_group(user_id: int, identifier: str, reason: str = "") -> None:
+async def disable_group(user_id: int, identifier: str, reason: str = "", numeric_id: int = None) -> None:
     """Disable a group (forbidden, banned, etc)."""
     db = get_db()
+    query = {"user_id": user_id}
+    if numeric_id:
+        query["numeric_id"] = numeric_id
+    else:
+        query["identifier"] = identifier
+
     await db.groups.update_one(
-        {"user_id": user_id, "identifier": identifier},
+        query,
         {"$set": {"status": "disabled", "disabled_reason": reason}},
     )
 

@@ -162,7 +162,6 @@ async def receive_ad_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if update.message.forward_date:
         ad_data["ad_mode"] = "forward"
-        ad_data["ad_forward_cid"] = update.message.chat_id
         ad_data["ad_forward_mid"] = update.message.message_id
         ad_data["ad_message"] = update.message.text or update.message.caption or "Forwarded Content"
         ad_data["ad_media_type"] = None

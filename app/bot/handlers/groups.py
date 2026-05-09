@@ -82,24 +82,43 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     for link in initial_links:
         parsed = parse_telegram_link(link)
-        if parsed and parsed["type"] == "folder":
-            if not active_acc:
-                await update.message.reply_text(
-                    messages.error_text("Connect at least one active account to expand Folder links."),
-                    parse_mode="HTML"
-                )
-                continue
+        if not parsed:
+            final_links.append(link)
+            continue
             
-            # Expand folder
-            try:
-                session = decrypt_session(active_acc["encrypted_session"])
-                async with await get_client_from_session(session) as client:
+        if not active_acc:
+            final_links.append(link)
+            continue
+
+        try:
+            session = decrypt_session(active_acc["encrypted_session"])
+            async with await get_client_from_session(session) as client:
+                if parsed["type"] == "folder":
+                    # Expand folder
                     folder_links = await expand_folder_link(client, parsed["identifier"])
-                    final_links.extend(folder_links)
-            except Exception as e:
-                logger.error(f"Folder expansion failed: {e}")
-                final_links.append(link) # Fallback to original
-        else:
+                    # For folder links, we resolve their IDs too
+                    for f_link in folder_links:
+                        try:
+                            entity = await client.get_entity(f_link)
+                            final_links.append({"link": f_link, "id": entity.id})
+                        except Exception:
+                            final_links.append(f_link)
+                else:
+                    # Resolve single link ID
+                    try:
+                        # Use the most specific identifier for resolution
+                        resolve_target = link
+                        if parsed["type"] == "username":
+                            resolve_target = f"@{parsed['identifier']}"
+                        elif parsed["type"] in ("private_chat", "private_topic"):
+                            resolve_target = int(f"-100{parsed['identifier']}")
+                            
+                        entity = await client.get_entity(resolve_target)
+                        final_links.append({"link": link, "id": entity.id})
+                    except Exception:
+                        final_links.append(link)
+        except Exception as e:
+            logger.error(f"Resolution failed for {link}: {e}")
             final_links.append(link)
 
     result = await add_groups_bulk(user_id, final_links)

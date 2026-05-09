@@ -89,17 +89,24 @@ async def start_orchestrator():
                 groups_count = await get_group_count(user_id)
                 ads = user_doc.get("ads", [])
                 
-                should_run = len(active_accounts) > 0 and groups_count > 0 and len(ads) > 0
+                should_run = (
+                    user_doc.get("ads_status") == "running" and
+                    len(active_accounts) > 0 and 
+                    groups_count > 0 and 
+                    len(ads) > 0
+                )
                 
                 if should_run and not is_broadcasting(user_id):
                     logger.info(f"Orchestrator: Auto-starting broadcast for {user_id}")
                     await start_broadcast(user_id)
                 elif not should_run and is_broadcasting(user_id):
-                    logger.info(f"Orchestrator: Auto-stopping broadcast for {user_id} (Missing requirements)")
+                    logger.info(f"Orchestrator: Auto-stopping broadcast for {user_id} (Conditions not met)")
                     await stop_broadcast(user_id)
                     
         except Exception as e:
             logger.error(f"Orchestrator error: {e}")
+            # New: Report orchestrator errors to channel
+            await log_error(0, "Orchestrator Failure", str(e))
             
         await asyncio.sleep(30) # Scan every 30 seconds
 
@@ -107,8 +114,19 @@ async def start_orchestrator():
 async def start_broadcast(user_id: int) -> dict:
     """Start the parallel broadcast loop for a user."""
     user = await get_user(user_id)
-    if not user: return {"success": False}
+    if not user: return {"success": False, "error": "User not found."}
     
+    accounts = await get_user_accounts(user_id)
+    active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
+    if not active_accounts:
+        return {"success": False, "error": "No active accounts linked."}
+        
+    if await get_group_count(user_id) == 0:
+        return {"success": False, "error": "No target groups added."}
+        
+    if not user.get("ads"):
+        return {"success": False, "error": "No ads configured."}
+
     interval = max(user.get("interval_seconds", MIN_INTERVAL), MIN_INTERVAL)
     await stop_broadcast(user_id)
 
@@ -165,6 +183,24 @@ def _shard_groups(groups: List[Dict], n: int) -> List[List[Dict]]:
     if n <= 0: return []
     random.shuffle(groups)
     return [groups[i::n] for i in range(n)]
+
+
+async def _interruptible_sleep(seconds: float, user_id: int) -> bool:
+    """
+    Sleep for N seconds while periodically checking if the broadcast was stopped.
+    Returns True if sleep completed, False if broadcast was stopped/paused.
+    """
+    step = 2.0 # Check database every 2 seconds
+    elapsed = 0
+    while elapsed < seconds:
+        await asyncio.sleep(min(step, seconds - elapsed))
+        elapsed += step
+        
+        # Check status
+        user = await get_user(user_id)
+        if not user or user.get("ads_status") != "running":
+            return False
+    return True
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -234,6 +270,8 @@ async def _broadcast_loop(user_id: int, interval: int):
         logger.info(f"Broadcast loop cancelled for {user_id}")
     except Exception as e:
         logger.error(f"Critical loop error for {user_id}: {e}", exc_info=True)
+        # New: Report critical loop failures
+        await log_error(user_id, "Critical Engine Error", str(e))
     finally:
         _active_tasks.pop(user_id, None)
         await update_user(user_id, ads_status="paused", night_mode_paused=False)
@@ -254,28 +292,35 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
             for group in shard:
                 if _is_night_time(): break
                 
-                success, error_msg = await _send_to_target(client, user_id, group, user, phone)
-                if success:
-                    sent += 1
-                    await increment_sent(user_id)
-                    await update_account_health(user_id, phone, 1)
-                else:
-                    failed += 1
-                    await increment_failed(user_id)
-                    await update_account_health(user_id, phone, -2)
-                    
-                    if "FloodWait" in (error_msg or ""):
-                        # Adaptive Backoff: If account is flooding, take a longer pause
-                        wait_time = int(error_msg.split("(")[1].split("s")[0]) if "(" in (error_msg or "") else 60
-                        logger.warning(f"Adaptive Backoff for {phone}: Sleeping {wait_time}s")
-                        await asyncio.sleep(min(wait_time + 10, 300)) # Max 5 min pause for account task
-                    
-                    if "Unauthorized" in (error_msg or "") or "Deactivated" in (error_msg or ""):
-                        await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, error_msg)
-                        return sent, failed
+                    success, error_msg = await _send_to_target(client, user_id, group, user, phone)
+                    if success:
+                        sent += 1
+                        await increment_sent(user_id)
+                        await update_account_health(user_id, phone, 1)
+                    else:
+                        failed += 1
+                        await increment_failed(user_id)
+                        await update_account_health(user_id, phone, -2)
+                        
+                        # New: Update group state on failure if not already handled
+                        await update_group_failed(user_id, group.get("identifier"), numeric_id=group.get("numeric_id"))
+                        
+                        if "FloodWait" in (error_msg or ""):
+                            # Adaptive Backoff: If account is flooding, take a longer pause
+                            wait_time = int(error_msg.split("(")[1].split("s")[0]) if "(" in (error_msg or "") else 60
+                            logger.warning(f"Adaptive Backoff for {phone}: Sleeping {wait_time}s")
+                            # Adaptive backoff is also interruptible
+                            if not await _interruptible_sleep(min(wait_time + 10, 300), user_id):
+                                return sent, failed
+                        
+                        if "Unauthorized" in (error_msg or "") or "Deactivated" in (error_msg or ""):
+                            await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, error_msg)
+                            return sent, failed
 
-                # Smart delay between targets
-                await asyncio.sleep(_get_send_delay())
+                    # Smart delay between targets (Interruptible)
+                    if not await _interruptible_sleep(_get_send_delay(), user_id):
+                        logger.info(f"Account task {phone} detected STOP signal during delay. Aborting.")
+                        return sent, failed
                 
         finally:
             await client.disconnect()
@@ -283,8 +328,11 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
     except (AuthKeyUnregisteredError, UserDeactivatedBanError, ConnectionError) as e:
         logger.warning(f"Account {phone} failed: {type(e).__name__}")
         await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, str(e))
+        # New: Report account loss to channel
+        await log_error(user_id, "Account Failure", f"Phone: {phone}\nReason: {type(e).__name__}")
     except Exception as e:
         logger.error(f"Unexpected task error for {phone}: {e}")
+        await log_error(user_id, "Task Exception", f"Phone: {phone}\nError: {str(e)}")
         
     return sent, failed
 
@@ -292,6 +340,7 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
 async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: str) -> tuple[bool, Optional[str]]:
     """Handles sending to a specific target with retry/recovery logic."""
     identifier = group.get("identifier", "")
+    numeric_id = group.get("numeric_id")
     ads = user.get("ads", [])
     if not ads: return False, "No ads"
     
@@ -301,11 +350,16 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
         try:
             # If multiple ads, add a gap between them for the same group
             if i > 0:
-                inner_gap = random.uniform(30, 60)
-                await asyncio.sleep(inner_gap)
+                # Synchronize inner gap with the requested 7-min message gap
+                inner_gap = SEND_GAP_SECONDS + random.uniform(SEND_JITTER_MIN, SEND_JITTER_MAX)
+                if not await _interruptible_sleep(inner_gap, user_id):
+                    return False, "Stopped"
             
             entity = await _resolve_entity_with_retry(client, group)
             if not entity:
+                logger.warning(f"Could not resolve target {identifier}")
+                # New: Report resolution failure to channel
+                await log_message_sent(user_id, identifier, phone, False, "Resolution Failed")
                 results.append(False)
                 continue
 
@@ -319,14 +373,18 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
 
             if ad_mode == "forward" and ad.get("ad_forward_mid"):
                 from app.config import BOT_USERNAME
-                await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME, **send_kwargs)
+                try:
+                    await client.forward_messages(entity, ad.get("ad_forward_mid"), BOT_USERNAME, **send_kwargs)
+                except Exception:
+                    # Fallback: try forwarding from the entity directly if it was a user message
+                    await client.forward_messages(entity, ad.get("ad_forward_mid"), user_id, **send_kwargs)
             elif ad.get("ad_media_type") in ("photo", "video") and ad.get("ad_media_file_id"):
                 await client.send_file(entity, ad.get("ad_media_file_id"), caption=ad.get("ad_message") or "", **send_kwargs)
             else:
                 await client.send_message(entity, ad.get("ad_message") or "Kurup Ads", **send_kwargs)
 
             results.append(True)
-            await update_group_sent(user_id, identifier)
+            await update_group_sent(user_id, identifier, numeric_id=numeric_id)
             await log_message_sent(user_id, identifier, phone, True)
 
         except FloodWaitError as e:
@@ -347,7 +405,7 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
                 # Skip the inner gap for retry
                 return await _send_to_target(client, user_id, group, user, phone)
             except Exception:
-                await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)")
+                await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)", numeric_id=numeric_id)
                 await log_message_sent(user_id, identifier, phone, False, "Forbidden")
                 return False, "Forbidden"
 
@@ -358,6 +416,7 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
         except Exception as e:
             logger.error(f"Error sending ad to {identifier}: {e}")
             results.append(False)
+            await update_group_failed(user_id, identifier, numeric_id=numeric_id)
 
     success = any(results)
     return success, None if success else "All ads failed"
@@ -371,7 +430,7 @@ async def _resolve_entity_with_retry(client, group: dict, retry: bool = True):
     
     try:
         # Try direct resolution
-        if link_type == "username":
+        if link_type in ("username", "topic"):
             return await client.get_entity(f"@{identifier}")
         if link_type in ("private_chat", "private_topic"):
             # Try to resolve numeric ID (must be int)
@@ -380,6 +439,14 @@ async def _resolve_entity_with_retry(client, group: dict, retry: bool = True):
                 return await client.get_entity(int(f"-100{identifier}"))
             except Exception:
                 return await client.get_entity(int(identifier))
+        
+        # New: Use numeric_id if available as it's the most reliable
+        if group.get("numeric_id"):
+            try:
+                return await client.get_entity(group.get("numeric_id"))
+            except Exception:
+                pass
+
         return await client.get_entity(link)
     except Exception:
         if not retry: return None
