@@ -11,14 +11,14 @@ from app.config import CHANNEL_USERNAME, SUPPORT_USERNAME, REQUIRED_CHANNELS
 def force_join_keyboard() -> InlineKeyboardMarkup:
     buttons = []
     for ch in REQUIRED_CHANNELS:
-        buttons.append([InlineKeyboardButton(f"‣ Jᴏɪɴ @{ch}", url=f"https://t.me/{ch}")])
+        buttons.append([InlineKeyboardButton(f"➜  Jᴏɪɴ @{ch}", url=f"https://t.me/{ch}")])
     buttons.append([InlineKeyboardButton("✓  Vᴇʀɪғʏ Mᴇᴍʙᴇʀsʜɪᴘ", callback_data="check_join")])
     return InlineKeyboardMarkup(buttons)
 
 
 def start_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("⚡  Cᴏᴍᴍᴀɴᴅ Cᴇɴᴛᴇʀ", callback_data="dashboard")],
+        [InlineKeyboardButton("➜  ⚡  Cᴏᴍᴍᴀɴᴅ Cᴇɴᴛᴇʀ", callback_data="dashboard")],
         [
             InlineKeyboardButton("📖  Gᴜɪᴅᴇ", callback_data="how_to_use"),
             InlineKeyboardButton("⚖  Tᴇʀᴍs", callback_data="disclaimer"),
@@ -183,7 +183,7 @@ def accounts_list_keyboard(accounts: list[dict]) -> InlineKeyboardMarkup:
         phone = acc["phone_masked"]
         status = acc.get("status", "active")
         dot = "🟢" if status == "active" else "🟡" if status == "limited" else "🔴"
-        buttons.append([InlineKeyboardButton(f"{dot}  {phone}", callback_data=f"acc_detail:{phone}")])
+        buttons.append([InlineKeyboardButton(f"{dot}  {phone}  ➜", callback_data=f"acc_detail:{phone}")])
     buttons.append([
         InlineKeyboardButton("↻  Rᴇғʀᴇsʜ", callback_data="my_accounts"),
         InlineKeyboardButton("🗑  Rᴇᴍᴏᴠᴇ", callback_data="delete_accounts"),

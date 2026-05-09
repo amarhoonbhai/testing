@@ -41,9 +41,9 @@ def welcome_text(first_name: str, last_name: str = "", user_id: int = 0, usernam
         f"\n"
         f"Your professional broadcast automation\n"
         f"suite is active and ready.\n\n"
-        f"‣ Encrypted Asset Hosting\n"
-        f"‣ Parallel Sharding Engine\n"
-        f"‣ Intelligent Error Recovery"
+        f"➜ Encrypted Asset Hosting\n"
+        f"➜ Parallel Sharding Engine\n"
+        f"➜ Intelligent Error Recovery"
         f"{_footer()}"
     )
 
@@ -145,8 +145,8 @@ def add_account_text() -> str:
         f"{_header('LINK ASSET')}"
         f"Provide the phone number for the\n"
         f"account you wish to host.\n\n"
-        f"‣ Format: <code>+1234567890</code>\n"
-        f"‣ Privacy: AES-256 Encrypted"
+        f"➜ Format: <code>+1234567890</code>\n"
+        f"➜ Privacy: AES-256 Encrypted"
         f"{_footer()}"
     )
 
@@ -207,8 +207,8 @@ def add_groups_text() -> str:
     return (
         f"{_header('IMPORT TARGETS')}"
         f"Send group links or usernames.\n\n"
-        f"‣ One link per line\n"
-        f"‣ Folder links supported"
+        f"➜ One link per line\n"
+        f"➜ Folder links supported"
         f"{_footer()}"
     )
 
