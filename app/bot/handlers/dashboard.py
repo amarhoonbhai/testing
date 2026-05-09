@@ -36,6 +36,9 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ads_status = user.get("ads_status", "paused")
     night_paused = user.get("night_mode_paused", False)
     
+    # Check if user is the owner
+    is_owner = (user_id == OWNER_ID)
+
     # Fetch extended stats
     groups = await get_user_groups(user_id)
     accounts = await get_user_accounts(user_id)
