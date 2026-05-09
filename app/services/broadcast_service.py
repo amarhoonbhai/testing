@@ -292,35 +292,35 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
             for group in shard:
                 if _is_night_time(): break
                 
-                    success, error_msg = await _send_to_target(client, user_id, group, user, phone)
-                    if success:
-                        sent += 1
-                        await increment_sent(user_id)
-                        await update_account_health(user_id, phone, 1)
-                    else:
-                        failed += 1
-                        await increment_failed(user_id)
-                        await update_account_health(user_id, phone, -2)
-                        
-                        # New: Update group state on failure if not already handled
-                        await update_group_failed(user_id, group.get("identifier"), numeric_id=group.get("numeric_id"))
-                        
-                        if "FloodWait" in (error_msg or ""):
-                            # Adaptive Backoff: If account is flooding, take a longer pause
-                            wait_time = int(error_msg.split("(")[1].split("s")[0]) if "(" in (error_msg or "") else 60
-                            logger.warning(f"Adaptive Backoff for {phone}: Sleeping {wait_time}s")
-                            # Adaptive backoff is also interruptible
-                            if not await _interruptible_sleep(min(wait_time + 10, 300), user_id):
-                                return sent, failed
-                        
-                        if "Unauthorized" in (error_msg or "") or "Deactivated" in (error_msg or ""):
-                            await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, error_msg)
+                success, error_msg = await _send_to_target(client, user_id, group, user, phone)
+                if success:
+                    sent += 1
+                    await increment_sent(user_id)
+                    await update_account_health(user_id, phone, 1)
+                else:
+                    failed += 1
+                    await increment_failed(user_id)
+                    await update_account_health(user_id, phone, -2)
+                    
+                    # New: Update group state on failure if not already handled
+                    await update_group_failed(user_id, group.get("identifier"), numeric_id=group.get("numeric_id"))
+                    
+                    if "FloodWait" in (error_msg or ""):
+                        # Adaptive Backoff: If account is flooding, take a longer pause
+                        wait_time = int(error_msg.split("(")[1].split("s")[0]) if "(" in (error_msg or "") else 60
+                        logger.warning(f"Adaptive Backoff for {phone}: Sleeping {wait_time}s")
+                        # Adaptive backoff is also interruptible
+                        if not await _interruptible_sleep(min(wait_time + 10, 300), user_id):
                             return sent, failed
-
-                    # Smart delay between targets (Interruptible)
-                    if not await _interruptible_sleep(_get_send_delay(), user_id):
-                        logger.info(f"Account task {phone} detected STOP signal during delay. Aborting.")
+                    
+                    if "Unauthorized" in (error_msg or "") or "Deactivated" in (error_msg or ""):
+                        await update_account_status(user_id, phone, ACCOUNT_HEALTH_FAILED, error_msg)
                         return sent, failed
+
+                # Smart delay between targets (Interruptible)
+                if not await _interruptible_sleep(_get_send_delay(), user_id):
+                    logger.info(f"Account task {phone} detected STOP signal during delay. Aborting.")
+                    return sent, failed
                 
         finally:
             await client.disconnect()
