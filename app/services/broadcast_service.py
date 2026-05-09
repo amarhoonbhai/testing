@@ -299,6 +299,7 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
     """Manages a single account's work within a cycle."""
     phone = account["phone_masked"]
     sent, failed = 0, 0
+    client = None
     
     try:
         session = decrypt_session(account["encrypted_session"])
@@ -341,7 +342,8 @@ async def _run_account_task(user_id: int, account: dict, shard: List[dict], user
                     return sent, failed
                 
         finally:
-            await client.disconnect()
+            if client:
+                await client.disconnect()
             
     except (AuthKeyUnregisteredError, UserDeactivatedBanError, ConnectionError) as e:
         logger.warning(f"Account {phone} failed: {type(e).__name__}")
