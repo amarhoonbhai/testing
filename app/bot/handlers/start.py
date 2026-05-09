@@ -240,3 +240,11 @@ async def powered_by_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         messages.powered_by_text(),
         keyboards.back_keyboard("home"),
     )
+
+
+async def end_conversation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Generic fallback to end ANY ConversationHandler safely."""
+    query = update.callback_query
+    if query:
+        await query.answer()
+    return ConversationHandler.END

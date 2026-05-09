@@ -11,7 +11,7 @@ from telegram.ext import (
 
 from app.database.models import get_user, update_user
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu, require_join
+from app.bot.handlers.start import _send_menu, require_join, end_conversation_callback
 
 logger = logging.getLogger(__name__)
 
@@ -92,18 +92,10 @@ def build_auto_reply_conversation() -> ConversationHandler:
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(
-                lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"
-            ),
-            CallbackQueryHandler(
-                lambda u, c: ConversationHandler.END, pattern="^dashboard$"
-            ),
-            CallbackQueryHandler(
-                lambda u, c: ConversationHandler.END, pattern="^home$"
-            ),
-            CallbackQueryHandler(
-                lambda u, c: ConversationHandler.END, pattern="^auto_reply$"
-            ),
+            CallbackQueryHandler(end_conversation_callback, pattern="^cancel_conv$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^dashboard$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^home$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^auto_reply$"),
         ],
         per_user=True, per_chat=True, per_message=True,
     )

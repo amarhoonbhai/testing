@@ -76,7 +76,7 @@ def dashboard_text(
         f"{_stat_line('Status', status_text)}"
         f"{_stat_line('Accounts', f'{account_count} Active')}"
         f"{_stat_line('Groups', f'{group_count} Active')}"
-        f"{_stat_line('Ads', '2 Ready' if ad_set else 'Missing')}"
+        f"{_stat_line('Ads', 'Ready' if ad_set else 'Missing')}"
         f"{_stat_line('Delay', f'{interval // 60} Minutes')}"
         f"\n"
         f"Today’s Report\n"

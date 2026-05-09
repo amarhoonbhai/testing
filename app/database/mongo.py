@@ -38,26 +38,10 @@ def get_db() -> AsyncIOMotorDatabase:
 async def init_db() -> AsyncIOMotorDatabase:
     """Initialize database and create indexes."""
     db = get_db()
+    
+    from app.database.models import init_db_indexes
+    await init_db_indexes()
 
-    # Users collection indexes
-    await db.users.create_index("telegram_user_id", unique=True)
-
-    # Accounts collection indexes
-    await db.accounts.create_index(
-        [("user_id", 1), ("phone_masked", 1)], unique=True
-    )
-    await db.accounts.create_index("user_id")
-
-    # Analytics collection indexes
-    await db.analytics.create_index("user_id", unique=True)
-
-    # Groups collection indexes
-    await db.groups.create_index(
-        [("user_id", 1), ("identifier", 1)], unique=True
-    )
-    await db.groups.create_index("user_id")
-
-    logger.info("Database indexes ensured")
     return db
 
 

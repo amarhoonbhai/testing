@@ -19,7 +19,7 @@ from app.database.models import (
 from app.services.broadcast_service import start_broadcast, stop_broadcast
 from app.services.channel_logger import log_ads_started, log_ads_stopped
 from app.bot import messages, keyboards
-from app.bot.handlers.start import _send_menu, require_join
+from app.bot.handlers.start import _send_menu, require_join, end_conversation_callback
 
 logger = logging.getLogger(__name__)
 
@@ -241,9 +241,9 @@ def build_set_ad_conversation() -> ConversationHandler:
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"),
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^dashboard$"),
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^manage_ads$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^cancel_conv$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^dashboard$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^manage_ads$"),
         ],
         per_user=True, per_chat=True, per_message=True,
     )
@@ -299,8 +299,8 @@ def build_set_interval_conversation() -> ConversationHandler:
             ],
         },
         fallbacks=[
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel_conv$"),
-            CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^dashboard$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^cancel_conv$"),
+            CallbackQueryHandler(end_conversation_callback, pattern="^dashboard$"),
         ],
         per_user=True, per_chat=True, per_message=True,
     )
