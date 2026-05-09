@@ -130,9 +130,13 @@ async def start_broadcast(user_id: int) -> dict:
     interval = max(user.get("interval_seconds", MIN_INTERVAL), MIN_INTERVAL)
     await stop_broadcast(user_id)
 
+    # Update status BEFORE starting task to avoid race condition
+    await update_user(user_id, ads_status="running")
+    
     task = asyncio.create_task(_broadcast_loop(user_id, interval))
     _active_tasks[user_id] = task
-    await update_user(user_id, ads_status="running")
+    
+    logger.info(f"Broadcast engine started for {user_id}")
     return {"success": True}
 
 
@@ -190,16 +194,20 @@ async def _interruptible_sleep(seconds: float, user_id: int) -> bool:
     Sleep for N seconds while periodically checking if the broadcast was stopped.
     Returns True if sleep completed, False if broadcast was stopped/paused.
     """
-    step = 2.0 # Check database every 2 seconds
-    elapsed = 0
-    while elapsed < seconds:
-        await asyncio.sleep(min(step, seconds - elapsed))
-        elapsed += step
-        
-        # Check status
-        user = await get_user(user_id)
-        if not user or user.get("ads_status") != "running":
-            return False
+    for _ in range(0, int(seconds), 2):
+        try:
+            user = await get_user(user_id)
+            if not user:
+                # If user doc is missing temporarily, don't kill the engine
+                await asyncio.sleep(2)
+                continue
+                
+            if user.get("ads_status") != "running":
+                return False
+        except Exception as e:
+            logger.warning(f"DB check failed in sleep for {user_id}: {e}")
+            
+        await asyncio.sleep(2)
     return True
 
 
@@ -211,6 +219,12 @@ async def _broadcast_loop(user_id: int, interval: int):
     """Orchestrator for parallel broadcast cycles."""
     try:
         while True:
+            logger.info(f"Starting new broadcast cycle for user {user_id}")
+            user = await get_user(user_id)
+            if not user or user.get("ads_status") != "running":
+                logger.info(f"Broadcast loop for {user_id} terminating: Status={user.get('ads_status') if user else 'None'}")
+                break
+
             # ── Night Mode check ──
             if _is_night_time():
                 wait = _seconds_until_night_ends()
@@ -220,11 +234,6 @@ async def _broadcast_loop(user_id: int, interval: int):
                 await update_user(user_id, night_mode_paused=False)
                 await log_night_mode(user_id, "end")
                 continue
-
-            # ── State check ──
-            user = await get_user(user_id)
-            if not user or user.get("ads_status") != "running":
-                break
 
             accounts = await get_user_accounts(user_id)
             active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
