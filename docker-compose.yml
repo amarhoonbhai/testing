@@ -5,11 +5,59 @@ services:
     build: .
     container_name: kurup-ads-bot
     restart: unless-stopped
-    env_file:
-      - .env
+    command: python -m app.bot.main
+    env_file: .env
     volumes:
       - ./logs:/app/logs
       - ./assets:/app/assets
+      - ./media_ads:/app/media_ads
+    depends_on:
+      - mongo
+
+  scheduler:
+    build: .
+    container_name: kurup-ads-scheduler
+    restart: unless-stopped
+    command: python -m app.workers.scheduler
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - mongo
+
+  worker-1:
+    build: .
+    container_name: kurup-ads-worker-1
+    restart: unless-stopped
+    command: python -m app.workers.sender_worker
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+      - ./media_ads:/app/media_ads
+    depends_on:
+      - mongo
+
+  worker-2:
+    build: .
+    container_name: kurup-ads-worker-2
+    restart: unless-stopped
+    command: python -m app.workers.sender_worker
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+      - ./media_ads:/app/media_ads
+    depends_on:
+      - mongo
+
+  worker-3:
+    build: .
+    container_name: kurup-ads-worker-3
+    restart: unless-stopped
+    command: python -m app.workers.sender_worker
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+      - ./media_ads:/app/media_ads
     depends_on:
       - mongo
 

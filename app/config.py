@@ -84,6 +84,14 @@ LOGS_CHANNEL_ID: int = _safe_int(os.getenv("LOGS_CHANNEL_ID"), -1003818032027)
 # ── Banner Image Path ───────────────────────────────────────────────────────
 BANNER_PATH: str = os.getenv("BANNER_PATH", "assets/banner.png")
 
+# ── Media Storage ───────────────────────────────────────────────────────────
+MEDIA_DIR: str = os.getenv("MEDIA_DIR", "media_ads")
+
+# ── Worker & Scheduler ──────────────────────────────────────────────────────
+WORKER_CONCURRENCY: int = _safe_int(os.getenv("WORKER_CONCURRENCY"), 5)
+JOB_LEASE_SECONDS: int = _safe_int(os.getenv("JOB_LEASE_SECONDS"), 300)
+MAX_JOB_RETRIES: int = _safe_int(os.getenv("MAX_JOB_RETRIES"), 3)
+
 
 def validate_config():
     """Validate critical configuration on startup."""

@@ -36,22 +36,34 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ads_status = user.get("ads_status", "paused")
     night_paused = user.get("night_mode_paused", False)
     
-    # Check if user is the owner
-    is_owner = (user_id == OWNER_ID)
-
     # Fetch extended stats
     groups = await get_user_groups(user_id)
-    active_groups = sum(1 for g in groups if g.get("status") == "active")
-    
     accounts = await get_user_accounts(user_id)
-    healthy_accounts = sum(1 for a in accounts if a.get("status") == "active")
+    
+    from datetime import datetime
+    now = datetime.utcnow()
+    
+    health_stats = {
+        "limited_accounts": sum(1 for a in accounts if a.get("status") == "limited" or (a.get("limited_until") and a.get("limited_until") > now)),
+        "forbidden_groups": sum(1 for g in groups if g.get("can_send") is False or g.get("status") == "restricted"),
+        "cooldown_groups": sum(1 for g in groups if g.get("next_allowed_at") and g.get("next_allowed_at") > now),
+    }
 
-    # Get active tasks count
-    from app.services.broadcast_service import get_active_broadcast_count
-    active_in_cycle = get_active_broadcast_count() if ads_status == "running" else 0
+    # Fetch analytics for "Today's Report"
+    from app.database.models import get_analytics
+    analytics = await get_analytics(user_id)
+
+    # Get active tasks count (pending or locked jobs for this user)
+    from app.database.mongo import get_db
+    db = get_db()
+    active_in_cycle = await db.broadcast_jobs.count_documents({
+        "user_id": user_id,
+        "status": "pending",
+        "locked_until": {"$gt": now}
+    })
 
     text = messages.dashboard_text(
-        account_count=healthy_accounts,
+        account_count=len([a for a in accounts if a.get("status") == "active"]),
         max_accounts=max_accounts,
         ad_set=ad_set,
         interval=interval,
@@ -59,7 +71,12 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         group_count=len(groups),
         night_paused=night_paused,
         active_in_cycle=active_in_cycle,
+        health_stats=health_stats,
+        analytics=analytics,
     )
+
+    # Keyboards
+    reply_markup = keyboards.dashboard_keyboard(ads_status=ads_status, is_owner=is_owner)
 
     # Try to fetch user profile photo for dashboard too
     photo = None
@@ -73,6 +90,6 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await _send_menu(
         update, context,
         text,
-        keyboards.dashboard_keyboard(is_owner=is_owner),
+        reply_markup,
         photo=photo,
     )

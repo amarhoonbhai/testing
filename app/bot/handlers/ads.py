@@ -156,41 +156,73 @@ async def add_ad_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receive_ad_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive the ad message (text, photo, video, or forward)."""
+    """Receive the ad message (text, photo, video, or forward) and download media."""
+    import os
+    from app.config import MEDIA_DIR
+    
     user_id = update.effective_user.id
-    ad_data = {}
+    ad_data = {
+        "ad_mode": "direct", # Always direct now
+        "ad_media_type": None,
+        "ad_media_file_id": None,
+        "ad_media_file_path": None,
+        "ad_message": None,
+    }
 
-    if update.message.forward_date:
-        ad_data["ad_mode"] = "forward"
-        ad_data["ad_forward_mid"] = update.message.message_id
-        ad_data["ad_message"] = update.message.text or update.message.caption or "Forwarded Content"
-        ad_data["ad_media_type"] = None
-        ad_data["ad_media_file_id"] = None
-    elif update.message.photo:
-        ad_data["ad_mode"] = "direct"
+    message = update.message
+    
+    # Extract message text/caption
+    ad_data["ad_message"] = message.text or message.caption or ""
+
+    # Identify media
+    file_id = None
+    if message.photo:
         ad_data["ad_media_type"] = "photo"
-        ad_data["ad_media_file_id"] = update.message.photo[-1].file_id
-        ad_data["ad_message"] = update.message.caption or ""
-    elif update.message.video:
-        ad_data["ad_mode"] = "direct"
+        file_id = message.photo[-1].file_id
+    elif message.video:
         ad_data["ad_media_type"] = "video"
-        ad_data["ad_media_file_id"] = update.message.video.file_id
-        ad_data["ad_message"] = update.message.caption or ""
-    elif update.message.text:
-        ad_data["ad_mode"] = "direct"
+        file_id = message.video.file_id
+    elif message.text:
         ad_data["ad_media_type"] = None
-        ad_data["ad_media_file_id"] = None
-        ad_data["ad_message"] = update.message.text
     else:
-        await update.message.reply_text(
-            messages.error_text("Unsupported format. Send text, photo, video, or forward a message."),
-            parse_mode="HTML",
-        )
-        return WAITING_AD
+        # Might be a document or other media - treat as error for now or extend
+        if not message.text:
+             await update.message.reply_text(
+                messages.error_text("Unsupported format. Send text, photo, or video."),
+                parse_mode="HTML",
+            )
+             return WAITING_AD
+
+    # Download media if exists
+    if file_id:
+        try:
+            # Ensure user directory exists
+            user_media_dir = os.path.join(MEDIA_DIR, str(user_id))
+            os.makedirs(user_media_dir, exist_ok=True)
+            
+            # Create a unique filename
+            import uuid
+            ext = "jpg" if ad_data["ad_media_type"] == "photo" else "mp4"
+            filename = f"{uuid.uuid4().hex}.{ext}"
+            file_path = os.path.join(user_media_dir, filename)
+            
+            # Download via Bot API
+            new_file = await context.bot.get_file(file_id)
+            await new_file.download_to_drive(file_path)
+            
+            ad_data["ad_media_file_id"] = file_id
+            ad_data["ad_media_file_path"] = file_path
+        except Exception as e:
+            logger.error(f"Failed to download media for ad: {e}")
+            await update.message.reply_text(
+                messages.error_text("Failed to process media. Please try again or send text only."),
+                parse_mode="HTML",
+            )
+            return WAITING_AD
 
     await add_user_ad(user_id, ad_data)
     await update.message.reply_text(
-        messages.success_text("CREATIVE SAVED\n\nYour ad has been added to the console."),
+        messages.success_text("CREATIVE SAVED\n\nYour ad has been added and processed for broadcasting."),
         parse_mode="HTML",
         reply_markup=keyboards.back_keyboard("manage_ads"),
     )

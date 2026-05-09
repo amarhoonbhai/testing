@@ -80,21 +80,29 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     accounts = await get_user_accounts(user_id)
     active_acc = next((a for a in accounts if a.get("status") == "active"), None)
 
-    for link in initial_links:
-        parsed = parse_telegram_link(link)
-        if not parsed:
-            final_links.append(link)
-            continue
-            
-        if not active_acc:
-            final_links.append(link)
-            continue
-
+    client = None
+    if active_acc:
         try:
             session = decrypt_session(active_acc["encrypted_session"])
-            async with await get_client_from_session(session) as client:
+            client = await get_client_from_session(session)
+        except Exception as e:
+            logger.error(f"Failed to start client for analysis: {e}")
+
+    try:
+        for link in initial_links:
+            parsed = parse_telegram_link(link)
+            if not parsed:
+                final_links.append(link)
+                continue
+                
+            if not client:
+                # If no active account is available for resolution, keep link as is
+                final_links.append(link)
+                continue
+
+            try:
                 if parsed["type"] == "folder":
-                    # Expand folder (now returns list of dicts with IDs)
+                    # Expand folder
                     folder_data = await expand_folder_link(client, parsed["identifier"])
                     final_links.extend(folder_data)
                 else:
@@ -105,15 +113,32 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
                             resolve_target = f"@{parsed['identifier']}"
                         elif parsed["type"] in ("private_chat", "private_topic"):
                             resolve_target = int(f"-100{parsed['identifier']}")
+                        elif parsed["type"] == "invite":
+                            # For invite links, we might need to join or at least get info
+                            from telethon.tl.functions.messages import CheckChatInviteRequest
+                            from telethon.tl.types import ChatInviteAlready, ChatInvite
+                            invite_info = await client(CheckChatInviteRequest(parsed["identifier"]))
+                            if isinstance(invite_info, ChatInviteAlready):
+                                entity = invite_info.chat
+                            elif isinstance(invite_info, ChatInvite):
+                                # Just info, haven't joined yet. We'll join later or now.
+                                # To get the ID, we usually need to join.
+                                entity = await client.get_entity(link)
+                            else:
+                                entity = await client.get_entity(link)
+                        else:
+                            entity = await client.get_entity(link)
                             
-                        entity = await client.get_entity(resolve_target)
                         final_links.append({"link": link, "id": entity.id})
                     except Exception:
                         # Fallback: add without ID if resolution fails
                         final_links.append(link)
-        except Exception as e:
-            logger.error(f"Resolution failed for {link}: {e}")
-            final_links.append(link)
+            except Exception as e:
+                logger.error(f"Resolution failed for {link}: {e}")
+                final_links.append(link)
+    finally:
+        if client:
+            await client.disconnect()
 
     result = await add_groups_bulk(user_id, final_links)
     await log_groups_added(user_id, result["added"], result["failed"])
