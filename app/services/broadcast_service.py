@@ -417,6 +417,21 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
             return await _send_to_target(client, user_id, group, user, phone, is_retry=True)
 
         except (ChatWriteForbiddenError, UserBannedInChannelError):
+            # Check if we are actually in the group
+            try:
+                from telethon.tl.functions.channels import GetParticipantRequest
+                from telethon.tl.types import ChannelParticipantSelf
+                me = await client(GetParticipantRequest(entity, 'me'))
+                is_member = isinstance(me.participant, ChannelParticipantSelf)
+            except Exception:
+                is_member = False
+
+            if is_member:
+                # We are in, but forbidden -> Muted or Restricted
+                await disable_group(user_id, identifier, "Muted/No-Post-Perm", numeric_id=numeric_id)
+                await log_message_sent(user_id, identifier, phone, False, "Muted (In Group)")
+                return False, "Muted"
+
             if is_retry:
                 # Already tried joining/retrying, still forbidden
                 await disable_group(user_id, identifier, "Forbidden (Permanently)", numeric_id=numeric_id)
@@ -425,13 +440,15 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
                 
             try:
                 from telethon.tl.functions.channels import JoinChannelRequest
-                await client(JoinChannelRequest(identifier))
+                # Try joining by entity instead of link to be more robust
+                await client(JoinChannelRequest(entity))
                 # Retry once after joining
                 return await _send_to_target(client, user_id, group, user, phone, is_retry=True)
-            except Exception:
-                await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)", numeric_id=numeric_id)
-                await log_message_sent(user_id, identifier, phone, False, "Forbidden")
-                return False, "Forbidden"
+            except Exception as e:
+                logger.warning(f"Join failed for {identifier}: {e}")
+                await disable_group(user_id, identifier, f"Join Failed ({type(e).__name__})", numeric_id=numeric_id)
+                await log_message_sent(user_id, identifier, phone, False, "Join Failed")
+                return False, "Join Failed"
 
         except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
             await delete_group(user_id, identifier)
