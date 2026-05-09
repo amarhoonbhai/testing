@@ -8,7 +8,10 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from app.config import OWNER_ID
-from app.database.models import get_user, get_account_count, get_group_count, upsert_user
+from app.database.models import (
+    get_user, get_account_count, get_group_count, upsert_user,
+    get_user_groups, get_user_accounts,
+)
 from app.bot import messages, keyboards
 from app.bot.handlers.start import _send_menu, require_join
 
