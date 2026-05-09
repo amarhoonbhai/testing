@@ -74,14 +74,34 @@ async def _send_menu(
     text: str,
     reply_markup,
     *,
-    with_banner: bool = False,
+    photo=None,
 ):
     """
     Reusable function to send or edit a menu message.
-    Edits the existing message if triggered by a callback, otherwise sends new.
+    If a photo is provided, it sends a new message with the photo.
     """
     query = update.callback_query
+    chat_id = update.effective_chat.id
 
+    # If we have a photo, we MUST send a new message (edit_message_media is complex)
+    if photo:
+        try:
+            if query:
+                await query.answer()
+                await query.message.delete()
+            
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo,
+                caption=text,
+                reply_markup=reply_markup,
+                parse_mode="HTML",
+            )
+            return
+        except Exception as e:
+            logger.warning(f"Failed to send photo: {e}")
+
+    # Fallback to text editing/sending
     if query:
         try:
             await query.answer()
@@ -92,24 +112,7 @@ async def _send_menu(
             )
             return
         except Exception:
-            pass  # Fallback to sending new message
-
-    # Send new message (with optional banner)
-    chat_id = update.effective_chat.id
-
-    if with_banner and os.path.exists(_BANNER_ABS):
-        try:
-            with open(_BANNER_ABS, "rb") as photo:
-                await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption=text,
-                    reply_markup=reply_markup,
-                    parse_mode="HTML",
-                )
-                return
-        except Exception:
-            logger.warning("Failed to send banner image, falling back to text")
+            pass
 
     await context.bot.send_message(
         chat_id=chat_id,
@@ -141,6 +144,19 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # Try to fetch user profile photo
+    photo = None
+    try:
+        profile_photos = await context.bot.get_user_profile_photos(user.id, limit=1)
+        if profile_photos.total_count > 0:
+            photo = profile_photos.photos[0][-1].file_id
+    except Exception:
+        pass
+    
+    # Fallback to system banner if no profile photo
+    if not photo and os.path.exists(_BANNER_ABS):
+        photo = open(_BANNER_ABS, "rb")
+
     await _send_menu(
         update, context,
         messages.welcome_text(
@@ -150,7 +166,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username=user.username or "",
         ),
         keyboards.start_keyboard(),
-        with_banner=True,
+        photo=photo,
     )
 
 

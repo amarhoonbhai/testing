@@ -57,8 +57,18 @@ async def dashboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         active_in_cycle=active_in_cycle,
     )
 
+    # Try to fetch user profile photo for dashboard too
+    photo = None
+    try:
+        profile_photos = await context.bot.get_user_profile_photos(user_id, limit=1)
+        if profile_photos.total_count > 0:
+            photo = profile_photos.photos[0][-1].file_id
+    except Exception:
+        pass
+
     await _send_menu(
         update, context,
         text,
         keyboards.dashboard_keyboard(is_owner=is_owner),
+        photo=photo,
     )
