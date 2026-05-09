@@ -90,17 +90,18 @@ async def start_orchestrator():
                 ads = user_doc.get("ads", [])
                 
                 should_run = (
-                    user_doc.get("ads_status") == "running" and
                     len(active_accounts) > 0 and 
                     groups_count > 0 and 
                     len(ads) > 0
                 )
                 
-                if should_run and not is_broadcasting(user_id):
-                    logger.info(f"Orchestrator: Auto-starting broadcast for {user_id}")
+                is_running = is_broadcasting(user_id)
+                
+                if should_run and not is_running:
+                    logger.info(f"Orchestrator: Auto-activating engine for {user_id} (Requirements met)")
                     await start_broadcast(user_id)
-                elif not should_run and is_broadcasting(user_id):
-                    logger.info(f"Orchestrator: Auto-stopping broadcast for {user_id} (Conditions not met)")
+                elif not should_run and is_running:
+                    logger.info(f"Orchestrator: Auto-halting engine for {user_id} (Requirements lost)")
                     await stop_broadcast(user_id)
                     
         except Exception as e:
@@ -220,9 +221,17 @@ async def _broadcast_loop(user_id: int, interval: int):
     try:
         while True:
             logger.info(f"Starting new broadcast cycle for user {user_id}")
+            
+            # Auto-check requirements instead of just status
+            accounts = await get_user_accounts(user_id)
+            active_accounts = [a for a in accounts if a.get("status") == ACCOUNT_HEALTH_ACTIVE]
+            groups_count = await get_group_count(user_id)
             user = await get_user(user_id)
-            if not user or user.get("ads_status") != "running":
-                logger.info(f"Broadcast loop for {user_id} terminating: Status={user.get('ads_status') if user else 'None'}")
+            ads = user.get("ads", []) if user else []
+
+            if not active_accounts or groups_count == 0 or not ads:
+                logger.info(f"Broadcast loop for {user_id} terminating: Requirements no longer met")
+                await update_user(user_id, ads_status="paused")
                 break
 
             # ── Night Mode check ──
