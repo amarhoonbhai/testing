@@ -274,6 +274,29 @@ async def my_accounts_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 
+@require_join
+async def acc_detail_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show details for a specific account."""
+    query = update.callback_query
+    await query.answer()
+    
+    phone_masked = query.data.split(":", 1)[1]
+    user_id = query.from_user.id
+    
+    from app.database.models import get_account
+    acc = await get_account(user_id, phone_masked)
+    
+    if not acc:
+        await query.message.reply_text("Account not found.")
+        return
+
+    await _send_menu(
+        update, context,
+        messages.account_detail_text(acc),
+        keyboards.back_keyboard("my_accounts"),
+    )
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  DELETE ACCOUNTS
 # ═══════════════════════════════════════════════════════════════════════════════

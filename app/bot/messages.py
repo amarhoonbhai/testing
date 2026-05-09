@@ -246,6 +246,26 @@ def no_accounts_text() -> str:
         f"{_footer()}"
     )
 
+def account_detail_text(acc: dict) -> str:
+    status = acc.get("status", "active").upper()
+    health = acc.get("health", 100)
+    success = acc.get("success_count", 0)
+    failure = acc.get("failure_count", 0)
+    
+    return (
+        f"{_header('ASSET ANALYTICS')}"
+        f"{_stat_line('Account', acc['phone_masked'], '📱')}"
+        f"{_stat_line('Status', status, '⚡️')}"
+        f"{_stat_line('Health', f'{health}%', '🏥')}"
+        f"\n"
+        f"<b>PERFORMANCE</b>\n"
+        f"┊ Delivered   {success}\n"
+        f"┊ Exceptions  {failure}\n"
+        f"\n"
+        f"<i>Reason: {acc.get('status_reason', 'None')}</i>"
+        f"{_footer()}"
+    )
+
 def set_auto_reply_prompt_text() -> str:
     return (
         f"{_header('AUTO RESPONDER')}"

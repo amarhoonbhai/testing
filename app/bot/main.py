@@ -23,7 +23,7 @@ from app.bot.handlers.dashboard import dashboard_callback
 from app.bot.handlers.accounts import (
     build_add_account_conversation,
     my_accounts_callback, delete_accounts_callback,
-    del_acc_callback, confirm_del_callback,
+    acc_detail_callback, del_acc_callback, confirm_del_callback,
 )
 from app.bot.handlers.ads import (
     build_set_ad_conversation, build_set_interval_conversation,
@@ -97,6 +97,7 @@ def create_application():
         app.add_handler(CallbackQueryHandler(handler, pattern=pattern))
 
     # Dynamic callbacks with parameters
+    app.add_handler(CallbackQueryHandler(acc_detail_callback, pattern=r"^acc_detail:"))
     app.add_handler(CallbackQueryHandler(del_acc_callback, pattern=r"^del_acc:"))
     app.add_handler(CallbackQueryHandler(confirm_del_callback, pattern=r"^confirm_del:"))
     app.add_handler(CallbackQueryHandler(view_ad_callback, pattern=r"^view_ad:"))
