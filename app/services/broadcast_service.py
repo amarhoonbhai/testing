@@ -296,7 +296,7 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
         try:
             # If multiple ads, add a gap between them for the same group
             if i > 0:
-                inner_gap = random.uniform(30, 60) # 30-60s gap between multiple messages
+                inner_gap = random.uniform(30, 60)
                 await asyncio.sleep(inner_gap)
             
             entity = await _resolve_entity_with_retry(client, group)
@@ -319,45 +319,31 @@ async def _send_to_target(client, user_id: int, group: dict, user: dict, phone: 
             await log_message_sent(user_id, identifier, phone, True)
 
         except FloodWaitError as e:
-            logger.warning(f"FloodWait on {phone} during multi-ad: {e.seconds}s")
+            logger.warning(f"FloodWait on {phone}: {e.seconds}s")
             await update_account_status(user_id, phone, ACCOUNT_HEALTH_LIMITED, f"FloodWait {e.seconds}s")
             return False, f"FloodWait ({e.seconds}s)"
+
+        except (ChatWriteForbiddenError, UserBannedInChannelError):
+            try:
+                from telethon.tl.functions.channels import JoinChannelRequest
+                await client(JoinChannelRequest(identifier))
+                # Skip the inner gap for retry
+                return await _send_to_target(client, user_id, group, user, phone)
+            except Exception:
+                await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)")
+                await log_message_sent(user_id, identifier, phone, False, "Forbidden")
+                return False, "Forbidden"
+
+        except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
+            await delete_group(user_id, identifier)
+            return False, "Invalid Peer"
+
         except Exception as e:
-            logger.error(f"Error sending ad {i} to {identifier}: {e}")
+            logger.error(f"Error sending ad to {identifier}: {e}")
             results.append(False)
 
     success = any(results)
     return success, None if success else "All ads failed"
-
-    except FloodWaitError as e:
-        logger.warning(f"FloodWait on {phone}: {e.seconds}s")
-        if e.seconds > 600: # If > 10 min, mark as limited and move on
-            await update_account_status(user_id, phone, ACCOUNT_HEALTH_LIMITED, f"FloodWait {e.seconds}s")
-        await asyncio.sleep(min(e.seconds + 5, 60))
-        return False, f"FloodWait ({e.seconds}s)"
-
-    except (ChatWriteForbiddenError, UserBannedInChannelError):
-        # Attempt recovery: try joining
-        try:
-            logger.info(f"Attempting recovery join for {identifier} using {phone}")
-            from telethon.tl.functions.channels import JoinChannelRequest
-            await client(JoinChannelRequest(entity if entity else identifier))
-            # Retry once
-            return await _send_to_target(client, user_id, group, user, phone)
-        except Exception as join_err:
-            logger.warning(f"Recovery join failed for {identifier}: {join_err}")
-            await disable_group(user_id, identifier, "Forbidden (Auto-Cleaned)")
-            await log_message_sent(user_id, identifier, phone, False, "Forbidden")
-            return False, "Forbidden"
-
-    except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
-        await delete_group(user_id, identifier) # Irrecoverable
-        return False, "Invalid Peer"
-    
-    except Exception as e:
-        logger.error(f"Error sending to {identifier}: {e}")
-        await update_group_failed(user_id, identifier)
-        return False, str(e)
 
 
 async def _resolve_entity_with_retry(client, group: dict, retry: bool = True):
