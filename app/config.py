@@ -1,8 +1,7 @@
 """
-Centralized configuration for Kurup Ads Bot.
+Centralized configuration for Group Broadcaster Bot.
 
 Loads all settings from environment variables via python-dotenv.
-Never exposes sensitive values in logs.
 """
 
 import os
@@ -28,19 +27,15 @@ API_HASH: str = os.getenv("API_HASH", "")
 
 # ── MongoDB (REQUIRED) ──────────────────────────────────────────────────────
 MONGO_URI: str = os.getenv("MONGO_URI", "")
-MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "kurup_ads")
+MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "group_broadcaster")
 
 # ── Encryption Key (REQUIRED — Fernet) ──────────────────────────────────────
 ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
 
 # ── Branding ─────────────────────────────────────────────────────────────────
-BOT_USERNAME: str = os.getenv("BOT_USERNAME", "KurupAdsBot")
+BOT_USERNAME: str = os.getenv("BOT_USERNAME", "GroupBroadcasterBot")
 SUPPORT_USERNAME: str = os.getenv("SUPPORT_USERNAME", "kurupads")
 CHANNEL_USERNAME: str = os.getenv("CHANNEL_USERNAME", "philobots")
-
-# ── Enforced Branding (appended to hosted accounts) ─────────────────────────
-ENFORCED_NAME: str = os.getenv("ENFORCED_NAME", "‣ Kᴜʀᴜᴘ Aᴅs")
-ENFORCED_BIO: str = os.getenv("ENFORCED_BIO", "Powered by @KurupAdsBot | Network: @PhiloBots")
 
 # ── Force Join Channels (comma-separated, no @) ─────────────────────────────
 REQUIRED_CHANNELS_STR: str = os.getenv("REQUIRED_CHANNELS", "philobots,sellinghub0")
@@ -48,49 +43,27 @@ REQUIRED_CHANNELS: list[str] = [
     c.strip() for c in REQUIRED_CHANNELS_STR.split(",") if c.strip()
 ]
 
-# ── Limits ───────────────────────────────────────────────────────────────────
-MAX_ACCOUNTS: int = _safe_int(os.getenv("MAX_ACCOUNTS"), 5)
-MIN_INTERVAL: int = _safe_int(os.getenv("MIN_INTERVAL"), 1200)   # 20 minutes minimum
-DEFAULT_INTERVAL: int = 1200  # 20 minutes
-
-# ── Rate Limiting (Anti-Freeze Protection) ──────────────────────────────────
-SEND_GAP_SECONDS: int = _safe_int(os.getenv("SEND_GAP_SECONDS"), 420)  # 7 min between msgs
-SEND_JITTER_MIN: int = _safe_int(os.getenv("SEND_JITTER_MIN"), 30)     # Random jitter range
-SEND_JITTER_MAX: int = _safe_int(os.getenv("SEND_JITTER_MAX"), 90)     # Random jitter range
-FLOOD_BACKOFF_BASE: int = _safe_int(os.getenv("FLOOD_BACKOFF_BASE"), 60)
-FLOOD_BACKOFF_MAX: int = _safe_int(os.getenv("FLOOD_BACKOFF_MAX"), 3600)  # Max 1 hour
-MAX_CONSECUTIVE_ERRORS: int = _safe_int(os.getenv("MAX_CONSECUTIVE_ERRORS"), 5)
-
-# ── Health & Sharding ──────────────────────────────────────────────────────
-ACCOUNT_HEALTH_ACTIVE = "active"
-ACCOUNT_HEALTH_LIMITED = "limited"   # FloodWait/Temporary restriction
-ACCOUNT_HEALTH_FAILED = "failed"     # Unauthorized/Banned
-ACCOUNT_HEALTH_FORBIDDEN = "forbidden" # Forbidden to post (ChatWriteForbidden)
-
-MAX_SHARD_SIZE: int = 50  # Max groups per account per cycle to avoid spam detection
-
-# ── Night Mode (IST) ────────────────────────────────────────────────────────
-NIGHT_MODE_ENABLED: bool = os.getenv("NIGHT_MODE_ENABLED", "true").lower() == "true"
-NIGHT_MODE_START_HOUR: int = _safe_int(os.getenv("NIGHT_MODE_START"), 0)   # 12:00 AM
-NIGHT_MODE_END_HOUR: int = _safe_int(os.getenv("NIGHT_MODE_END"), 5)       # 5:00 AM
-TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
-
 # ── Owner ────────────────────────────────────────────────────────────────────
 OWNER_ID: int = _safe_int(os.getenv("OWNER_ID"), 0)
 
 # ── Logs Channel ─────────────────────────────────────────────────────────────
-LOGS_CHANNEL_ID: int = _safe_int(os.getenv("LOGS_CHANNEL_ID"), -1003818032027)
+LOGS_CHANNEL_ID: int = _safe_int(os.getenv("LOGS_CHANNEL_ID"), 0)
 
 # ── Banner Image Path ───────────────────────────────────────────────────────
 BANNER_PATH: str = os.getenv("BANNER_PATH", "assets/banner.png")
 
-# ── Media Storage ───────────────────────────────────────────────────────────
-MEDIA_DIR: str = os.getenv("MEDIA_DIR", "media_ads")
+# ── Timezone ─────────────────────────────────────────────────────────────────
+TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
 
-# ── Worker & Scheduler ──────────────────────────────────────────────────────
-WORKER_CONCURRENCY: int = _safe_int(os.getenv("WORKER_CONCURRENCY"), 5)
-JOB_LEASE_SECONDS: int = _safe_int(os.getenv("JOB_LEASE_SECONDS"), 300)
-MAX_JOB_RETRIES: int = _safe_int(os.getenv("MAX_JOB_RETRIES"), 3)
+# ── Broadcast Algorithm ─────────────────────────────────────────────────────
+SEND_DELAY_MIN: int = _safe_int(os.getenv("SEND_DELAY_MIN"), 3)    # Min seconds between sends
+SEND_DELAY_MAX: int = _safe_int(os.getenv("SEND_DELAY_MAX"), 8)    # Max seconds between sends
+BATCH_SIZE: int = _safe_int(os.getenv("BATCH_SIZE"), 5)            # Groups per batch
+BATCH_GAP_MIN: int = _safe_int(os.getenv("BATCH_GAP_MIN"), 30)    # Min gap after batch
+BATCH_GAP_MAX: int = _safe_int(os.getenv("BATCH_GAP_MAX"), 60)    # Max gap after batch
+DEFAULT_INTERVAL: int = _safe_int(os.getenv("DEFAULT_INTERVAL"), 1200)  # 20 min between cycles
+MIN_INTERVAL: int = _safe_int(os.getenv("MIN_INTERVAL"), 300)     # 5 min minimum
+MAX_FAIL_SKIP: int = _safe_int(os.getenv("MAX_FAIL_SKIP"), 5)     # Skip group after N fails
 
 
 def validate_config():

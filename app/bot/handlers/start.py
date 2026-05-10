@@ -9,9 +9,9 @@ import os
 import logging
 import functools
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.ext import ContextTypes, ConversationHandler
 
-from app.config import REQUIRED_CHANNELS, BOT_USERNAME, BANNER_PATH
+from app.config import REQUIRED_CHANNELS, BANNER_PATH
 from app.database.models import upsert_user
 from app.bot import messages, keyboards
 from app.services.channel_logger import log_user_start
@@ -26,7 +26,7 @@ _BANNER_ABS = os.path.join(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  FORCE-JOIN GATE — checks on EVERY action
+#  FORCE-JOIN GATE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def _check_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -76,20 +76,17 @@ async def _send_menu(
     *,
     photo=None,
 ):
-    """
-    Reusable function to send or edit a menu message.
-    If a photo is provided, it sends a new message with the photo.
-    """
+    """Reusable function to send or edit a menu message."""
     query = update.callback_query
     chat_id = update.effective_chat.id
 
-    # If we have a photo, we MUST send a new message (edit_message_media is complex)
+    # If we have a photo, send a new message
     if photo:
         try:
             if query:
                 await query.answer()
                 await query.message.delete()
-            
+
             await context.bot.send_photo(
                 chat_id=chat_id,
                 photo=photo,
@@ -152,8 +149,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             photo = profile_photos.photos[0][-1].file_id
     except Exception:
         pass
-    
-    # Fallback to system banner if no profile photo
+
+    # Fallback to system banner
     if not photo and os.path.exists(_BANNER_ABS):
         photo = open(_BANNER_ABS, "rb")
 
@@ -178,7 +175,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     joined = await _check_membership(user.id, context)
     if not joined:
         await query.answer(
-            "❌ You haven't joined all channels yet. Please join and try again.",
+            "❌ You haven't joined all channels yet.",
             show_alert=True,
         )
         return
@@ -198,7 +195,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @require_join
 async def home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle 'Back' to home/start screen."""
+    """Handle 'Back' to home screen."""
     user = update.effective_user
     await _send_menu(
         update, context,

@@ -1,25 +1,18 @@
 """
 Admin panel handler — Owner-only system dashboard.
-
-Shows all users, accounts, broadcast health, and performance.
-Only accessible by OWNER_ID.
+Shows total users, broadcasting count, and global stats.
 """
 
 import logging
-from datetime import datetime
-
-import pytz
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from app.config import OWNER_ID, TIMEZONE, BOT_USERNAME
-from app.database.mongo import get_db
+from app.config import OWNER_ID
+from app.database.models import get_global_stats
 from app.bot import keyboards, messages
 from app.bot.handlers.start import _send_menu
-from app.services.broadcast_service import get_active_broadcast_count
 
 logger = logging.getLogger(__name__)
-_tz = pytz.timezone(TIMEZONE)
 
 
 def _is_owner(user_id: int) -> bool:
@@ -46,141 +39,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def _show_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Build and show the admin panel with live system stats."""
-    db = get_db()
-
-    # Gather stats
-    total_users = await db.users.count_documents({})
-    total_accounts = await db.accounts.count_documents({})
-    active_accounts = await db.accounts.count_documents({"status": "active"})
-    error_accounts = await db.accounts.count_documents({"status": "error"})
-    total_groups = await db.groups.count_documents({})
-    active_groups = await db.groups.count_documents({"status": "active"})
-
-    # Ads stats
-    running_users = await db.users.count_documents({"ads_status": "running"})
-    paused_users = await db.users.count_documents({"ads_status": "paused"})
-
-    # Analytics aggregation
-    pipeline = [
-        {"$group": {
-            "_id": None,
-            "total_sent": {"$sum": "$total_sent"},
-            "total_failed": {"$sum": "$failed_count"},
-        }}
-    ]
-    agg = await db.analytics.aggregate(pipeline).to_list(1)
-    global_sent = agg[0]["total_sent"] if agg else 0
-    global_failed = agg[0]["total_failed"] if agg else 0
-
-    # Active broadcasts
-    active_broadcasts = get_active_broadcast_count()
-
-    stats = {
-        "total_users": total_users,
-        "running_users": running_users,
-        "total_accounts": total_accounts,
-        "active_accounts": active_accounts,
-        "error_accounts": error_accounts,
-        "total_groups": total_groups,
-        "global_sent": global_sent,
-        "success_rate": _success_rate(global_sent, global_failed),
-    }
-
+    """Build and show the admin panel."""
+    stats = await get_global_stats()
     text = messages.admin_panel_text(stats)
     await _send_menu(update, context, text, keyboards.admin_keyboard())
-
-
-async def admin_users_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show recent users list."""
-    user_id = update.effective_user.id
-    if not _is_owner(user_id):
-        return
-
-    db = get_db()
-    cursor = db.users.find({}).sort("last_seen", -1).limit(20)
-    users = await cursor.to_list(20)
-
-    lines = [
-        f"        ─── 👥 ───",
-        f"    <b>Recent Users</b>",
-        f"        ─── 👥 ───",
-        f"",
-    ]
-    for i, u in enumerate(users, 1):
-        uid = u.get("telegram_user_id", "?")
-        uname = u.get("username", "—")
-        status = u.get("ads_status", "paused")
-        status_text = "Running" if status == "running" else "Idle"
-        lines.append(f"   {i}. <code>{uid}</code> @{uname} → {status_text}")
-
-    text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.back_keyboard("admin"))
-
-
-async def admin_health_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show account health overview."""
-    user_id = update.effective_user.id
-    if not _is_owner(user_id):
-        return
-
-    db = get_db()
-    accounts = await db.accounts.find({}).sort("health", 1).to_list(100)
-
-    lines = [
-        f"<b>Account Health Manifest</b>",
-        f"━━━━━━━━━━━━━━━━━━━━━\n",
-    ]
-    for acc in accounts:
-        phone = acc.get("phone_masked", "???")
-        health = acc.get("health", 100)
-        status = acc.get("status", "active")
-        
-        lines.append(f"▸ <code>{phone}</code> → {health}% ({status.upper()})")
-
-    if not accounts:
-        lines.append("↳ <i>No accounts linked yet.</i>")
-
-    text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.back_keyboard("admin"))
-
-
-async def admin_broadcast_stats_callback(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
-    """Show per-user broadcast statistics."""
-    user_id = update.effective_user.id
-    if not _is_owner(user_id):
-        return
-
-    db = get_db()
-    cursor = db.analytics.find({}).sort("total_sent", -1).limit(20)
-    stats = await cursor.to_list(20)
-
-    lines = [
-        f"<b>Broadcaster Performance</b>",
-        f"━━━━━━━━━━━━━━━━━━━━━\n",
-    ]
-
-    for i, s in enumerate(stats, 1):
-        uid = s.get("user_id", "?")
-        sent = s.get("total_sent", 0)
-        failed = s.get("failed_count", 0)
-        last = s.get("last_broadcast_at")
-        last_str = last.strftime("%m/%d %H:%M") if last else "Never"
-        lines.append(
-            f" {i}. <code>{uid}</code>\n"
-            f" ┃ Sent → {sent} | Fail → {failed}\n"
-            f" ↳ Last → {last_str}"
-        )
-
-    text = "\n".join(lines)
-    await _send_menu(update, context, text, keyboards.back_keyboard("admin"))
-
-
-def _success_rate(sent: int, failed: int) -> str:
-    total = sent + failed
-    if total == 0:
-        return "N/A"
-    rate = (sent / total) * 100
-    return f"{rate:.1f}%"

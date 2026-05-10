@@ -38,7 +38,7 @@ def get_db() -> AsyncIOMotorDatabase:
 async def init_db() -> AsyncIOMotorDatabase:
     """Initialize database and create indexes."""
     db = get_db()
-    
+
     from app.database.models import init_db_indexes
     await init_db_indexes()
 

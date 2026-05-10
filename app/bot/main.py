@@ -1,5 +1,5 @@
 """
-Kurup Ads Bot — Main application entry point.
+Group Broadcaster Bot — Main application entry point.
 Registers all handlers and starts the bot.
 """
 
@@ -13,6 +13,7 @@ from app.config import BOT_TOKEN, validate_config
 from app.database.mongo import init_db, close_db
 from app.utils.logger import setup_logging
 from app.services.channel_logger import set_bot
+from app.services import engine
 
 # Import handlers
 from app.bot.handlers.start import (
@@ -20,31 +21,26 @@ from app.bot.handlers.start import (
     how_to_use_callback, disclaimer_callback, powered_by_callback,
 )
 from app.bot.handlers.dashboard import dashboard_callback
-from app.bot.handlers.accounts import (
-    build_add_account_conversation,
-    my_accounts_callback, delete_accounts_callback,
-    acc_detail_callback, del_acc_callback, confirm_del_callback,
+from app.bot.handlers.account import (
+    build_account_conversation,
+    view_account_callback, disconnect_account_callback,
+    confirm_disconnect_callback,
 )
-from app.bot.handlers.ads import (
-    build_set_ad_conversation, build_set_interval_conversation,
-    start_ads_callback, stop_ads_callback, manage_ads_callback,
-    view_ad_callback, del_ad_callback, confirm_del_ad_callback,
-)
-from app.bot.handlers.analytics import analytics_callback
-from app.bot.handlers.auto_reply import (
-    auto_reply_callback, ar_enable_callback,
-    ar_disable_callback, build_auto_reply_conversation,
+from app.bot.handlers.message import (
+    build_message_conversation,
+    set_message_callback, preview_message_callback,
+    clear_message_callback,
 )
 from app.bot.handlers.groups import (
     manage_groups_callback, view_groups_callback,
     clear_groups_callback, confirm_clear_groups_callback,
     build_add_groups_conversation,
 )
-from app.bot.handlers.admin import (
-    admin_command, admin_callback,
-    admin_users_callback, admin_health_callback,
-    admin_broadcast_stats_callback,
+from app.bot.handlers.broadcast import (
+    start_broadcast_callback, stop_broadcast_callback,
+    build_interval_conversation,
 )
+from app.bot.handlers.admin import admin_command, admin_callback
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +55,10 @@ def create_application():
     app.add_handler(CommandHandler("admin", admin_command))
 
     # ── Conversation Handlers (must be registered BEFORE callbacks) ──
-    app.add_handler(build_add_account_conversation())
-    app.add_handler(build_set_ad_conversation())
-    app.add_handler(build_set_interval_conversation())
-    app.add_handler(build_auto_reply_conversation())
+    app.add_handler(build_account_conversation())
+    app.add_handler(build_message_conversation())
     app.add_handler(build_add_groups_conversation())
+    app.add_handler(build_interval_conversation())
 
     # ── Callback Query Handlers ──────────────────────────────
     callbacks = [
@@ -73,50 +68,39 @@ def create_application():
         ("^how_to_use$", how_to_use_callback),
         ("^disclaimer$", disclaimer_callback),
         ("^powered_by$", powered_by_callback),
-        ("^my_accounts$", my_accounts_callback),
-        ("^delete_accounts$", delete_accounts_callback),
-        ("^start_ads$", start_ads_callback),
-        ("^stop_ads$", stop_ads_callback),
-        ("^manage_ads$", manage_ads_callback),
-        ("^analytics$", analytics_callback),
-        ("^auto_reply$", auto_reply_callback),
-        ("^ar_enable$", ar_enable_callback),
-        ("^ar_disable$", ar_disable_callback),
+        # Account
+        ("^view_account$", view_account_callback),
+        ("^disconnect_account$", disconnect_account_callback),
+        ("^confirm_disconnect$", confirm_disconnect_callback),
+        # Message
+        ("^set_message$", set_message_callback),
+        ("^preview_message$", preview_message_callback),
+        ("^clear_message$", clear_message_callback),
         # Groups
         ("^manage_groups$", manage_groups_callback),
         ("^view_groups$", view_groups_callback),
         ("^clear_groups$", clear_groups_callback),
         ("^confirm_clear_groups$", confirm_clear_groups_callback),
-        # Admin (owner-only)
+        # Broadcast
+        ("^start_broadcast$", start_broadcast_callback),
+        ("^stop_broadcast$", stop_broadcast_callback),
+        # Admin
         ("^admin$", admin_callback),
-        ("^admin_users$", admin_users_callback),
-        ("^admin_health$", admin_health_callback),
-        ("^admin_bstats$", admin_broadcast_stats_callback),
     ]
     for pattern, handler in callbacks:
         app.add_handler(CallbackQueryHandler(handler, pattern=pattern))
-
-    # Dynamic callbacks with parameters
-    app.add_handler(CallbackQueryHandler(acc_detail_callback, pattern=r"^acc_detail:"))
-    app.add_handler(CallbackQueryHandler(del_acc_callback, pattern=r"^del_acc:"))
-    app.add_handler(CallbackQueryHandler(confirm_del_callback, pattern=r"^confirm_del:"))
-    app.add_handler(CallbackQueryHandler(view_ad_callback, pattern=r"^view_ad:"))
-    app.add_handler(CallbackQueryHandler(del_ad_callback, pattern=r"^del_ad:"))
-    app.add_handler(CallbackQueryHandler(confirm_del_ad_callback, pattern=r"^confirm_del_ad:"))
 
     return app
 
 
 async def main():
     """Initialize and run the bot."""
-    setup_logging("kurup_ads")
+    setup_logging("group_broadcaster")
     validate_config()
 
     logger.info("=" * 50)
-    logger.info("  KURUP ADS BOT — Starting Up")
-    logger.info("  Night Mode: 12:00 AM – 5:00 AM IST")
-    logger.info("  Min Interval: 1200s | Send Gap: 300s")
-    logger.info("  Logs Channel: ACTIVE")
+    logger.info("  GROUP BROADCASTER — Starting Up")
+    logger.info("  Smart Batched Sending Algorithm")
     logger.info("=" * 50)
 
     # Initialize database
@@ -132,6 +116,9 @@ async def main():
 
     await app.start()
     await app.updater.start_polling(drop_pending_updates=True)
+
+    # Auto-resume active broadcasts
+    await engine.auto_resume()
 
     logger.info("Bot is running! Press Ctrl+C to stop.")
 

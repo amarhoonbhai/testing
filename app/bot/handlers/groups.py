@@ -3,9 +3,8 @@ Groups handler — Add, view, and manage broadcast target groups.
 
 Supports:
 - Single group/channel links (t.me/username, t.me/+invite, @username)
-- Folder links (t.me/addlist/xxx)
 - Multi-link paste (one per line)
-- View/delete groups
+- View/clear groups
 """
 
 import logging
@@ -16,8 +15,7 @@ from telegram.ext import (
 )
 
 from app.database.models import (
-    get_user_groups, get_group_count, add_groups_bulk,
-    delete_all_groups, delete_group, parse_telegram_link,
+    get_user, add_groups, get_groups, get_group_count, clear_groups,
 )
 from app.services.channel_logger import log_groups_added
 from app.bot import messages, keyboards
@@ -32,13 +30,9 @@ WAITING_LINKS = 0
 async def manage_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show groups management screen."""
     user_id = update.effective_user.id
-    groups = await get_user_groups(user_id)
-    group_count = len(groups)
+    count = await get_group_count(user_id)
 
-    active = sum(1 for g in groups if g.get("status") == "active")
-    disabled = group_count - active
-
-    text = messages.groups_text(group_count, active, disabled)
+    text = messages.groups_text(count)
     await _send_menu(update, context, text, keyboards.groups_keyboard())
 
 
@@ -49,7 +43,7 @@ async def add_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     await query.answer()
     await _send_menu(
         update, context,
-        messages.add_groups_text(),
+        messages.add_groups_prompt_text(),
         keyboards.cancel_keyboard(),
     )
     return WAITING_LINKS
@@ -61,91 +55,20 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = update.message.text.strip()
 
     # Split by newlines, filter empty
-    initial_links = [line.strip() for line in text.split("\n") if line.strip()]
+    links = [line.strip() for line in text.split("\n") if line.strip()]
 
-    if not initial_links:
+    if not links:
         await update.message.reply_text(
             messages.error_text("No valid links found. Send one link per line."),
             parse_mode="HTML",
         )
         return WAITING_LINKS
 
-    final_links = []
-    status_msg = await update.message.reply_text("<i>🔍 Analyzing links...</i>", parse_mode="HTML")
+    result = await add_groups(user_id, links)
+    await log_groups_added(user_id, result["added"], result["total"])
 
-    from app.database.models import parse_telegram_link, get_user_accounts
-    from app.services.encryption_service import decrypt_session
-    from app.services.telethon_service import get_client_from_session, expand_folder_link
-
-    accounts = await get_user_accounts(user_id)
-    active_acc = next((a for a in accounts if a.get("status") == "active"), None)
-
-    client = None
-    if active_acc:
-        try:
-            session = decrypt_session(active_acc["encrypted_session"])
-            client = await get_client_from_session(session)
-        except Exception as e:
-            logger.error(f"Failed to start client for analysis: {e}")
-
-    try:
-        for link in initial_links:
-            parsed = parse_telegram_link(link)
-            if not parsed:
-                final_links.append(link)
-                continue
-                
-            if not client:
-                # If no active account is available for resolution, keep link as is
-                final_links.append(link)
-                continue
-
-            try:
-                if parsed["type"] == "folder":
-                    # Expand folder
-                    folder_data = await expand_folder_link(client, parsed["identifier"])
-                    final_links.extend(folder_data)
-                else:
-                    # Resolve single link ID
-                    try:
-                        resolve_target = link
-                        if parsed["type"] == "username":
-                            resolve_target = f"@{parsed['identifier']}"
-                        elif parsed["type"] in ("private_chat", "private_topic"):
-                            resolve_target = int(f"-100{parsed['identifier']}")
-                        elif parsed["type"] == "invite":
-                            # For invite links, we might need to join or at least get info
-                            from telethon.tl.functions.messages import CheckChatInviteRequest
-                            from telethon.tl.types import ChatInviteAlready, ChatInvite
-                            invite_info = await client(CheckChatInviteRequest(parsed["identifier"]))
-                            if isinstance(invite_info, ChatInviteAlready):
-                                entity = invite_info.chat
-                            elif isinstance(invite_info, ChatInvite):
-                                # Just info, haven't joined yet. We'll join later or now.
-                                # To get the ID, we usually need to join.
-                                entity = await client.get_entity(link)
-                            else:
-                                entity = await client.get_entity(link)
-                        else:
-                            entity = await client.get_entity(link)
-                            
-                        final_links.append({"link": link, "id": entity.id})
-                    except Exception:
-                        # Fallback: add without ID if resolution fails
-                        final_links.append(link)
-            except Exception as e:
-                logger.error(f"Resolution failed for {link}: {e}")
-                final_links.append(link)
-    finally:
-        if client:
-            await client.disconnect()
-
-    result = await add_groups_bulk(user_id, final_links)
-    await log_groups_added(user_id, result["added"], result["failed"])
-
-    await status_msg.delete()
     await update.message.reply_text(
-        messages.groups_added_text(result["added"], result["failed"]),
+        messages.groups_added_text(result["added"], result["total"]),
         parse_mode="HTML",
         reply_markup=keyboards.groups_after_add_keyboard(),
     )
@@ -156,7 +79,7 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def view_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """View all added groups."""
     user_id = update.effective_user.id
-    groups = await get_user_groups(user_id)
+    groups = await get_groups(user_id)
 
     if not groups:
         await _send_menu(
@@ -175,9 +98,7 @@ async def clear_groups_callback(update: Update, context: ContextTypes.DEFAULT_TY
     """Ask confirmation to clear all groups."""
     await _send_menu(
         update, context,
-        messages._header("CONFIRM PURGE") + 
-        "This will remove ALL your broadcast\ntarget groups. Proceed?" + 
-        messages._footer(),
+        messages.confirm_clear_groups_text(),
         keyboards.confirm_clear_groups_keyboard(),
     )
 
@@ -190,13 +111,11 @@ async def confirm_clear_groups_callback(
     await query.answer()
     user_id = query.from_user.id
 
-    deleted = await delete_all_groups(user_id)
+    deleted = await clear_groups(user_id)
 
     await _send_menu(
         update, context,
-        messages._header("POOL CLEARED") + 
-        f"Successfully removed <b>{deleted}</b> targets." + 
-        messages._footer(),
+        messages.groups_cleared_text(deleted),
         keyboards.back_keyboard("manage_groups"),
     )
 

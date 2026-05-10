@@ -1,5 +1,5 @@
 """
-Telethon service — manages Telegram user account connections.
+Telethon service — manages Telegram user account connections and messaging.
 
 Handles:
 - Sending login codes
@@ -7,6 +7,7 @@ Handles:
 - 2FA password authentication
 - Creating session strings
 - Building clients from stored sessions
+- Sending messages to groups/channels
 
 SECURITY: Never logs phone numbers, OTPs, passwords, or session strings.
 """
@@ -30,15 +31,12 @@ logger = logging.getLogger(__name__)
 
 
 async def create_client(session_string: str = "") -> TelegramClient:
-    """
-    Create a Telethon client with the given session string.
-    If empty, creates a new session.
-    """
+    """Create a Telethon client with the given session string."""
     client = TelegramClient(
         StringSession(session_string),
         API_ID,
         API_HASH,
-        device_model="Kurup Ads Bot",
+        device_model="Group Broadcaster",
         system_version="1.0",
         app_version="2.0",
     )
@@ -228,52 +226,24 @@ async def get_client_from_session(session_string: str) -> TelegramClient:
     return client
 
 
-async def get_account_dialogs(client: TelegramClient) -> list[dict]:
+async def send_message_to_entity(
+    client: TelegramClient,
+    entity,
+    text: str = None,
+    media_type: str = None,
+    media_file_id: str = None,
+) -> bool:
     """
-    Get all dialogs (chats/groups/channels) for a connected client.
-    Only returns groups and channels where the user can post.
+    Send a message (text/photo/video) to a resolved entity.
+    Returns True on success, raises on error.
     """
-    dialogs = []
-    try:
-        async for dialog in client.iter_dialogs():
-            if dialog.is_group or dialog.is_channel:
-                dialogs.append({
-                    "id": dialog.id,
-                    "title": dialog.title,
-                    "is_group": dialog.is_group,
-                    "is_channel": dialog.is_channel,
-                })
-    except Exception as e:
-        logger.error(f"Failed to fetch dialogs: {type(e).__name__}")
+    if media_type == "photo" and media_file_id:
+        await client.send_file(entity, media_file_id, caption=text or "")
+    elif media_type == "video" and media_file_id:
+        await client.send_file(entity, media_file_id, caption=text or "")
+    elif text:
+        await client.send_message(entity, text)
+    else:
+        raise ValueError("No message content to send")
 
-    return dialogs
-
-
-async def expand_folder_link(client: TelegramClient, slug: str) -> list[dict]:
-    """
-    Expand a Telegram folder link (t.me/addlist/slug) into a list of group data.
-    Returns list of {"link": str, "id": int}
-    """
-    from telethon.tl.functions.chatlists import GetChatlistInviteRequest
-    from telethon.tl.types import Chat, Channel
-    
-    results = []
-    try:
-        # Get the invite info
-        invite = await client(GetChatlistInviteRequest(slug))
-        
-        # Peer entities are in invite.peers
-        for peer in invite.peers:
-            if isinstance(peer, (Chat, Channel)):
-                data = {"id": peer.id}
-                if getattr(peer, "username", None):
-                    data["link"] = f"https://t.me/{peer.username}"
-                else:
-                    # Private group: t.me/c/id
-                    data["link"] = f"https://t.me/c/{peer.id}"
-                results.append(data)
-                    
-    except Exception as e:
-        logger.error(f"Failed to expand folder {slug}: {e}")
-        
-    return results
+    return True

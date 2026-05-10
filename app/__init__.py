@@ -1,1 +1,1 @@
-# Kurup Ads Bot — Main Application Package
+# Group Broadcaster Bot — Main Application Package
