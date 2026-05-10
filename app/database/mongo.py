@@ -29,8 +29,10 @@ def get_db() -> AsyncIOMotorDatabase:
             maxPoolSize=50,
             minPoolSize=3,
         )
-        _db = _client[MONGO_DB_NAME]
-        logger.info("MongoDB connection pool created")
+        _db = _client.get_default_database()
+        if _db.name is None:
+            _db = _client[MONGO_DB_NAME]
+        logger.info(f"MongoDB connection pool created (db: {_db.name})")
 
     return _db
 
