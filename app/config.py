@@ -26,8 +26,8 @@ API_ID: int = _safe_int(os.getenv("API_ID"), 0)
 API_HASH: str = os.getenv("API_HASH", "")
 
 # ── MongoDB (REQUIRED) ──────────────────────────────────────────────────────
-MONGO_URI: str = os.getenv("MONGO_URI", "")
-MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "group_broadcaster")
+MONGO_URI: str = os.getenv("MONGODB_URI", "")
+MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "kurup_ads")
 
 # ── Encryption Key (REQUIRED — Fernet) ──────────────────────────────────────
 ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
