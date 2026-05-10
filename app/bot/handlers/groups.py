@@ -146,5 +146,5 @@ def build_add_groups_conversation() -> ConversationHandler:
             CallbackQueryHandler(_cancel_to_groups, pattern="^dashboard$"),
             CallbackQueryHandler(_cancel_to_groups, pattern="^home$"),
         ],
-        per_user=True, per_chat=True, per_message=True,
+        per_user=True, per_chat=True,
     )

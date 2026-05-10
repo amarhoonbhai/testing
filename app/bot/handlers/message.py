@@ -113,7 +113,7 @@ def build_message_conversation() -> ConversationHandler:
             CallbackQueryHandler(end_conversation_callback, pattern="^dashboard$"),
             CallbackQueryHandler(end_conversation_callback, pattern="^set_message$"),
         ],
-        per_user=True, per_chat=True, per_message=True,
+        per_user=True, per_chat=True,
     )
 
 
