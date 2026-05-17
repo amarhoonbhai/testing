@@ -97,7 +97,7 @@ async def start(user_id: int) -> dict:
     await log_broadcast_started(user_id, len(groups), interval)
 
     logger.info(f"Broadcast started for user {user_id} — {len(groups)} groups, {interval}s interval")
-    return {"success": True}
+    return {"success": True, "total_groups": len(groups)}
 
 
 async def stop(user_id: int) -> dict:
@@ -206,8 +206,13 @@ async def _broadcast_loop(user_id: int):
 
             try:
                 # ── Execute one broadcast cycle ──
+                progress_chat_id = user.get("progress_chat_id")
+                progress_message_id = user.get("progress_message_id")
+                
                 sent, failed, skipped = await _execute_cycle(
-                    client, user_id, message, groups, group_fails
+                    client, user_id, message, groups, group_fails,
+                    progress_chat_id=progress_chat_id,
+                    progress_message_id=progress_message_id
                 )
 
                 # Log cycle results
@@ -244,16 +249,24 @@ async def _broadcast_loop(user_id: int):
 
 
 async def _execute_cycle(
-    client, user_id: int, message: dict, groups: list[str], group_fails: dict
+    client, user_id: int, message: dict, groups: list[str], group_fails: dict,
+    progress_chat_id: int = None, progress_message_id: int = None
 ) -> tuple[int, int, int]:
     """
     Execute one broadcast cycle across all groups.
-
-    Returns (sent, failed, skipped) counts.
+    Updates the live progress message.
     """
+    import time
+    from app.bot import messages
+    from app.services.channel_logger import _bot as telegram_bot
+
     sent = 0
     failed = 0
     skipped = 0
+    total = len(groups)
+    start_time = time.time()
+    last_update_time = start_time
+    last_update_count = 0
 
     # Step 1: Shuffle groups for randomization
     random.shuffle(groups)
@@ -278,28 +291,42 @@ async def _execute_cycle(
         for i in range(0, len(active_groups), BATCH_SIZE)
     ]
 
+    async def _update_progress():
+        if telegram_bot and progress_chat_id and progress_message_id:
+            try:
+                await telegram_bot.edit_message_text(
+                    chat_id=progress_chat_id,
+                    message_id=progress_message_id,
+                    text=messages.broadcast_progress_text(sent, failed, skipped, total),
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+
     for batch_idx, batch in enumerate(batches):
         for group_link in batch:
+            result = {"success": False, "target": group_link, "error_type": None, "error_message": None, "skipped": False}
             try:
                 # Resolve entity
                 entity = await _resolve_group(client, group_link)
                 if not entity:
+                    result["error_type"] = "ResolveError"
+                    result["error_message"] = "Could not resolve entity"
                     failed += 1
                     await increment_failed(user_id)
                     await increment_group_fail(user_id, group_link)
-                    continue
-
-                # Send message
-                await send_message_to_entity(
-                    client, entity,
-                    text=message.get("text"),
-                    media_type=message.get("media_type"),
-                    media_file_id=message.get("media_file_id"),
-                )
-
-                sent += 1
-                await increment_sent(user_id)
-                await reset_group_fail(user_id, group_link)
+                else:
+                    # Send message
+                    res = await send_message_to_entity(
+                        client, entity,
+                        text=message.get("text"),
+                        media_type=message.get("media_type"),
+                        media_path=message.get("media_path"),
+                    )
+                    sent += 1
+                    await increment_sent(user_id)
+                    await reset_group_fail(user_id, group_link)
+                    result = res
 
             except FloodWaitError as e:
                 logger.warning(f"[{user_id}] FloodWait: {e.seconds}s — sleeping...")
@@ -308,57 +335,86 @@ async def _execute_cycle(
                 try:
                     entity = await _resolve_group(client, group_link)
                     if entity:
-                        await send_message_to_entity(
+                        res = await send_message_to_entity(
                             client, entity,
                             text=message.get("text"),
                             media_type=message.get("media_type"),
-                            media_file_id=message.get("media_file_id"),
+                            media_path=message.get("media_path"),
                         )
                         sent += 1
                         await increment_sent(user_id)
                         await reset_group_fail(user_id, group_link)
+                        result = res
                     else:
                         failed += 1
                         await increment_failed(user_id)
-                except Exception:
+                        result["error_type"] = "ResolveError"
+                except Exception as ex:
                     failed += 1
                     await increment_failed(user_id)
                     await increment_group_fail(user_id, group_link)
+                    result["error_type"] = type(ex).__name__
+                    result["error_message"] = str(ex)
 
             except SlowModeWaitError as e:
                 logger.info(f"[{user_id}] SlowMode on {group_link}: {e.seconds}s — skipping")
                 skipped += 1
+                result["skipped"] = True
+                result["error_type"] = "SlowMode"
+                result["error_message"] = f"Wait {e.seconds}s"
 
             except (ChatWriteForbiddenError, UserBannedInChannelError,
-                    ChatAdminRequiredError):
+                    ChatAdminRequiredError) as e:
                 logger.info(f"[{user_id}] Permission denied: {group_link}")
                 failed += 1
                 await increment_failed(user_id)
                 await increment_group_fail(user_id, group_link)
+                result["error_type"] = "PermissionError"
+                result["error_message"] = type(e).__name__
 
-            except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError):
+            except (ChannelPrivateError, ChatIdInvalidError, PeerIdInvalidError) as e:
                 logger.info(f"[{user_id}] Invalid/private group: {group_link}")
                 failed += 1
                 await increment_failed(user_id)
                 await increment_group_fail(user_id, group_link)
+                result["error_type"] = "InvalidGroup"
+                result["error_message"] = type(e).__name__
 
             except PeerFloodError:
                 logger.warning(f"[{user_id}] PeerFlood — pausing 5 minutes")
                 await asyncio.sleep(300)
                 failed += 1
                 await increment_failed(user_id)
+                result["error_type"] = "PeerFloodError"
 
             except RPCError as e:
                 logger.warning(f"[{user_id}] RPC error on {group_link}: {e}")
                 failed += 1
                 await increment_failed(user_id)
                 await increment_group_fail(user_id, group_link)
+                result["error_type"] = "RPCError"
+                result["error_message"] = str(e)
 
             except Exception as e:
                 logger.error(f"[{user_id}] Unexpected error on {group_link}: {e}")
                 failed += 1
                 await increment_failed(user_id)
                 await increment_group_fail(user_id, group_link)
+                result["error_type"] = type(e).__name__
+                result["error_message"] = str(e)
+                
+            # Log failure if any
+            if not result.get("success") and not result.get("skipped"):
+                from app.services.channel_logger import log_send_failed
+                await log_send_failed(user_id, group_link, result.get("error_type", "Error"), result.get("error_message", ""))
+
+            # ── Check if we should update progress ──
+            current = sent + failed + skipped
+            current_time = time.time()
+            if (current - last_update_count >= 10) or (current_time - last_update_time >= 30):
+                await _update_progress()
+                last_update_count = current
+                last_update_time = current_time
 
             # ── Send delay between individual messages ──
             delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
@@ -369,6 +425,9 @@ async def _execute_cycle(
             gap = random.uniform(BATCH_GAP_MIN, BATCH_GAP_MAX)
             logger.info(f"[{user_id}] Batch {batch_idx + 1}/{len(batches)} done — gap {gap:.0f}s")
             await asyncio.sleep(gap)
+            
+    # Final progress update
+    await _update_progress()
 
     return sent, failed, skipped
 

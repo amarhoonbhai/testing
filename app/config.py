@@ -26,11 +26,11 @@ API_ID: int = _safe_int(os.getenv("API_ID"), 0)
 API_HASH: str = os.getenv("API_HASH", "")
 
 # ── MongoDB (REQUIRED) ──────────────────────────────────────────────────────
-MONGO_URI: str = os.getenv("MONGO_URI", "")
+MONGODB_URI: str = os.getenv("MONGODB_URI", os.getenv("MONGO_URI", ""))
 MONGO_DB_NAME: str = os.getenv("MONGO_DB_NAME", "kurup_ads")
 
 # ── Encryption Key (REQUIRED — Fernet) ──────────────────────────────────────
-ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")
+ENCRYPTION_KEY: str = os.getenv("FERNET_KEY", os.getenv("ENCRYPTION_KEY", ""))
 
 # ── Branding ─────────────────────────────────────────────────────────────────
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "GroupBroadcasterBot")
@@ -76,10 +76,14 @@ def validate_config():
         missing.append("API_ID")
     if not API_HASH:
         missing.append("API_HASH")
-    if not MONGO_URI:
-        missing.append("MONGO_URI")
+    if not MONGODB_URI:
+        missing.append("MONGODB_URI")
     if not ENCRYPTION_KEY:
-        missing.append("ENCRYPTION_KEY")
+        missing.append("FERNET_KEY")
+    if not OWNER_ID:
+        missing.append("OWNER_ID")
+    if not LOG_CHANNEL_ID:
+        missing.append("LOG_CHANNEL_ID")
 
     if missing:
         print("\n" + "!" * 55)

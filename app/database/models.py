@@ -23,13 +23,15 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
 
     default_doc = {
         "telegram_user_id": telegram_user_id,
-        "message": None,                # {text, media_type, media_file_id}
+        "message": None,                # {text, media_type, media_path}
         "session_encrypted": None,       # Encrypted Telethon session string
         "phone_masked": None,            # Masked phone for display
         "groups": [],                    # List of group link strings
         "group_fails": {},               # {group_link: consecutive_fail_count}
         "interval_seconds": DEFAULT_INTERVAL,
         "is_broadcasting": False,
+        "progress_message_id": None,     # ID of the live progress message
+        "progress_chat_id": None,        # Chat ID for the live progress message
         "total_sent": 0,
         "total_failed": 0,
         "last_sent_at": None,
@@ -70,12 +72,12 @@ async def update_user(telegram_user_id: int, **fields) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def set_message(telegram_user_id: int, text: str = None,
-                      media_type: str = None, media_file_id: str = None) -> dict:
+                      media_type: str = None, media_path: str = None) -> dict:
     """Save the broadcast message for a user."""
     msg = {
         "text": text,
         "media_type": media_type,       # "photo", "video", or None
-        "media_file_id": media_file_id,  # Telegram file_id
+        "media_path": media_path,        # Local file path for Telethon
     }
     return await update_user(telegram_user_id, message=msg)
 
@@ -165,6 +167,24 @@ async def set_broadcasting(telegram_user_id: int, is_broadcasting: bool) -> dict
 async def set_interval(telegram_user_id: int, seconds: int) -> dict:
     """Set the broadcast cycle interval."""
     return await update_user(telegram_user_id, interval_seconds=seconds)
+
+
+async def set_progress_message(telegram_user_id: int, chat_id: int, message_id: int) -> dict:
+    """Save the current progress message details to update it live."""
+    return await update_user(
+        telegram_user_id,
+        progress_chat_id=chat_id,
+        progress_message_id=message_id,
+    )
+
+
+async def clear_progress_message(telegram_user_id: int) -> dict:
+    """Clear the progress message details."""
+    return await update_user(
+        telegram_user_id,
+        progress_chat_id=None,
+        progress_message_id=None,
+    )
 
 
 async def get_broadcasting_users() -> list[dict]:

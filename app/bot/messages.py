@@ -13,17 +13,17 @@ from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME
 def _header(title: str) -> str:
     return (
         f"<b>{title.upper()}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
     )
 
 def _footer() -> str:
     return (
-        f"\n━━━━━━━━━━━━━━━━━━━━\n"
+        f"\n━━━━━━━━━━━━━━━━━━\n"
         f"<b>GROUP BROADCASTER</b>"
     )
 
 def _stat(label: str, value) -> str:
-    return f"┊ {label:<12} → <code>{value}</code>\n"
+    return f"🔹 {label:<12} → <code>{value}</code>\n"
 
 
 # ━━━━━━━━━━━━━━━━━━━━
@@ -114,8 +114,8 @@ def dashboard_text(
     rate = f"{(total_sent / total * 100):.1f}%" if total > 0 else "N/A"
 
     return (
-        f"<b>DASHBOARD</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📊 <b>DASHBOARD</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
         f"{_stat('Status', status)}"
         f"{_stat('Account', account_status)}"
         f"{_stat('Message', message_status)}"
@@ -374,6 +374,19 @@ def broadcast_stopped_text() -> str:
     )
 
 
+def broadcast_progress_text(sent: int, failed: int, skipped: int, total: int) -> str:
+    remaining = total - (sent + failed + skipped)
+    return (
+        f"📡 <b>BROADCAST RUNNING</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"✅ Sent: {sent}\n"
+        f"❌ Failed: {failed}\n"
+        f"⏭ Skipped: {skipped}\n"
+        f"🎯 Total: {total}\n"
+        f"⏳ Remaining: {remaining}\n"
+    )
+
+
 def set_interval_prompt_text(min_interval: int) -> str:
     return (
         f"{_header('Set Interval')}"
@@ -400,19 +413,19 @@ def interval_saved_text(seconds: int) -> str:
 
 def error_text(msg: str) -> str:
     return (
-        f"<b>ERROR</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"┊ {msg}\n"
-        f"━━━━━━━━━━━━━━━━━━━━"
+        f"❌ <b>ERROR</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"⚠️ {msg}\n\n"
+        f"━━━━━━━━━━━━━━━━━━"
     )
 
 
 def success_text(msg: str) -> str:
     return (
-        f"<b>SUCCESS</b>\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"┊ {msg}\n"
-        f"━━━━━━━━━━━━━━━━━━━━"
+        f"✅ <b>SUCCESS</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"✨ {msg}\n\n"
+        f"━━━━━━━━━━━━━━━━━━"
     )
 
 

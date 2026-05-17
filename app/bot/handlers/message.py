@@ -6,6 +6,8 @@ Uses ConversationHandler for the set-message flow.
 """
 
 import logging
+import os
+import uuid
 from telegram import Update
 from telegram.ext import (
     ContextTypes,
@@ -68,14 +70,22 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = msg.text or msg.caption or ""
     media_type = None
-    media_file_id = None
+    media_path = None
 
-    if msg.photo:
-        media_type = "photo"
-        media_file_id = msg.photo[-1].file_id
-    elif msg.video:
-        media_type = "video"
-        media_file_id = msg.video.file_id
+    if msg.photo or msg.video:
+        media_dir = "downloads"
+        os.makedirs(media_dir, exist_ok=True)
+        file_ext = ".jpg" if msg.photo else ".mp4"
+        media_path = os.path.join(media_dir, f"{user_id}_{uuid.uuid4().hex}{file_ext}")
+        
+        if msg.photo:
+            media_type = "photo"
+            file = await context.bot.get_file(msg.photo[-1].file_id)
+        else:
+            media_type = "video"
+            file = await context.bot.get_file(msg.video.file_id)
+            
+        await file.download_to_drive(media_path)
     elif msg.text:
         media_type = None
     else:
@@ -85,7 +95,7 @@ async def receive_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return WAITING_MESSAGE
 
-    await set_message(user_id, text=text, media_type=media_type, media_file_id=media_file_id)
+    await set_message(user_id, text=text, media_type=media_type, media_path=media_path)
 
     await update.message.reply_text(
         messages.message_saved_text(),
@@ -140,7 +150,7 @@ async def preview_message_callback(update: Update, context: ContextTypes.DEFAULT
     msg = user["message"]
     text = msg.get("text") or ""
     media_type = msg.get("media_type")
-    media_file_id = msg.get("media_file_id")
+    media_path = msg.get("media_path")
 
     caption = f"<b>MESSAGE PREVIEW</b>\n────────────────────\n\n{text}"
     chat_id = update.effective_chat.id
@@ -152,22 +162,24 @@ async def preview_message_callback(update: Update, context: ContextTypes.DEFAULT
         except Exception:
             pass
 
-        if media_type == "photo" and media_file_id:
-            await context.bot.send_photo(
-                chat_id=chat_id,
-                photo=media_file_id,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=keyboards.back_keyboard("set_message"),
-            )
-        elif media_type == "video" and media_file_id:
-            await context.bot.send_video(
-                chat_id=chat_id,
-                video=media_file_id,
-                caption=caption,
-                parse_mode="HTML",
-                reply_markup=keyboards.back_keyboard("set_message"),
-            )
+        if media_type == "photo" and media_path and os.path.exists(media_path):
+            with open(media_path, 'rb') as f:
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=f,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=keyboards.back_keyboard("set_message"),
+                )
+        elif media_type == "video" and media_path and os.path.exists(media_path):
+            with open(media_path, 'rb') as f:
+                await context.bot.send_video(
+                    chat_id=chat_id,
+                    video=f,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=keyboards.back_keyboard("set_message"),
+                )
         else:
             await context.bot.send_message(
                 chat_id=chat_id,

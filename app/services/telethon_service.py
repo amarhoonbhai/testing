@@ -231,19 +231,31 @@ async def send_message_to_entity(
     entity,
     text: str = None,
     media_type: str = None,
-    media_file_id: str = None,
-) -> bool:
+    media_path: str = None,
+) -> dict:
     """
     Send a message (text/photo/video) to a resolved entity.
-    Returns True on success, raises on error.
+    Returns a structured dictionary:
+    { "success": bool, "target": str, "error_type": str, "error_message": str, "skipped": bool }
     """
-    if media_type == "photo" and media_file_id:
-        await client.send_file(entity, media_file_id, caption=text or "")
-    elif media_type == "video" and media_file_id:
-        await client.send_file(entity, media_file_id, caption=text or "")
-    elif text:
-        await client.send_message(entity, text)
+    target = getattr(entity, 'username', None)
+    if not target:
+        target = str(getattr(entity, 'id', 'Unknown'))
     else:
-        raise ValueError("No message content to send")
+        target = f"@{target}"
 
-    return True
+    try:
+        if media_type == "photo" and media_path:
+            await client.send_file(entity, media_path, caption=text or "")
+        elif media_type == "video" and media_path:
+            await client.send_file(entity, media_path, caption=text or "")
+        elif text:
+            await client.send_message(entity, text)
+        else:
+            return {"success": False, "target": target, "error_type": "ValueError", "error_message": "No message content to send", "skipped": False}
+
+        return {"success": True, "target": target, "error_type": None, "error_message": None, "skipped": False}
+    except Exception as e:
+        # Re-raise so the engine can catch specific FloodWait or permissions
+        # But we format the error safely
+        raise e
