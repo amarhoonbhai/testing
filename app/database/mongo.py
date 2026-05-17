@@ -8,7 +8,7 @@ import logging
 import certifi
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
-from app.config import MONGO_URI, MONGO_DB_NAME
+from app.config import MONGODB_URI, MONGO_DB_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def get_db() -> AsyncIOMotorDatabase:
 
     if _db is None:
         _client = AsyncIOMotorClient(
-            MONGO_URI,
+            MONGODB_URI,
             tlsCAFile=certifi.where(),
             serverSelectionTimeoutMS=30_000,
             connectTimeoutMS=30_000,
