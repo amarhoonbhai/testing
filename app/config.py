@@ -82,8 +82,8 @@ def validate_config():
         missing.append("FERNET_KEY")
     if not OWNER_ID:
         missing.append("OWNER_ID")
-    if not LOG_CHANNEL_ID:
-        missing.append("LOG_CHANNEL_ID")
+    if not LOGS_CHANNEL_ID:
+        missing.append("LOGS_CHANNEL_ID")
 
     if missing:
         print("\n" + "!" * 55)
