@@ -353,41 +353,41 @@ async def check_account_health(user_id: int, client: TelegramClient) -> dict:
     try:
         if not await client.is_user_authorized():
             score = 0
-            details.append("├ ▪ ⚠️ Session Standing : Unauthorized / Expired")
+            details.append("▪ ⚠️ Session Standing : Unauthorized / Expired")
             status_str = "🔴 Session Expired (0%)"
         else:
             me = await client.get_me()
-            details.append(f"├ ▪ 👤 Account ID : <code>{me.id}</code>")
+            details.append(f"▪ 👤 Account ID : <code>{me.id}</code>")
             
             if getattr(me, 'restricted', False):
                 score -= 40
-                details.append("├ ▪ ⚠️ Restriction Flag : Active (Account Limited)")
+                details.append("▪ ⚠️ Restriction Flag : Active (Account Limited)")
                 if getattr(me, 'restriction_reason', None):
                     for r in me.restriction_reason:
-                        details.append(f"├ ▪ ↳ Reason : {r.platform} - {r.reason} ({r.text})")
+                        details.append(f"▪ ↳ Reason : {r.platform} - {r.reason} ({r.text})")
             else:
-                details.append("├ ▪ ✅ Restriction Flag : None (Unrestricted)")
+                details.append("▪ ✅ Restriction Flag : None (Unrestricted)")
 
             if getattr(me, 'scam', False):
                 score -= 30
-                details.append("├ ▪ ⚠️ Scam Flag : Active")
+                details.append("▪ ⚠️ Scam Flag : Active")
             elif getattr(me, 'fake', False):
                 score -= 30
-                details.append("├ ▪ ⚠️ Fake Flag : Active")
+                details.append("▪ ⚠️ Fake Flag : Active")
             else:
-                details.append("├ ▪ ✅ Reputation Standing : Verified Clean")
+                details.append("▪ ✅ Reputation Standing : Verified Clean")
 
             # Check profile completeness
             full = await client(GetFullUserRequest(me.id))
             if not full.full_user.about:
                 score -= 10
-                details.append("├ ▪ ⚠️ Profile Bio : Empty (Add bio for better standing)")
+                details.append("▪ ⚠️ Profile Bio : Empty (Add bio for better standing)")
             if not me.photo:
                 score -= 10
-                details.append("├ ▪ ⚠️ Profile Avatar : Missing (Add photo for trust score)")
+                details.append("▪ ⚠️ Profile Avatar : Missing (Add photo for trust score)")
 
             if score == 100:
-                details.append("├ ▪ ✅ Overall Standing : Excellent & Fully Trusted")
+                details.append("▪ ✅ Overall Standing : Excellent & Fully Trusted")
                 status_str = f"🟢 Excellent ({score}%)"
             elif score >= 70:
                 status_str = f"🟡 Good / Minor Warnings ({score}%)"
@@ -396,8 +396,9 @@ async def check_account_health(user_id: int, client: TelegramClient) -> dict:
 
     except Exception as e:
         score = 0
-        details.append(f"├ ▪ ❌ Diagnostic Error : {type(e).__name__}")
+        details.append(f"▪ ❌ Diagnostic Error : {type(e).__name__}")
         status_str = "🔴 Diagnostic Error (0%)"
 
     await update_user(user_id, health_status=status_str, last_health_check=datetime.utcnow())
     return {"score": score, "status": status_str, "details": "\n".join(details)}
+

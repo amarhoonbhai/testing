@@ -13,27 +13,27 @@ from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME
 
 def _header(title: str) -> str:
     return (
-        f"┌── <b>{title.upper()}</b>\n"
-        f"└───────────────────────────────────\n\n"
+        f"<b>{title.upper()}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
     )
 
 def _footer() -> str:
     return (
-        f"\n───────────────────────────────────\n"
+        f"\n━━━━━━━━━━━━━━━━━━━━━━\n"
         f"▪ <b>GROUP BROADCASTER</b> ▪"
     )
 
 def _stat(label: str, value) -> str:
-    return f"├ ▪ {label:<20} : <code>{value}</code>\n"
+    return f"▪ <b>{label}:</b> <code>{value}</code>\n"
 
 def _sub(title: str) -> str:
-    return f"┌ <b>{title}</b>\n"
+    return f"<b>{title}</b>\n"
 
 def _end_sub() -> str:
-    return f"└───────────────────────────────────\n\n"
+    return f"\n"
 
 def _item(text: str) -> str:
-    return f"├ ▸ {text}\n"
+    return f"▸ {text}\n"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -135,8 +135,7 @@ def dashboard_text(
     rate = f"{(total_sent / total * 100):.1f}%" if total > 0 else "N/A"
 
     return (
-        f"📊 <b>EXECUTIVE DASHBOARD</b>\n"
-        f"└───────────────────────────────────\n\n"
+        f"{_header('Executive Dashboard')}"
         f"{_sub('System Status')}"
         f"{_stat('Engine State', status)}"
         f"{_stat('Connected Account', account_status)}"
@@ -156,6 +155,7 @@ def dashboard_text(
         f"{'↳ <i>Autonomous broadcasting engine is live in the background!</i>' if is_broadcasting else '↳ <i>Connect account and add groups to activate autonomous broadcasting.</i>'}"
         f"{_footer()}"
     )
+
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -264,7 +264,7 @@ def add_groups_prompt_text() -> str:
     return (
         f"{_header('Import Target Groups')}"
         f"Submit your group links or usernames (one per line).\n\n"
-        f"┌ <b>Supported Formats</b>\n"
+        f"{_sub('Supported Formats')}"
         f"{_item('@username')}"
         f"{_item('https://t.me/username')}"
         f"{_item('https://t.me/+inviteHash')}"
@@ -299,11 +299,10 @@ def groups_list_text(groups: list[str]) -> str:
     text = f"{_header('Configured Group Roster')}"
     for i, g in enumerate(groups[:30], 1):
         display = g if len(g) <= 35 else g[:32] + "..."
-        text += f"├ {i:02d}. <code>{display}</code>\n"
+        text += f"▪ {i:02d}. <code>{display}</code>\n"
     if len(groups) > 30:
-        text += f"├\n├ ↳ <i>+ {len(groups) - 30} additional groups...</i>\n"
-    text += f"└───────────────────────────────────\n\n"
-    text += f"{_stat('Total Group Count', len(groups))}"
+        text += f"▪ ↳ <i>+ {len(groups) - 30} additional groups...</i>\n"
+    text += f"\n{_stat('Total Group Count', len(groups))}"
     text += _footer()
     return text
 
@@ -329,13 +328,12 @@ def live_groups_text(groups: list[str]) -> str:
     text = f"{_header('Active Live Groups')}"
     for i, g in enumerate(groups[:30], 1):
         display = g if len(g) <= 35 else g[:32] + "..."
-        text += f"├ {i:02d}. <code>{display}</code>\n"
+        text += f"▪ {i:02d}. <code>{display}</code>\n"
     if len(groups) > 30:
-        text += f"├\n├ ↳ <i>+ {len(groups) - 30} additional live groups...</i>\n"
+        text += f"▪ ↳ <i>+ {len(groups) - 30} additional live groups...</i>\n"
     if not groups:
-        text += "├ <i>No active live groups found.</i>\n"
-    text += f"└───────────────────────────────────\n\n"
-    text += f"{_stat('Total Live Groups', len(groups))}"
+        text += "▪ <i>No active live groups found.</i>\n"
+    text += f"\n{_stat('Total Live Groups', len(groups))}"
     text += _footer()
     return text
 
@@ -344,13 +342,12 @@ def paused_groups_text(groups: list[str]) -> str:
     text = f"{_header('Paused / Skipped Groups')}"
     for i, g in enumerate(groups[:30], 1):
         display = g if len(g) <= 35 else g[:32] + "..."
-        text += f"├ {i:02d}. <code>{display}</code>\n"
+        text += f"▪ {i:02d}. <code>{display}</code>\n"
     if len(groups) > 30:
-        text += f"├\n├ ↳ <i>+ {len(groups) - 30} additional paused groups...</i>\n"
+        text += f"▪ ↳ <i>+ {len(groups) - 30} additional paused groups...</i>\n"
     if not groups:
-        text += "├ <i>No paused groups found.</i>\n"
-    text += f"└───────────────────────────────────\n\n"
-    text += f"{_stat('Total Paused Groups', len(groups))}"
+        text += "▪ <i>No paused groups found.</i>\n"
+    text += f"\n{_stat('Total Paused Groups', len(groups))}"
     text += _footer()
     return text
 
@@ -358,18 +355,17 @@ def paused_groups_text(groups: list[str]) -> str:
 def group_diagnostics_text(group_reasons: dict, paused_groups: list[str]) -> str:
     text = f"{_header('Group Failure Diagnostics')}"
     if not paused_groups:
-        text += "├ ✅ <i>All configured groups are fully operational.</i>\n"
+        text += "▪ ✅ <i>All configured groups are fully operational.</i>\n"
     else:
-        text += "┌ <b>Failure Root Cause Analysis</b>\n"
+        text += "<b>Failure Root Cause Analysis</b>\n"
         for i, g in enumerate(paused_groups[:20], 1):
             display = g if len(g) <= 25 else g[:22] + "..."
             safe_key = g.replace(".", "_DOT_").replace("$", "_DOLLAR_")
             reason = group_reasons.get(safe_key, "Consecutive Failures / Unknown")
-            text += f"├ {i:02d}. <code>{display}</code> : <b>{reason}</b>\n"
+            text += f"▪ {i:02d}. <code>{display}</code> : <b>{reason}</b>\n"
         if len(paused_groups) > 20:
-            text += f"├\n├ ↳ <i>+ {len(paused_groups) - 20} more failing groups...</i>\n"
-        text += f"└───────────────────────────────────\n\n"
-        text += f"↳ <i>Tap 'Prune Dead Groups' to automatically remove invalid targets.</i>\n"
+            text += f"▪ ↳ <i>+ {len(paused_groups) - 20} more failing groups...</i>\n"
+        text += f"\n↳ <i>Tap 'Prune Dead Groups' to automatically remove invalid targets.</i>\n"
     
     text += f"\n{_stat('Total Failing Groups', len(paused_groups))}"
     text += _footer()
@@ -413,21 +409,20 @@ def broadcast_progress_text(sent: int, failed: int, skipped: int, total: int, sp
         eta_str = "Cycle Complete"
 
     return (
-        f"📡 <b>LIVE BROADCAST TELEMETRY</b>\n"
-        f"└───────────────────────────────────\n\n"
-        f"┌ <b>Execution Metrics</b>\n"
-        f"├ ▪ ✅ Successful Forwards : <code>{sent}</code>\n"
-        f"├ ▪ ❌ Failed Attempts     : <code>{failed}</code>\n"
-        f"├ ▪ ⏭ Skipped Targets     : <code>{skipped}</code>\n"
-        f"├ ▪ 🎯 Total Target Groups : <code>{total}</code>\n"
-        f"├ ▪ ⏳ Remaining Targets   : <code>{remaining}</code>\n"
-        f"└───────────────────────────────────\n\n"
-        f"┌ <b>Performance & Vitals</b>\n"
-        f"├ ▪ ⚡ Transmission Speed  : <code>{speed:.1f} msg/min</code>\n"
-        f"├ ▪ 📈 Current Success Rate: <code>{rate}</code>\n"
-        f"├ ▪ ⏱ Estimated Completion : <code>{eta_str}</code>\n"
-        f"└───────────────────────────────────\n"
+        f"{_header('Live Broadcast Telemetry')}"
+        f"<b>Execution Metrics</b>\n"
+        f"▪ ✅ Successful Forwards : <code>{sent}</code>\n"
+        f"▪ ❌ Failed Attempts     : <code>{failed}</code>\n"
+        f"▪ ⏭ Skipped Targets     : <code>{skipped}</code>\n"
+        f"▪ 🎯 Total Target Groups : <code>{total}</code>\n"
+        f"▪ ⏳ Remaining Targets   : <code>{remaining}</code>\n\n"
+        f"<b>Performance & Vitals</b>\n"
+        f"▪ ⚡ Transmission Speed  : <code>{speed:.1f} msg/min</code>\n"
+        f"▪ 📈 Current Success Rate: <code>{rate}</code>\n"
+        f"▪ ⏱ Estimated Completion : <code>{eta_str}</code>"
+        f"{_footer()}"
     )
+
 
 
 def set_interval_prompt_text(min_interval: int) -> str:
@@ -457,18 +452,18 @@ def interval_saved_text(seconds: int) -> str:
 def error_text(msg: str) -> str:
     return (
         f"❌ <b>SYSTEM ERROR</b>\n"
-        f"└───────────────────────────────────\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"⚠️ {msg}\n\n"
-        f"───────────────────────────────────"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
     )
 
 
 def success_text(msg: str) -> str:
     return (
         f"✅ <b>OPERATION SUCCESSFUL</b>\n"
-        f"└───────────────────────────────────\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"✨ {msg}\n\n"
-        f"───────────────────────────────────"
+        f"━━━━━━━━━━━━━━━━━━━━━━"
     )
 
 
@@ -477,15 +472,15 @@ def success_text(msg: str) -> str:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def health_monitor_text(score: int, status: str, details: str) -> str:
+    clean_details = details.replace("├ ▪ ", "▪ ").replace("└───────────────────────────────────", "").strip()
     return (
         f"{_header('Account Health Diagnostic')}"
         f"{_sub('Vitals Overview')}"
         f"{_stat('Health Score', f'{score}%')}"
         f"{_stat('Account Standing', status)}"
         f"{_end_sub()}"
-        f"┌ <b>Diagnostic Report</b>\n"
-        f"{details}\n"
-        f"└───────────────────────────────────\n\n"
+        f"<b>Diagnostic Report</b>\n"
+        f"{clean_details}\n\n"
         f"↳ <i>Real-time automated account standing evaluation.</i>"
         f"{_footer()}"
     )
@@ -541,8 +536,7 @@ def live_stats_text(user: dict, live_count: int, paused_count: int) -> str:
     premium = "💎 Premium Tier" if user.get("is_premium") else "🆓 Free Plan"
 
     return (
-        f"📊 <b>REAL-TIME USER TELEMETRY</b>\n"
-        f"└───────────────────────────────────\n\n"
+        f"{_header('Real-Time User Telemetry')}"
         f"{_sub('Account Standing')}"
         f"{_stat('Service Tier', premium)}"
         f"{_stat('Health Standing', health)}"
@@ -655,12 +649,11 @@ def admin_all_users_stats_text(users: list[dict]) -> str:
         failed = u.get("total_failed", 0)
         health = u.get("health_status", "N/A").split(" ")[0]
         prem = "💎" if u.get("is_premium") else "🆓"
-        text += f"├ ▪ <code>{uid}</code> ({phone}) | {prem} | {health} | S:{sent} F:{failed}\n"
+        text += f"▪ <code>{uid}</code> ({phone}) | {prem} | {health} | S:{sent} F:{failed}\n"
     
     if len(users) > 20:
-        text += f"├\n├ ↳ <i>+ {len(users) - 20} additional users...</i>\n"
-    text += f"└───────────────────────────────────\n\n"
-    text += f"{_stat('Total Fleet Users', len(users))}"
+        text += f"▪ ↳ <i>+ {len(users) - 20} additional users...</i>\n"
+    text += f"\n{_stat('Total Fleet Users', len(users))}"
     text += _footer()
     return text
 
@@ -685,3 +678,4 @@ def admin_global_broadcast_success_text(sent: int, failed: int) -> str:
         f"{_end_sub()}"
         f"{_footer()}"
     )
+
