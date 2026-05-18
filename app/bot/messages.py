@@ -584,6 +584,8 @@ def premium_info_text(is_premium: bool) -> str:
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def admin_panel_text(stats: dict) -> str:
+    sent_str = f"{stats['total_sent']:,}"
+    failed_str = f"{stats['total_failed']:,}"
     return (
         f"{_header('Elite Admin Command Center')}"
         f"{_sub('Global Fleet Telemetry')}"
@@ -591,13 +593,14 @@ def admin_panel_text(stats: dict) -> str:
         f"{_stat('Active Broadcasting', stats['broadcasting'])}"
         f"{_end_sub()}"
         f"{_sub('Global Lifetime Performance')}"
-        f"{_stat('Total Messages Sent', f'{stats['total_sent']:,}')}"
-        f"{_stat('Total Failed Attempts', f'{stats['total_failed']:,}')}"
+        f"{_stat('Total Messages Sent', sent_str)}"
+        f"{_stat('Total Failed Attempts', failed_str)}"
         f"{_stat('Global Success Rate', stats['success_rate'])}"
         f"{_end_sub()}"
         f"↳ <i>Select a management capability below.</i>"
         f"{_footer()}"
     )
+
 
 
 def admin_manage_user_prompt_text() -> str:
