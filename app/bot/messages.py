@@ -127,7 +127,7 @@ def dashboard_text(
     is_premium: bool = False,
     health_status: str = "Not Checked",
 ) -> str:
-    status = "🟢 Active (Broadcasting)" if is_broadcasting else "⏸ Idle (Paused)"
+    status = "🟢 Active (Autonomous)" if is_broadcasting else "🟡 Standby (Awaiting Account/Groups)"
     account_status = f"{phone_masked}" if has_account else "🔴 Not Connected"
     tier = "💎 Premium Tier" if is_premium else "🆓 Free Plan"
 
@@ -153,7 +153,7 @@ def dashboard_text(
         f"{_stat('Total Failed Attempts', f'{total_failed:,}')}"
         f"{_stat('Overall Success Rate', rate)}"
         f"{_end_sub()}"
-        f"{'↳ <i>Autonomous broadcasting engine is live!</i>' if is_broadcasting else '↳ <i>Configure your targets and start the engine.</i>'}"
+        f"{'↳ <i>Autonomous broadcasting engine is live in the background!</i>' if is_broadcasting else '↳ <i>Connect account and add groups to activate autonomous broadcasting.</i>'}"
         f"{_footer()}"
     )
 

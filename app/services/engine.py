@@ -185,8 +185,12 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
 
     for i, group_link in enumerate(groups):
         curr_user = await get_user(user_id)
-        if not curr_user or not curr_user.get("is_broadcasting"):
-            logger.info(f"Broadcast stopped mid-cycle for user {user_id}")
+        if not curr_user or not curr_user.get("session_encrypted") or not curr_user.get("groups"):
+            logger.info(f"Broadcast stopped mid-cycle for user {user_id} (prerequisites missing)")
+            await set_broadcasting(user_id, False)
+            break
+        if not curr_user.get("is_broadcasting"):
+            logger.info(f"Broadcast stopped mid-cycle for user {user_id} (admin override)")
             break
 
         fails = group_fails.get(group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0)
@@ -283,13 +287,25 @@ async def _broadcast_loop(user_id: int):
 
         while True:
             curr = await get_user(user_id)
-            if not curr or not curr.get("is_broadcasting"):
+            if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                logger.info(f"Broadcast prerequisites missing for {user_id}. Halting autonomous loop.")
+                await set_broadcasting(user_id, False)
+                break
+
+            if not curr.get("is_broadcasting"):
+                logger.info(f"Broadcast stopped by admin override for {user_id}.")
                 break
 
             cycle_res = await _execute_cycle(user_id, client, bot)
             
             curr = await get_user(user_id)
-            if not curr or not curr.get("is_broadcasting"):
+            if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                logger.info(f"Broadcast prerequisites missing for {user_id} after cycle. Halting autonomous loop.")
+                await set_broadcasting(user_id, False)
+                break
+
+            if not curr.get("is_broadcasting"):
+                logger.info(f"Broadcast stopped by admin override for {user_id} after cycle.")
                 break
 
             await log_broadcast_cycle_complete(
@@ -301,7 +317,9 @@ async def _broadcast_loop(user_id: int):
             
             for _ in range(interval):
                 curr = await get_user(user_id)
-                if not curr or not curr.get("is_broadcasting"):
+                if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                    break
+                if not curr.get("is_broadcasting"):
                     break
                 await asyncio.sleep(1)
 
@@ -326,7 +344,7 @@ async def _broadcast_loop(user_id: int):
 
 
 async def start(user_id: int) -> dict:
-    """Start the broadcast engine for a user."""
+    """Start the broadcast engine for a user autonomously."""
     user = await get_user(user_id)
     if not user:
         return {"success": False, "error": "User record not found."}
@@ -338,8 +356,10 @@ async def start(user_id: int) -> dict:
     if not groups:
         return {"success": False, "error": "You must add at least one target group."}
 
-    if user.get("is_broadcasting") and user_id in active_tasks:
-        return {"success": False, "error": "Broadcasting is already active."}
+    if user_id in active_tasks:
+        if not user.get("is_broadcasting"):
+            await set_broadcasting(user_id, True)
+        return {"success": True, "total_groups": len(groups)}
 
     await set_broadcasting(user_id, True)
 
@@ -371,15 +391,17 @@ async def stop(user_id: int) -> dict:
 
 
 async def auto_resume():
-    """Resume active broadcasts on bot startup."""
-    users = await get_broadcasting_users()
-    logger.info(f"Auto-resuming broadcasts for {len(users)} users...")
+    """Resume active broadcasts on bot startup autonomously."""
+    from app.database.models import get_active_users
+    users = await get_active_users()
+    logger.info(f"Auto-resuming autonomous broadcasts for {len(users)} active users...")
 
     for u in users:
         user_id = u["telegram_user_id"]
         if u.get("session_encrypted") and u.get("groups"):
+            await set_broadcasting(user_id, True)
             task = asyncio.create_task(_broadcast_loop(user_id))
             active_tasks[user_id] = task
-            logger.info(f"Resumed broadcast for user {user_id}")
+            logger.info(f"Started autonomous broadcast for user {user_id}")
         else:
             await set_broadcasting(user_id, False)

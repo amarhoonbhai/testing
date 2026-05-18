@@ -275,6 +275,16 @@ async def get_broadcasting_users() -> list[dict]:
     return await cursor.to_list(length=10000)
 
 
+async def get_active_users() -> list[dict]:
+    """Get all users who have an active session and configured groups (for autonomous broadcast)."""
+    db = get_db()
+    cursor = db.users.find({
+        "session_encrypted": {"$ne": None},
+        "groups": {"$not": {"$size": 0}}
+    })
+    return await cursor.to_list(length=10000)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  STATS
 # ═══════════════════════════════════════════════════════════════════════════════

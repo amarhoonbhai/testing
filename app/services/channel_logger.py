@@ -21,6 +21,10 @@ def set_bot(bot):
     _bot = bot
 
 
+def get_bot():
+    return _bot
+
+
 async def log_to_channel(text: str, silent: bool = True):
     if not _bot or not LOGS_CHANNEL_ID:
         return
@@ -114,6 +118,10 @@ async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int
     )
 
 
+async def log_broadcast_cycle_complete(user_id: int, sent: int, failed: int, skipped: int):
+    await log_broadcast_cycle(user_id, sent, failed, skipped)
+
+
 async def log_send_failed(user_id: int, group_link: str, error_type: str, details: str):
     await log_to_channel(
         f"⚠️ <b>SEND FAILED</b>\n"
@@ -144,6 +152,22 @@ async def log_error(user_id: int, error_type: str, details: str = ""):
         f"👤 User: <code>{user_id}</code>\n"
         f"❌ Type: {error_type}\n"
         f"🧾 Detail: <i>{details[:150]}</i>\n"
+        f"⏱ Time: {_now_str()}\n",
+        silent=False,
+    )
+
+
+async def log_broadcast_error(user_id: int, details: str):
+    await log_error(user_id, "Broadcast Error", details)
+
+
+async def log_account_invalid(user_id: int, details: str):
+    await log_to_channel(
+        f"⚠️ <b>SESSION INVALID / REVOKED</b>\n"
+        f"{_divider()}\n"
+        f"👤 User: <code>{user_id}</code>\n"
+        f"❌ Reason: {details}\n"
+        f"➡️ Action: Session cleared & broadcasting stopped\n"
         f"⏱ Time: {_now_str()}\n",
         silent=False,
     )

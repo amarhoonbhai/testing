@@ -31,12 +31,6 @@ def start_keyboard() -> InlineKeyboardMarkup:
 
 def dashboard_keyboard(is_broadcasting: bool = False, has_account: bool = False,
                        is_owner: bool = False) -> InlineKeyboardMarkup:
-    # Broadcast toggle
-    if is_broadcasting:
-        broadcast_btn = InlineKeyboardButton("⏹ Pause Broadcasting Engine", callback_data="stop_broadcast")
-    else:
-        broadcast_btn = InlineKeyboardButton("▶️ Initialize Broadcasting Engine", callback_data="start_broadcast")
-
     # Account button
     if has_account:
         account_btn = InlineKeyboardButton("🔗 Connected Account", callback_data="view_account")
@@ -44,7 +38,6 @@ def dashboard_keyboard(is_broadcasting: bool = False, has_account: bool = False,
         account_btn = InlineKeyboardButton("🔴 Connect Account", callback_data="connect_account")
 
     buttons = [
-        [broadcast_btn],
         [InlineKeyboardButton("👥 Manage Target Groups", callback_data="manage_groups")],
         [
             account_btn,

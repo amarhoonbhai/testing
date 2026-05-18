@@ -1,7 +1,5 @@
 """
-Broadcast handler — Start/Stop broadcasting + Set interval.
-
-Validates prerequisites before starting and manages the broadcast engine.
+Broadcast handler — Set interval for autonomous broadcasting loops.
 """
 
 import logging
@@ -23,61 +21,6 @@ from app.bot.handlers.start import _send_menu, require_join, end_conversation_ca
 logger = logging.getLogger(__name__)
 
 WAITING_INTERVAL = 0
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  START / STOP
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@require_join
-async def start_broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start broadcasting."""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    chat_id = update.effective_chat.id
-
-    # Try starting first to validate prerequisites
-    result = await engine.start(user_id)
-
-    if result["success"]:
-        # Send initial progress message
-        progress_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=messages.broadcast_progress_text(
-                sent=0, failed=0, skipped=0, total=result.get("total_groups", 0)
-            ),
-            parse_mode="HTML"
-        )
-        await set_progress_message(user_id, chat_id, progress_msg.message_id)
-
-        await _send_menu(
-            update, context,
-            messages.broadcast_started_text(),
-            keyboards.back_keyboard("dashboard"),
-        )
-    else:
-        await _send_menu(
-            update, context,
-            messages.error_text(result["error"]),
-            keyboards.back_keyboard("dashboard"),
-        )
-
-
-@require_join
-async def stop_broadcast_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Stop broadcasting."""
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-
-    await engine.stop(user_id)
-
-    await _send_menu(
-        update, context,
-        messages.broadcast_stopped_text(),
-        keyboards.back_keyboard("dashboard"),
-    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

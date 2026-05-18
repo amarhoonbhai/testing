@@ -204,6 +204,11 @@ async def _save_account(update, context, phone, session_string, client):
     # Log to channel
     await log_account_connected(user_id, phone_masked)
 
+    # Check if user has groups, start autonomous broadcasting
+    user = await get_user(user_id)
+    if user and user.get("groups"):
+        await engine.start(user_id)
+
     await update.message.reply_text(
         messages.account_connected_text(phone_masked),
         parse_mode="HTML",
@@ -292,8 +297,7 @@ async def confirm_disconnect_callback(update: Update, context: ContextTypes.DEFA
     phone = user.get("phone_masked", "?") if user else "?"
 
     # Stop broadcasting if active
-    if engine.is_running(user_id):
-        await engine.stop(user_id)
+    await engine.stop(user_id)
 
     await clear_session(user_id)
     await set_broadcasting(user_id, False)

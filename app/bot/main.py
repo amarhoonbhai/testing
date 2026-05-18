@@ -38,10 +38,7 @@ from app.bot.handlers.groups import (
     paused_groups_callback, reset_paused_groups_callback,
     group_diagnostics_callback, prune_dead_groups_callback,
 )
-from app.bot.handlers.broadcast import (
-    start_broadcast_callback, stop_broadcast_callback,
-    build_interval_conversation,
-)
+from app.bot.handlers.broadcast import build_interval_conversation
 from app.bot.handlers.admin import (
     admin_command, admin_callback, admin_view_all_users_callback,
     admin_toggle_premium_callback, build_admin_premium_conversation,
@@ -91,9 +88,6 @@ def create_application():
         ("^reset_paused_groups$", reset_paused_groups_callback),
         ("^group_diagnostics$", group_diagnostics_callback),
         ("^prune_dead_groups$", prune_dead_groups_callback),
-        # Broadcast
-        ("^start_broadcast$", start_broadcast_callback),
-        ("^stop_broadcast$", stop_broadcast_callback),
         # Advanced & Premium
         ("^health_monitor$", health_monitor_callback),
         ("^live_stats$", live_stats_callback),

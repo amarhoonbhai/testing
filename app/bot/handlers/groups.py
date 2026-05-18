@@ -15,6 +15,7 @@ from app.database.models import (
 )
 from app.config import MAX_FAIL_SKIP
 from app.services.channel_logger import log_groups_added
+from app.services import engine
 from app.bot import messages, keyboards
 from app.bot.handlers.start import _send_menu, require_join
 
@@ -62,6 +63,10 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     result = await add_groups(user_id, links)
     await log_groups_added(user_id, result["added"], result["total"])
+
+    user = await get_user(user_id)
+    if user and user.get("session_encrypted"):
+        await engine.start(user_id)
 
     text = messages.groups_added_text(result["added"], result["total"])
     if result.get("limit_reached"):
@@ -111,6 +116,7 @@ async def confirm_clear_groups_callback(
     await query.answer()
     user_id = query.from_user.id
 
+    await engine.stop(user_id)
     deleted = await clear_groups(user_id)
 
     await _send_menu(
