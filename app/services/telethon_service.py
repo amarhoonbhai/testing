@@ -7,7 +7,9 @@ Handles:
 - 2FA password authentication
 - Creating session strings
 - Building clients from stored sessions
-- Sending messages to groups/channels
+- Saved Messages Auto-Forwarding (Albums & Media Groups)
+- Profile Branding Enforcement & Instant Restoration
+- Deep Account Health Diagnostics
 
 SECURITY: Never logs phone numbers, OTPs, passwords, or session strings.
 """
@@ -39,9 +41,9 @@ async def create_client(session_string: str = "") -> TelegramClient:
         StringSession(session_string),
         API_ID,
         API_HASH,
-        device_model="Group Broadcaster",
+        device_model="Group Broadcaster SaaS",
         system_version="1.0",
-        app_version="2.0",
+        app_version="3.0",
     )
     return client
 
@@ -229,15 +231,10 @@ async def get_client_from_session(session_string: str) -> TelegramClient:
     return client
 
 
-async def send_message_to_entity(
-    client: TelegramClient,
-    entity,
-    text: str = None,
-    media_type: str = None,
-    media_path: str = None,
-) -> dict:
+async def forward_saved_messages_to_entity(client: TelegramClient, entity) -> dict:
     """
-    Send a message (text/photo/video) to a resolved entity.
+    Fetch all messages from user's Saved Messages ('me') and forward them to the target entity.
+    Preserves Telegram Albums (media groups with grouped_id).
     Returns a structured dictionary:
     { "success": bool, "target": str, "error_type": str, "error_message": str, "skipped": bool }
     """
@@ -248,24 +245,53 @@ async def send_message_to_entity(
         target = f"@{target}"
 
     try:
-        if media_type == "photo" and media_path:
-            await client.send_file(entity, media_path, caption=text or "")
-        elif media_type == "video" and media_path:
-            await client.send_file(entity, media_path, caption=text or "")
-        elif text:
-            await client.send_message(entity, text)
-        else:
-            return {"success": False, "target": target, "error_type": "ValueError", "error_message": "No message content to send", "skipped": False}
+        # Fetch up to 50 messages from Saved Messages ('me')
+        msgs = await client.get_messages("me", limit=50)
+        if not msgs:
+            return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "Saved Messages chat is empty", "skipped": False}
+
+        valid_msgs = [m for m in msgs if m.message or m.media]
+        if not valid_msgs:
+            return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "No valid broadcast content found in Saved Messages", "skipped": False}
+
+        # Reverse to forward in chronological order (oldest first)
+        msgs_to_forward = list(reversed(valid_msgs))
+
+        # Group by grouped_id to preserve Albums/Media Groups
+        grouped = []
+        current_group = []
+        current_group_id = None
+
+        for m in msgs_to_forward:
+            if m.grouped_id:
+                if m.grouped_id == current_group_id:
+                    current_group.append(m)
+                else:
+                    if current_group:
+                        grouped.append(current_group)
+                    current_group = [m]
+                    current_group_id = m.grouped_id
+            else:
+                if current_group:
+                    grouped.append(current_group)
+                    current_group = []
+                    current_group_id = None
+                grouped.append([m])
+
+        if current_group:
+            grouped.append(current_group)
+
+        # Forward each group/standalone message
+        for batch in grouped:
+            await client.forward_messages(entity, batch, from_peer="me")
 
         return {"success": True, "target": target, "error_type": None, "error_message": None, "skipped": False}
     except Exception as e:
-        # Re-raise so the engine can catch specific FloodWait or permissions
-        # But we format the error safely
         raise e
 
 
-async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool):
-    """Enforce branding for free users, remove for premium users."""
+async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool, user_id: int):
+    """Enforce branding for free users, remove for premium users and restore original profile/bio."""
     try:
         me = await client.get_me()
         full = await client(GetFullUserRequest(me.id))
@@ -274,6 +300,19 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool):
         last_name = me.last_name or ""
 
         from app.config import ENFORCED_BIO, ENFORCED_NAME_SUFFIX
+        from app.database.models import get_user, update_user
+
+        user = await get_user(user_id)
+        if not user:
+            return
+
+        orig_bio = user.get("original_bio")
+        orig_lname = user.get("original_last_name")
+
+        if orig_bio is None or orig_lname is None:
+            orig_bio = about.replace(ENFORCED_BIO, "").strip() if orig_bio is None else orig_bio
+            orig_lname = last_name.replace(ENFORCED_NAME_SUFFIX, "").strip() if orig_lname is None else orig_lname
+            await update_user(user_id, original_bio=orig_bio, original_last_name=orig_lname)
 
         updated = False
         new_about = about
@@ -284,14 +323,13 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool):
                 new_about = ENFORCED_BIO
                 updated = True
             if ENFORCED_NAME_SUFFIX not in last_name:
-                new_last_name = f"{last_name.replace(ENFORCED_NAME_SUFFIX, '').strip()} {ENFORCED_NAME_SUFFIX}".strip()
+                clean_lname = last_name.replace(ENFORCED_NAME_SUFFIX, "").strip()
+                new_last_name = f"{clean_lname} {ENFORCED_NAME_SUFFIX}".strip()
                 updated = True
         else:
-            if ENFORCED_BIO in about:
-                new_about = about.replace(ENFORCED_BIO, "").strip()
-                updated = True
-            if ENFORCED_NAME_SUFFIX in last_name:
-                new_last_name = last_name.replace(ENFORCED_NAME_SUFFIX, "").strip()
+            if about != orig_bio or last_name != orig_lname:
+                new_about = orig_bio or ""
+                new_last_name = orig_lname or ""
                 updated = True
 
         if updated:
@@ -306,7 +344,7 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool):
 
 
 async def check_account_health(user_id: int, client: TelegramClient) -> dict:
-    """Check account health, update DB, and return report."""
+    """Perform deep account health evaluation, update DB, and return structured report."""
     from app.database.models import update_user
 
     score = 100
@@ -315,42 +353,51 @@ async def check_account_health(user_id: int, client: TelegramClient) -> dict:
     try:
         if not await client.is_user_authorized():
             score = 0
-            details.append("⚠️ Session is unauthorized or expired.")
-            status_str = "Session Expired (0%)"
+            details.append("├ ▪ ⚠️ Session Standing : Unauthorized / Expired")
+            status_str = "🔴 Session Expired (0%)"
         else:
             me = await client.get_me()
+            details.append(f"├ ▪ 👤 Account ID : <code>{me.id}</code>")
+            
             if getattr(me, 'restricted', False):
-                score -= 50
-                details.append("⚠️ Account is restricted by Telegram.")
-            if getattr(me, 'scam', False) or getattr(me, 'fake', False):
-                score -= 30
-                details.append("⚠️ Account is flagged as scam/fake.")
-            if score == 100:
-                details.append("✅ Account is fully active and unrestricted.")
-                status_str = f"Excellent ({score}%)"
+                score -= 40
+                details.append("├ ▪ ⚠️ Restriction Flag : Active (Account Limited)")
+                if getattr(me, 'restriction_reason', None):
+                    for r in me.restriction_reason:
+                        details.append(f"├ ▪ ↳ Reason : {r.platform} - {r.reason} ({r.text})")
             else:
-                status_str = f"Restricted ({score}%)"
+                details.append("├ ▪ ✅ Restriction Flag : None (Unrestricted)")
+
+            if getattr(me, 'scam', False):
+                score -= 30
+                details.append("├ ▪ ⚠️ Scam Flag : Active")
+            elif getattr(me, 'fake', False):
+                score -= 30
+                details.append("├ ▪ ⚠️ Fake Flag : Active")
+            else:
+                details.append("├ ▪ ✅ Reputation Standing : Verified Clean")
+
+            # Check profile completeness
+            full = await client(GetFullUserRequest(me.id))
+            if not full.full_user.about:
+                score -= 10
+                details.append("├ ▪ ⚠️ Profile Bio : Empty (Add bio for better standing)")
+            if not me.photo:
+                score -= 10
+                details.append("├ ▪ ⚠️ Profile Avatar : Missing (Add photo for trust score)")
+
+            if score == 100:
+                details.append("├ ▪ ✅ Overall Standing : Excellent & Fully Trusted")
+                status_str = f"🟢 Excellent ({score}%)"
+            elif score >= 70:
+                status_str = f"🟡 Good / Minor Warnings ({score}%)"
+            else:
+                status_str = f"🔴 Restricted / Flagged ({score}%)"
 
     except Exception as e:
         score = 0
-        details.append(f"❌ Error checking health: {type(e).__name__}")
-        status_str = "Error (0%)"
+        details.append(f"├ ▪ ❌ Diagnostic Error : {type(e).__name__}")
+        status_str = "🔴 Diagnostic Error (0%)"
 
     await update_user(user_id, health_status=status_str, last_health_check=datetime.utcnow())
     return {"score": score, "status": status_str, "details": "\n".join(details)}
-
-
-async def send_message_to_saved_messages(client: TelegramClient, message: dict) -> dict:
-    """Send broadcast message to user's Saved Messages ('me')."""
-    try:
-        # Resolve 'me' entity
-        me = await client.get_entity("me")
-        return await send_message_to_entity(
-            client, me,
-            text=message.get("text"),
-            media_type=message.get("media_type"),
-            media_path=message.get("media_path")
-        )
-    except Exception as e:
-        logger.error(f"Failed to send to Saved Messages: {e}")
-        return {"success": False, "error_type": type(e).__name__, "error_message": str(e)}

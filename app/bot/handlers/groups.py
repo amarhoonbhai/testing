@@ -1,10 +1,5 @@
 """
-Groups handler — Add, view, and manage broadcast target groups.
-
-Supports:
-- Single group/channel links (t.me/username, t.me/+invite, @username)
-- Multi-link paste (one per line)
-- View/clear groups
+Groups handler — Add, view, manage broadcast target groups, diagnostics, and pruning.
 """
 
 import logging
@@ -15,7 +10,8 @@ from telegram.ext import (
 )
 
 from app.database.models import (
-    get_user, add_groups, get_groups, get_group_count, clear_groups, update_user
+    get_user, add_groups, get_groups, get_group_count, clear_groups, update_user,
+    get_group_reasons, prune_dead_groups
 )
 from app.config import MAX_FAIL_SKIP
 from app.services.channel_logger import log_groups_added
@@ -55,7 +51,6 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     text = update.message.text.strip()
 
-    # Split by newlines, filter empty
     links = [line.strip() for line in text.split("\n") if line.strip()]
 
     if not links:
@@ -133,7 +128,7 @@ async def live_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     groups = user.get("groups", []) if user else []
     group_fails = user.get("group_fails", {}) if user else {}
 
-    live_groups = [g for g in groups if group_fails.get(g, 0) < MAX_FAIL_SKIP]
+    live_groups = [g for g in groups if group_fails.get(g.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0) < MAX_FAIL_SKIP]
     text = messages.live_groups_text(live_groups)
     await _send_menu(update, context, text, keyboards.back_keyboard("manage_groups"))
 
@@ -146,7 +141,7 @@ async def paused_groups_callback(update: Update, context: ContextTypes.DEFAULT_T
     groups = user.get("groups", []) if user else []
     group_fails = user.get("group_fails", {}) if user else {}
 
-    paused_groups = [g for g in groups if group_fails.get(g, 0) >= MAX_FAIL_SKIP]
+    paused_groups = [g for g in groups if group_fails.get(g.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0) >= MAX_FAIL_SKIP]
     text = messages.paused_groups_text(paused_groups)
     await _send_menu(update, context, text, keyboards.paused_groups_keyboard())
 
@@ -158,10 +153,41 @@ async def reset_paused_groups_callback(update: Update, context: ContextTypes.DEF
     await query.answer("Resetting paused groups...")
     user_id = query.from_user.id
 
-    await update_user(user_id, group_fails={})
+    await update_user(user_id, group_fails={}, group_reasons={})
     await _send_menu(
         update, context,
         messages.success_text("All paused groups have been reset to Live status!"),
+        keyboards.back_keyboard("manage_groups")
+    )
+
+
+@require_join
+async def group_diagnostics_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """View detailed failure reasons for paused/failing groups."""
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+    groups = user.get("groups", []) if user else []
+    group_fails = user.get("group_fails", {}) if user else {}
+    reasons = await get_group_reasons(user_id)
+
+    paused_groups = [g for g in groups if group_fails.get(g.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0) >= MAX_FAIL_SKIP]
+    
+    text = messages.group_diagnostics_text(reasons, paused_groups)
+    await _send_menu(update, context, text, keyboards.back_keyboard("manage_groups"))
+
+
+@require_join
+async def prune_dead_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Automatically remove all permanently failing groups."""
+    query = update.callback_query
+    await query.answer("Pruning dead groups...")
+    user_id = query.from_user.id
+
+    pruned = await prune_dead_groups(user_id, MAX_FAIL_SKIP)
+
+    await _send_menu(
+        update, context,
+        messages.success_text(f"Successfully pruned <b>{pruned}</b> permanently failing groups from your roster."),
         keyboards.back_keyboard("manage_groups")
     )
 
@@ -176,7 +202,6 @@ async def _cancel_to_groups(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def build_add_groups_conversation() -> ConversationHandler:
-    """Build conversation handler for adding groups."""
     return ConversationHandler(
         entry_points=[
             CallbackQueryHandler(add_groups_callback, pattern="^add_groups$"),

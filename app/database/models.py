@@ -1,7 +1,7 @@
 """
 Database models — CRUD operations for the Group Broadcaster.
 
-Single 'users' collection stores everything: user info, message, session, groups, stats.
+Single 'users' collection stores everything: user info, session, groups, stats, entity cache, diagnostics.
 All functions operate on the shared Motor database instance.
 """
 
@@ -23,11 +23,12 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
 
     default_doc = {
         "telegram_user_id": telegram_user_id,
-        "message": None,                # {text, media_type, media_path}
         "session_encrypted": None,       # Encrypted Telethon session string
         "phone_masked": None,            # Masked phone for display
         "groups": [],                    # List of group link strings
         "group_fails": {},               # {group_link: consecutive_fail_count}
+        "group_reasons": {},             # {group_link: str_reason}
+        "entity_cache": {},              # {group_link: dict_input_peer}
         "interval_seconds": DEFAULT_INTERVAL,
         "is_broadcasting": False,
         "progress_message_id": None,     # ID of the live progress message
@@ -37,8 +38,14 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
         "last_sent_at": None,
         "created_at": now,
         "is_premium": False,
+        "original_bio": None,
+        "original_last_name": None,
         "auto_responder_enabled": False,
         "auto_responder_message": "Hello! I am currently busy. I will get back to you soon.",
+        "auto_responder_rules": {
+            "only_during_broadcast": True,
+            "exclude_contacts": True,
+        },
         "health_status": "Not Checked",
         "last_health_check": None,
     }
@@ -73,26 +80,6 @@ async def update_user(telegram_user_id: int, **fields) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  MESSAGE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def set_message(telegram_user_id: int, text: str = None,
-                      media_type: str = None, media_path: str = None) -> dict:
-    """Save the broadcast message for a user."""
-    msg = {
-        "text": text,
-        "media_type": media_type,       # "photo", "video", or None
-        "media_path": media_path,        # Local file path for Telethon
-    }
-    return await update_user(telegram_user_id, message=msg)
-
-
-async def clear_message(telegram_user_id: int) -> dict:
-    """Clear the broadcast message."""
-    return await update_user(telegram_user_id, message=None)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
 #  SESSION (Single Account)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -116,7 +103,7 @@ async def clear_session(telegram_user_id: int) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  GROUPS
+#  GROUPS & DIAGNOSTICS
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def add_groups(telegram_user_id: int, links: list[str]) -> dict:
@@ -168,8 +155,85 @@ async def clear_groups(telegram_user_id: int) -> int:
     """Remove all groups. Returns count removed."""
     user = await get_user(telegram_user_id)
     count = len(user.get("groups", [])) if user else 0
-    await update_user(telegram_user_id, groups=[], group_fails={})
+    await update_user(telegram_user_id, groups=[], group_fails={}, group_reasons={}, entity_cache={})
     return count
+
+
+async def set_group_reason(telegram_user_id: int, group_link: str, reason: str) -> None:
+    """Set exact failure reason for a group."""
+    db = get_db()
+    safe_key = group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$set": {f"group_reasons.{safe_key}": reason}},
+    )
+
+
+async def get_group_reasons(telegram_user_id: int) -> dict:
+    """Get all failure reasons for a user's groups."""
+    user = await get_user(telegram_user_id)
+    return user.get("group_reasons", {}) if user else {}
+
+
+async def prune_dead_groups(telegram_user_id: int, max_fails: int) -> int:
+    """Remove all groups that have failed >= max_fails times. Returns count removed."""
+    db = get_db()
+    user = await get_user(telegram_user_id)
+    if not user:
+        return 0
+
+    groups = user.get("groups", [])
+    group_fails = user.get("group_fails", {})
+    dead_groups = [g for g in groups if group_fails.get(g.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0) >= max_fails]
+
+    if not dead_groups:
+        return 0
+
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {
+            "$pull": {"groups": {"$in": dead_groups}},
+            "$set": {"updated_at": datetime.utcnow()},
+        },
+    )
+
+    unset_dict = {}
+    for g in dead_groups:
+        safe_key = g.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+        unset_dict[f"group_fails.{safe_key}"] = ""
+        unset_dict[f"group_reasons.{safe_key}"] = ""
+        unset_dict[f"entity_cache.{safe_key}"] = ""
+
+    if unset_dict:
+        await db.users.update_one(
+            {"telegram_user_id": telegram_user_id},
+            {"$unset": unset_dict}
+        )
+
+    return len(dead_groups)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ENTITY CACHE (Telethon InputPeer optimization)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def get_cached_entity(telegram_user_id: int, group_link: str) -> Optional[dict]:
+    """Get cached Telethon InputPeer dictionary for a group."""
+    user = await get_user(telegram_user_id)
+    if not user:
+        return None
+    safe_key = group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+    return user.get("entity_cache", {}).get(safe_key)
+
+
+async def set_cached_entity(telegram_user_id: int, group_link: str, entity_dict: dict) -> None:
+    """Cache a Telethon InputPeer dictionary for a group."""
+    db = get_db()
+    safe_key = group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$set": {f"entity_cache.{safe_key}": entity_dict}},
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -239,7 +303,6 @@ async def increment_failed(telegram_user_id: int) -> None:
 async def increment_group_fail(telegram_user_id: int, group_link: str) -> int:
     """Increment consecutive failure count for a group. Returns new count."""
     db = get_db()
-    # Use dot notation for nested dict update
     safe_key = group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_")
     await db.users.update_one(
         {"telegram_user_id": telegram_user_id},
@@ -255,7 +318,12 @@ async def reset_group_fail(telegram_user_id: int, group_link: str) -> None:
     safe_key = group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_")
     await db.users.update_one(
         {"telegram_user_id": telegram_user_id},
-        {"$set": {f"group_fails.{safe_key}": 0}},
+        {
+            "$set": {
+                f"group_fails.{safe_key}": 0,
+                f"group_reasons.{safe_key}": "Operational",
+            }
+        },
     )
 
 

@@ -23,23 +23,20 @@ from app.bot.handlers.start import (
 from app.bot.handlers.dashboard import (
     dashboard_callback, health_monitor_callback, live_stats_callback,
     premium_info_callback, auto_responder_callback, toggle_auto_responder_callback,
-    build_auto_responder_conversation,
+    build_auto_responder_conversation, toggle_rule_broadcast_callback,
+    toggle_rule_contacts_callback,
 )
 from app.bot.handlers.account import (
     build_account_conversation,
     view_account_callback, disconnect_account_callback,
     confirm_disconnect_callback,
 )
-from app.bot.handlers.message import (
-    build_message_conversation,
-    set_message_callback, preview_message_callback,
-    clear_message_callback, send_to_saved_messages_callback,
-)
 from app.bot.handlers.groups import (
     manage_groups_callback, view_groups_callback,
     clear_groups_callback, confirm_clear_groups_callback,
     build_add_groups_conversation, live_groups_callback,
     paused_groups_callback, reset_paused_groups_callback,
+    group_diagnostics_callback, prune_dead_groups_callback,
 )
 from app.bot.handlers.broadcast import (
     start_broadcast_callback, stop_broadcast_callback,
@@ -48,6 +45,9 @@ from app.bot.handlers.broadcast import (
 from app.bot.handlers.admin import (
     admin_command, admin_callback, admin_view_all_users_callback,
     admin_toggle_premium_callback, build_admin_premium_conversation,
+    admin_remote_start_callback, admin_remote_stop_callback,
+    admin_remote_health_callback, admin_remote_stats_callback,
+    admin_remote_wipe_callback,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,7 +64,6 @@ def create_application():
 
     # ── Conversation Handlers (must be registered BEFORE callbacks) ──
     app.add_handler(build_account_conversation())
-    app.add_handler(build_message_conversation())
     app.add_handler(build_add_groups_conversation())
     app.add_handler(build_interval_conversation())
     app.add_handler(build_auto_responder_conversation())
@@ -82,11 +81,6 @@ def create_application():
         ("^view_account$", view_account_callback),
         ("^disconnect_account$", disconnect_account_callback),
         ("^confirm_disconnect$", confirm_disconnect_callback),
-        # Message
-        ("^set_message$", set_message_callback),
-        ("^preview_message$", preview_message_callback),
-        ("^clear_message$", clear_message_callback),
-        ("^send_to_saved_messages$", send_to_saved_messages_callback),
         # Groups
         ("^manage_groups$", manage_groups_callback),
         ("^view_groups$", view_groups_callback),
@@ -95,6 +89,8 @@ def create_application():
         ("^live_groups$", live_groups_callback),
         ("^paused_groups$", paused_groups_callback),
         ("^reset_paused_groups$", reset_paused_groups_callback),
+        ("^group_diagnostics$", group_diagnostics_callback),
+        ("^prune_dead_groups$", prune_dead_groups_callback),
         # Broadcast
         ("^start_broadcast$", start_broadcast_callback),
         ("^stop_broadcast$", stop_broadcast_callback),
@@ -104,11 +100,18 @@ def create_application():
         ("^premium_info$", premium_info_callback),
         ("^auto_responder$", auto_responder_callback),
         ("^toggle_auto_responder$", toggle_auto_responder_callback),
+        ("^toggle_rule_broadcast$", toggle_rule_broadcast_callback),
+        ("^toggle_rule_contacts$", toggle_rule_contacts_callback),
         # Admin
         ("^admin$", admin_callback),
         ("^admin_view_all_users$", admin_view_all_users_callback),
         ("^grant_prem_.*$", admin_toggle_premium_callback),
         ("^revoke_prem_.*$", admin_toggle_premium_callback),
+        ("^remote_start_.*$", admin_remote_start_callback),
+        ("^remote_stop_.*$", admin_remote_stop_callback),
+        ("^remote_health_.*$", admin_remote_health_callback),
+        ("^remote_stats_.*$", admin_remote_stats_callback),
+        ("^remote_wipe_.*$", admin_remote_wipe_callback),
     ]
     for pattern, handler in callbacks:
         app.add_handler(CallbackQueryHandler(handler, pattern=pattern))
@@ -145,7 +148,6 @@ async def main():
 
     logger.info("Bot is running! Press Ctrl+C to stop.")
 
-    # Keep running until interrupted
     try:
         while True:
             await asyncio.sleep(3600)
