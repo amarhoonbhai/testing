@@ -65,8 +65,23 @@ def require_join(handler_func):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  MENU HELPER
+#  MENU HELPER & PHOTO HELPER
 # ═══════════════════════════════════════════════════════════════════════════════
+
+async def _get_user_photo(user_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """Fetch user profile photo or fallback to system banner."""
+    photo = None
+    try:
+        profile_photos = await context.bot.get_user_profile_photos(user_id, limit=1)
+        if profile_photos.total_count > 0:
+            photo = profile_photos.photos[0][-1].file_id
+    except Exception:
+        pass
+
+    if not photo and os.path.exists(_BANNER_ABS):
+        photo = open(_BANNER_ABS, "rb")
+    return photo
+
 
 async def _send_menu(
     update: Update,
@@ -76,7 +91,7 @@ async def _send_menu(
     *,
     photo=None,
 ):
-    """Reusable function to send or edit a menu message."""
+    """Reusable function to send or edit a menu message cleanly."""
     query = update.callback_query
     chat_id = update.effective_chat.id
 
@@ -102,6 +117,17 @@ async def _send_menu(
     if query:
         try:
             await query.answer()
+            # If the existing message is a photo, we cannot edit_message_text. We must delete and send_message.
+            if query.message and query.message.photo:
+                await query.message.delete()
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                )
+                return
+
             await query.edit_message_text(
                 text=text,
                 reply_markup=reply_markup,
@@ -141,18 +167,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Try to fetch user profile photo
-    photo = None
-    try:
-        profile_photos = await context.bot.get_user_profile_photos(user.id, limit=1)
-        if profile_photos.total_count > 0:
-            photo = profile_photos.photos[0][-1].file_id
-    except Exception:
-        pass
-
-    # Fallback to system banner
-    if not photo and os.path.exists(_BANNER_ABS):
-        photo = open(_BANNER_ABS, "rb")
+    photo = await _get_user_photo(user.id, context)
 
     await _send_menu(
         update, context,
@@ -181,6 +196,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     await query.answer("✅ Verified successfully!")
+    photo = await _get_user_photo(user.id, context)
     await _send_menu(
         update, context,
         messages.welcome_text(
@@ -190,6 +206,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             username=user.username or "",
         ),
         keyboards.start_keyboard(),
+        photo=photo,
     )
 
 
@@ -197,6 +214,7 @@ async def check_join_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle 'Back' to home screen."""
     user = update.effective_user
+    photo = await _get_user_photo(user.id, context)
     await _send_menu(
         update, context,
         messages.welcome_text(
@@ -206,6 +224,7 @@ async def home_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username=user.username or "",
         ),
         keyboards.start_keyboard(),
+        photo=photo,
     )
 
 
@@ -245,3 +264,4 @@ async def end_conversation_callback(update: Update, context: ContextTypes.DEFAUL
     if query:
         await query.answer()
     return ConversationHandler.END
+
