@@ -4,6 +4,7 @@ Clean, minimal, executive text symbol architecture.
 Emojis are strictly reserved for primary status definitions.
 """
 
+from datetime import datetime
 from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME
 
 
@@ -128,11 +129,21 @@ def dashboard_text(
     health_status: str = "Not Checked",
 ) -> str:
     status = "🟢 Active (Broadcasting)" if is_broadcasting else "🟡 Standby (Waiting for Account/Groups)"
+    now = datetime.now()
+    if is_broadcasting and (now.hour >= 0 and now.hour < 5):
+        status = "🌙 Night Mode (Sleeping 12 AM - 5 AM)"
+
     account_status = f"{phone_masked}" if has_account else "🔴 Not Connected"
     tier = "💎 Premium Plan" if is_premium else "🆓 Free Plan"
 
     total = total_sent + total_failed
     rate = f"{(total_sent / total * 100):.1f}%" if total > 0 else "N/A"
+
+    footer_note = (
+        "↳ <i>🌙 Auto Night Mode active. Sleeping until 5:00 AM.</i>"
+        if is_broadcasting and (now.hour >= 0 and now.hour < 5)
+        else ("↳ <i>The bot is broadcasting automatically in the background!</i>" if is_broadcasting else "↳ <i>Connect your account and add groups to start broadcasting.</i>")
+    )
 
     return (
         f"{_header('Main Dashboard')}"
@@ -152,7 +163,7 @@ def dashboard_text(
         f"{_stat('Failed Attempts', f'{total_failed:,}')}"
         f"{_stat('Success Rate', rate)}"
         f"{_end_sub()}"
-        f"{'↳ <i>The bot is broadcasting automatically in the background!</i>' if is_broadcasting else '↳ <i>Connect your account and add groups to start broadcasting.</i>'}"
+        f"{footer_note}"
         f"{_footer()}"
     )
 
@@ -421,6 +432,17 @@ def broadcast_progress_text(sent: int, failed: int, skipped: int, total: int, sp
         f"▪ ⚡ Sending Speed    : <code>{speed:.1f} msg/min</code>\n"
         f"▪ 📈 Success Rate     : <code>{rate}</code>\n"
         f"▪ ⏱ Time Remaining   : <code>{eta_str}</code>"
+        f"{_footer()}"
+    )
+
+
+def night_mode_progress_text() -> str:
+    return (
+        f"{_header('🌙 Auto Night Mode')}"
+        f"<b>Resting Period Active</b>\n"
+        f"▪ Status: Sleeping (12:00 AM to 5:00 AM)\n"
+        f"▪ Reason: Quiet hours / Spam protection\n\n"
+        f"↳ <i>Broadcasting will automatically resume at 5:00 AM.</i>"
         f"{_footer()}"
     )
 

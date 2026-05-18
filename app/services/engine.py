@@ -193,6 +193,23 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
             logger.info(f"Broadcast stopped mid-cycle for user {user_id} (admin override)")
             break
 
+        # Check Auto Night Mode mid-cycle (12:00 AM to 5:00 AM)
+        now = datetime.now()
+        if now.hour >= 0 and now.hour < 5:
+            logger.info(f"Auto Night Mode triggered mid-cycle for {user_id}.")
+            if bot and curr_user.get("progress_chat_id") and curr_user.get("progress_message_id"):
+                try:
+                    await bot.edit_message_text(
+                        chat_id=curr_user["progress_chat_id"],
+                        message_id=curr_user["progress_message_id"],
+                        text=messages.night_mode_progress_text(),
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    if "exactly the same" not in str(e).lower():
+                        logger.warning(f"Failed to update night mode progress mid-cycle: {e}")
+            break
+
         fails = group_fails.get(group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0)
         if fails >= MAX_FAIL_SKIP:
             skipped += 1
@@ -295,6 +312,32 @@ async def _broadcast_loop(user_id: int):
             if not curr.get("is_broadcasting"):
                 logger.info(f"Broadcast stopped by admin override for {user_id}.")
                 break
+
+            # Check Auto Night Mode (12:00 AM to 5:00 AM)
+            now = datetime.now()
+            if now.hour >= 0 and now.hour < 5:
+                logger.info(f"Auto Night Mode active for {user_id}. Sleeping until 5:00 AM.")
+                if bot and curr.get("progress_chat_id") and curr.get("progress_message_id"):
+                    try:
+                        await bot.edit_message_text(
+                            chat_id=curr["progress_chat_id"],
+                            message_id=curr["progress_message_id"],
+                            text=messages.night_mode_progress_text(),
+                            parse_mode="HTML"
+                        )
+                    except Exception as e:
+                        if "exactly the same" not in str(e).lower():
+                            logger.warning(f"Failed to update night mode progress: {e}")
+                
+                # Sleep for 60 seconds, then check again
+                for _ in range(60):
+                    curr = await get_user(user_id)
+                    if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                        break
+                    if not curr.get("is_broadcasting"):
+                        break
+                    await asyncio.sleep(1)
+                continue
 
             cycle_res = await _execute_cycle(user_id, client, bot)
             
