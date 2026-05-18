@@ -41,7 +41,8 @@ from app.database.models import (
     increment_group_fail, reset_group_fail,
 )
 from app.services.encryption_service import decrypt_session
-from app.services.telethon_service import get_client_from_session, send_message_to_entity
+from telethon import events
+from app.services.telethon_service import get_client_from_session, send_message_to_entity, enforce_or_remove_branding
 from app.services.channel_logger import (
     log_broadcast_started, log_broadcast_stopped,
     log_broadcast_cycle, log_error,
@@ -155,6 +156,18 @@ async def auto_resume():
 #  CORE BROADCAST LOOP
 # ═══════════════════════════════════════════════════════════════════════════════
 
+async def _auto_responder_handler(event, user_id: int):
+    try:
+        user = await get_user(user_id)
+        if user and user.get("auto_responder_enabled") and user.get("auto_responder_message"):
+            sender = await event.get_sender()
+            if sender and not getattr(sender, 'bot', False) and event.chat_id != 777000:
+                await event.reply(user["auto_responder_message"])
+                logger.info(f"[{user_id}] Auto-responder replied to {event.chat_id}")
+    except Exception as e:
+        logger.warning(f"[{user_id}] Auto-responder error: {e}")
+
+
 async def _broadcast_loop(user_id: int):
     """
     Main broadcast loop with smart batched sending.
@@ -169,43 +182,56 @@ async def _broadcast_loop(user_id: int):
     7. Auto-skip groups that fail MAX_FAIL_SKIP times
     """
     logger.info(f"[{user_id}] Broadcast loop started")
+    client = None
 
     try:
+        # Initial check & connection
+        user = await get_user(user_id)
+        if not user or not user.get("is_broadcasting"):
+            return
+
+        session_encrypted = user.get("session_encrypted")
+        if not session_encrypted:
+            return
+
+        try:
+            session = decrypt_session(session_encrypted)
+            client = await get_client_from_session(session)
+        except (AuthKeyUnregisteredError, UserDeactivatedBanError, ConnectionError) as e:
+            logger.error(f"[{user_id}] Session failure: {type(e).__name__}")
+            await log_error(user_id, "Session Failure", str(e))
+            return
+        except Exception as e:
+            logger.error(f"[{user_id}] Connection error: {e}")
+            await log_error(user_id, "Connection Error", str(e))
+            return
+
+        # Attach Auto Responder handler
+        client.add_event_handler(
+            lambda e: _auto_responder_handler(e, user_id),
+            events.NewMessage(incoming=True, func=lambda e: e.is_private)
+        )
+        logger.info(f"[{user_id}] Auto-responder listener attached")
+
         while True:
-            # Re-fetch user data each cycle (message/groups/interval may change)
             user = await get_user(user_id)
             if not user or not user.get("is_broadcasting"):
                 logger.info(f"[{user_id}] Broadcast stopped (user state changed)")
                 break
 
-            session_encrypted = user.get("session_encrypted")
             message = user.get("message")
             groups = list(user.get("groups", []))
             group_fails = user.get("group_fails", {})
             interval = user.get("interval_seconds", 1200)
 
-            if not session_encrypted or not message or not groups:
+            if not message or not groups:
                 logger.warning(f"[{user_id}] Missing prerequisites, stopping broadcast")
                 break
 
-            # ── Connect Telethon client for this cycle ──
-            client = None
-            try:
-                session = decrypt_session(session_encrypted)
-                client = await get_client_from_session(session)
-            except (AuthKeyUnregisteredError, UserDeactivatedBanError, ConnectionError) as e:
-                logger.error(f"[{user_id}] Session failure: {type(e).__name__}")
-                await log_error(user_id, "Session Failure", str(e))
-                break
-            except Exception as e:
-                logger.error(f"[{user_id}] Connection error: {e}")
-                await log_error(user_id, "Connection Error", str(e))
-                # Wait and retry instead of breaking
-                await asyncio.sleep(60)
-                continue
+            # Enforce branding
+            await enforce_or_remove_branding(client, user.get("is_premium", False))
 
             try:
-                # ── Execute one broadcast cycle ──
                 progress_chat_id = user.get("progress_chat_id")
                 progress_message_id = user.get("progress_message_id")
                 
@@ -215,23 +241,13 @@ async def _broadcast_loop(user_id: int):
                     progress_message_id=progress_message_id
                 )
 
-                # Log cycle results
                 await log_broadcast_cycle(user_id, sent, failed, skipped)
-                logger.info(
-                    f"[{user_id}] Cycle complete: {sent} sent, {failed} failed, {skipped} skipped"
-                )
+                logger.info(f"[{user_id}] Cycle complete: {sent} sent, {failed} failed, {skipped} skipped")
 
             except asyncio.CancelledError:
                 raise  # Propagate cancellation
             except Exception as e:
                 logger.error(f"[{user_id}] Cycle error: {e}", exc_info=True)
-            finally:
-                # Always disconnect after cycle
-                if client:
-                    try:
-                        await client.disconnect()
-                    except Exception:
-                        pass
 
             # ── Wait for interval before next cycle ──
             logger.info(f"[{user_id}] Waiting {interval}s before next cycle...")
@@ -242,7 +258,11 @@ async def _broadcast_loop(user_id: int):
     except Exception as e:
         logger.error(f"[{user_id}] Broadcast loop crashed: {e}", exc_info=True)
     finally:
-        # Cleanup
+        if client:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
         await set_broadcasting(user_id, False)
         _active_tasks.pop(user_id, None)
         logger.info(f"[{user_id}] Broadcast loop ended")

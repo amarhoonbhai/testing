@@ -36,6 +36,11 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
         "total_failed": 0,
         "last_sent_at": None,
         "created_at": now,
+        "is_premium": False,
+        "auto_responder_enabled": False,
+        "auto_responder_message": "Hello! I am currently busy. I will get back to you soon.",
+        "health_status": "Not Checked",
+        "last_health_check": None,
     }
 
     await db.users.update_one(
@@ -115,24 +120,36 @@ async def clear_session(telegram_user_id: int) -> dict:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def add_groups(telegram_user_id: int, links: list[str]) -> dict:
-    """Add group links. Deduplicates against existing groups."""
+    """Add group links. Deduplicates against existing groups and enforces 50 limit."""
     db = get_db()
     user = await get_user(telegram_user_id)
     existing = set(user.get("groups", [])) if user else set()
 
     new_links = [link for link in links if link not in existing]
     if not new_links:
-        return {"added": 0, "total": len(existing)}
+        return {"added": 0, "total": len(existing), "limit_reached": False}
+
+    max_limit = 50
+    if len(existing) >= max_limit:
+        return {"added": 0, "total": len(existing), "limit_reached": True}
+
+    available_slots = max_limit - len(existing)
+    links_to_add = new_links[:available_slots]
+    limit_reached = len(new_links) > available_slots
 
     await db.users.update_one(
         {"telegram_user_id": telegram_user_id},
         {
-            "$push": {"groups": {"$each": new_links}},
+            "$push": {"groups": {"$each": links_to_add}},
             "$set": {"updated_at": datetime.utcnow()},
         },
     )
 
-    return {"added": len(new_links), "total": len(existing) + len(new_links)}
+    return {
+        "added": len(links_to_add),
+        "total": len(existing) + len(links_to_add),
+        "limit_reached": limit_reached
+    }
 
 
 async def get_groups(telegram_user_id: int) -> list[str]:
@@ -245,6 +262,18 @@ async def reset_group_fail(telegram_user_id: int, group_link: str) -> None:
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ADMIN
 # ═══════════════════════════════════════════════════════════════════════════════
+
+async def get_all_users() -> list[dict]:
+    """Get all user documents."""
+    db = get_db()
+    cursor = db.users.find({})
+    return await cursor.to_list(length=10000)
+
+
+async def update_user_premium(telegram_user_id: int, is_premium: bool) -> dict:
+    """Update premium status for a user."""
+    return await update_user(telegram_user_id, is_premium=is_premium)
+
 
 async def get_all_users_count() -> int:
     """Get total user count."""

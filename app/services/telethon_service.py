@@ -24,6 +24,9 @@ from telethon.errors import (
     PhoneNumberInvalidError,
     ApiIdInvalidError,
 )
+from telethon.tl.functions.account import UpdateProfileRequest
+from telethon.tl.functions.users import GetFullUserRequest
+from datetime import datetime
 
 from app.config import API_ID, API_HASH
 
@@ -259,3 +262,95 @@ async def send_message_to_entity(
         # Re-raise so the engine can catch specific FloodWait or permissions
         # But we format the error safely
         raise e
+
+
+async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool):
+    """Enforce branding for free users, remove for premium users."""
+    try:
+        me = await client.get_me()
+        full = await client(GetFullUserRequest(me.id))
+        about = full.full_user.about or ""
+        first_name = me.first_name or ""
+        last_name = me.last_name or ""
+
+        from app.config import ENFORCED_BIO, ENFORCED_NAME_SUFFIX
+
+        updated = False
+        new_about = about
+        new_last_name = last_name
+
+        if not is_premium:
+            if ENFORCED_BIO not in about:
+                new_about = ENFORCED_BIO
+                updated = True
+            if ENFORCED_NAME_SUFFIX not in last_name:
+                new_last_name = f"{last_name.replace(ENFORCED_NAME_SUFFIX, '').strip()} {ENFORCED_NAME_SUFFIX}".strip()
+                updated = True
+        else:
+            if ENFORCED_BIO in about:
+                new_about = about.replace(ENFORCED_BIO, "").strip()
+                updated = True
+            if ENFORCED_NAME_SUFFIX in last_name:
+                new_last_name = last_name.replace(ENFORCED_NAME_SUFFIX, "").strip()
+                updated = True
+
+        if updated:
+            await client(UpdateProfileRequest(
+                about=new_about[:70],
+                first_name=first_name,
+                last_name=new_last_name[:64]
+            ))
+            logger.info(f"Profile branding updated for user {me.id} (Premium: {is_premium})")
+    except Exception as e:
+        logger.warning(f"Failed to update profile branding: {e}")
+
+
+async def check_account_health(user_id: int, client: TelegramClient) -> dict:
+    """Check account health, update DB, and return report."""
+    from app.database.models import update_user
+
+    score = 100
+    details = []
+
+    try:
+        if not await client.is_user_authorized():
+            score = 0
+            details.append("⚠️ Session is unauthorized or expired.")
+            status_str = "Session Expired (0%)"
+        else:
+            me = await client.get_me()
+            if getattr(me, 'restricted', False):
+                score -= 50
+                details.append("⚠️ Account is restricted by Telegram.")
+            if getattr(me, 'scam', False) or getattr(me, 'fake', False):
+                score -= 30
+                details.append("⚠️ Account is flagged as scam/fake.")
+            if score == 100:
+                details.append("✅ Account is fully active and unrestricted.")
+                status_str = f"Excellent ({score}%)"
+            else:
+                status_str = f"Restricted ({score}%)"
+
+    except Exception as e:
+        score = 0
+        details.append(f"❌ Error checking health: {type(e).__name__}")
+        status_str = "Error (0%)"
+
+    await update_user(user_id, health_status=status_str, last_health_check=datetime.utcnow())
+    return {"score": score, "status": status_str, "details": "\n".join(details)}
+
+
+async def send_message_to_saved_messages(client: TelegramClient, message: dict) -> dict:
+    """Send broadcast message to user's Saved Messages ('me')."""
+    try:
+        # Resolve 'me' entity
+        me = await client.get_entity("me")
+        return await send_message_to_entity(
+            client, me,
+            text=message.get("text"),
+            media_type=message.get("media_type"),
+            media_path=message.get("media_path")
+        )
+    except Exception as e:
+        logger.error(f"Failed to send to Saved Messages: {e}")
+        return {"success": False, "error_type": type(e).__name__, "error_message": str(e)}

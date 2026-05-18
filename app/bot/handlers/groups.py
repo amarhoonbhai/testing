@@ -15,8 +15,9 @@ from telegram.ext import (
 )
 
 from app.database.models import (
-    get_user, add_groups, get_groups, get_group_count, clear_groups,
+    get_user, add_groups, get_groups, get_group_count, clear_groups, update_user
 )
+from app.config import MAX_FAIL_SKIP
 from app.services.channel_logger import log_groups_added
 from app.bot import messages, keyboards
 from app.bot.handlers.start import _send_menu, require_join
@@ -67,8 +68,12 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     result = await add_groups(user_id, links)
     await log_groups_added(user_id, result["added"], result["total"])
 
+    text = messages.groups_added_text(result["added"], result["total"])
+    if result.get("limit_reached"):
+        text += "\n\n⚠️ <b>Note:</b> Maximum limit of 50 groups per account reached."
+
     await update.message.reply_text(
-        messages.groups_added_text(result["added"], result["total"]),
+        text,
         parse_mode="HTML",
         reply_markup=keyboards.groups_after_add_keyboard(),
     )
@@ -117,6 +122,47 @@ async def confirm_clear_groups_callback(
         update, context,
         messages.groups_cleared_text(deleted),
         keyboards.back_keyboard("manage_groups"),
+    )
+
+
+@require_join
+async def live_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """View active live groups."""
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+    groups = user.get("groups", []) if user else []
+    group_fails = user.get("group_fails", {}) if user else {}
+
+    live_groups = [g for g in groups if group_fails.get(g, 0) < MAX_FAIL_SKIP]
+    text = messages.live_groups_text(live_groups)
+    await _send_menu(update, context, text, keyboards.back_keyboard("manage_groups"))
+
+
+@require_join
+async def paused_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """View paused/skipped groups."""
+    user_id = update.effective_user.id
+    user = await get_user(user_id)
+    groups = user.get("groups", []) if user else []
+    group_fails = user.get("group_fails", {}) if user else {}
+
+    paused_groups = [g for g in groups if group_fails.get(g, 0) >= MAX_FAIL_SKIP]
+    text = messages.paused_groups_text(paused_groups)
+    await _send_menu(update, context, text, keyboards.paused_groups_keyboard())
+
+
+@require_join
+async def reset_paused_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reset fail counts for all groups to 0."""
+    query = update.callback_query
+    await query.answer("Resetting paused groups...")
+    user_id = query.from_user.id
+
+    await update_user(user_id, group_fails={})
+    await _send_menu(
+        update, context,
+        messages.success_text("All paused groups have been reset to Live status!"),
+        keyboards.back_keyboard("manage_groups")
     )
 
 

@@ -20,7 +20,11 @@ from app.bot.handlers.start import (
     start_handler, home_callback, check_join_callback,
     how_to_use_callback, disclaimer_callback, powered_by_callback,
 )
-from app.bot.handlers.dashboard import dashboard_callback
+from app.bot.handlers.dashboard import (
+    dashboard_callback, health_monitor_callback, live_stats_callback,
+    premium_info_callback, auto_responder_callback, toggle_auto_responder_callback,
+    build_auto_responder_conversation,
+)
 from app.bot.handlers.account import (
     build_account_conversation,
     view_account_callback, disconnect_account_callback,
@@ -29,18 +33,22 @@ from app.bot.handlers.account import (
 from app.bot.handlers.message import (
     build_message_conversation,
     set_message_callback, preview_message_callback,
-    clear_message_callback,
+    clear_message_callback, send_to_saved_messages_callback,
 )
 from app.bot.handlers.groups import (
     manage_groups_callback, view_groups_callback,
     clear_groups_callback, confirm_clear_groups_callback,
-    build_add_groups_conversation,
+    build_add_groups_conversation, live_groups_callback,
+    paused_groups_callback, reset_paused_groups_callback,
 )
 from app.bot.handlers.broadcast import (
     start_broadcast_callback, stop_broadcast_callback,
     build_interval_conversation,
 )
-from app.bot.handlers.admin import admin_command, admin_callback
+from app.bot.handlers.admin import (
+    admin_command, admin_callback, admin_view_all_users_callback,
+    admin_toggle_premium_callback, build_admin_premium_conversation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +67,8 @@ def create_application():
     app.add_handler(build_message_conversation())
     app.add_handler(build_add_groups_conversation())
     app.add_handler(build_interval_conversation())
+    app.add_handler(build_auto_responder_conversation())
+    app.add_handler(build_admin_premium_conversation())
 
     # ── Callback Query Handlers ──────────────────────────────
     callbacks = [
@@ -76,16 +86,29 @@ def create_application():
         ("^set_message$", set_message_callback),
         ("^preview_message$", preview_message_callback),
         ("^clear_message$", clear_message_callback),
+        ("^send_to_saved_messages$", send_to_saved_messages_callback),
         # Groups
         ("^manage_groups$", manage_groups_callback),
         ("^view_groups$", view_groups_callback),
         ("^clear_groups$", clear_groups_callback),
         ("^confirm_clear_groups$", confirm_clear_groups_callback),
+        ("^live_groups$", live_groups_callback),
+        ("^paused_groups$", paused_groups_callback),
+        ("^reset_paused_groups$", reset_paused_groups_callback),
         # Broadcast
         ("^start_broadcast$", start_broadcast_callback),
         ("^stop_broadcast$", stop_broadcast_callback),
+        # Advanced & Premium
+        ("^health_monitor$", health_monitor_callback),
+        ("^live_stats$", live_stats_callback),
+        ("^premium_info$", premium_info_callback),
+        ("^auto_responder$", auto_responder_callback),
+        ("^toggle_auto_responder$", toggle_auto_responder_callback),
         # Admin
         ("^admin$", admin_callback),
+        ("^admin_view_all_users$", admin_view_all_users_callback),
+        ("^grant_prem_.*$", admin_toggle_premium_callback),
+        ("^revoke_prem_.*$", admin_toggle_premium_callback),
     ]
     for pattern, handler in callbacks:
         app.add_handler(CallbackQueryHandler(handler, pattern=pattern))

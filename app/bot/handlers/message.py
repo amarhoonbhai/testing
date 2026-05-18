@@ -20,6 +20,8 @@ from telegram.ext import (
 from app.database.models import get_user, set_message, clear_message
 from app.bot import messages, keyboards
 from app.bot.handlers.start import _send_menu, require_join, end_conversation_callback
+from app.services.encryption_service import decrypt_session
+from app.services.telethon_service import get_client_from_session, send_message_to_saved_messages
 
 logger = logging.getLogger(__name__)
 
@@ -211,3 +213,59 @@ async def clear_message_callback(update: Update, context: ContextTypes.DEFAULT_T
         messages.message_cleared_text(),
         keyboards.back_keyboard("dashboard"),
     )
+
+
+@require_join
+async def send_to_saved_messages_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send broadcast message to user's Saved Messages."""
+    query = update.callback_query
+    await query.answer("Connecting to Telegram...")
+    user_id = query.from_user.id
+
+    user = await get_user(user_id)
+    if not user or not user.get("session_encrypted"):
+        await query.edit_message_text(
+            messages.error_text("You must connect your Telegram account first."),
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("set_message"),
+        )
+        return
+
+    message = user.get("message")
+    if not message:
+        await query.edit_message_text(
+            messages.error_text("No broadcast message configured."),
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("set_message"),
+        )
+        return
+
+    client = None
+    try:
+        session = decrypt_session(user["session_encrypted"])
+        client = await get_client_from_session(session)
+        
+        result = await send_message_to_saved_messages(client, message)
+        if result.get("success"):
+            text = messages.saved_messages_success_text()
+        else:
+            text = messages.saved_messages_error_text(result.get("error_message", "Unknown Error"))
+
+        await query.edit_message_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("set_message"),
+        )
+    except Exception as e:
+        logger.error(f"Send to saved messages failed: {e}")
+        await query.edit_message_text(
+            messages.saved_messages_error_text(str(e)),
+            parse_mode="HTML",
+            reply_markup=keyboards.back_keyboard("set_message"),
+        )
+    finally:
+        if client:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass

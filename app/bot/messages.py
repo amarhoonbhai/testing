@@ -445,3 +445,187 @@ def admin_panel_text(stats: dict) -> str:
         f"┊ Success  → {stats['success_rate']}\n"
         f"{_footer()}"
     )
+
+
+# ━━━━━━━━━━━━━━━━━━━━
+#  ADVANCED & PREMIUM
+# ━━━━━━━━━━━━━━━━━━━━
+
+def saved_messages_success_text() -> str:
+    return (
+        f"{_header('Saved Messages')}"
+        f"Your broadcast message was successfully\n"
+        f"sent to your Telegram Saved Messages!\n\n"
+        f"↳ <i>Check your Saved Messages chat to verify.</i>"
+        f"{_footer()}"
+    )
+
+
+def saved_messages_error_text(err: str) -> str:
+    return (
+        f"{_header('Saved Messages Error')}"
+        f"Failed to send message to Saved Messages:\n"
+        f"<code>{err}</code>\n\n"
+        f"↳ <i>Please check your account connection.</i>"
+        f"{_footer()}"
+    )
+
+
+def health_monitor_text(score: int, status: str, details: str) -> str:
+    return (
+        f"{_header('Health Monitor')}"
+        f"{_stat('Health Score', f'{score}%')}"
+        f"{_stat('Status', status)}"
+        f"\n"
+        f"<b>Diagnostic Details:</b>\n"
+        f"{details}\n\n"
+        f"↳ <i>Real-time account health evaluation.</i>"
+        f"{_footer()}"
+    )
+
+
+def auto_responder_text(enabled: bool, message: str) -> str:
+    status = "🟢 Enabled" if enabled else "🔴 Disabled"
+    preview = message[:100] + "..." if len(message) > 100 else message
+    return (
+        f"{_header('Auto Responder')}"
+        f"{_stat('Status', status)}"
+        f"\n"
+        f"<b>Current Reply Message:</b>\n"
+        f"<code>{preview}</code>\n\n"
+        f"↳ <i>Automatically replies to incoming private\n"
+        f"   messages while broadcasting is active.</i>"
+        f"{_footer()}"
+    )
+
+
+def auto_responder_prompt_text() -> str:
+    return (
+        f"{_header('Set Auto Responder')}"
+        f"Send the text message you want the bot\n"
+        f"to reply with when someone PMs you.\n\n"
+        f"↳ <i>Waiting for your message input...</i>"
+        f"{_footer()}"
+    )
+
+
+def auto_responder_saved_text() -> str:
+    return (
+        f"{_header('Auto Responder Saved')}"
+        f"Your auto-responder message has been saved."
+        f"{_footer()}"
+    )
+
+
+def live_stats_text(user: dict, live_count: int, paused_count: int) -> str:
+    total_sent = user.get("total_sent", 0)
+    total_failed = user.get("total_failed", 0)
+    total = total_sent + total_failed
+    rate = f"{(total_sent / total * 100):.1f}%" if total > 0 else "N/A"
+    health = user.get("health_status", "Not Checked")
+    premium = "💎 Premium" if user.get("is_premium") else "🆓 Free Plan"
+
+    return (
+        f"📊 <b>LIVE ACCOUNT STATS</b>\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"{_stat('Account Tier', premium)}"
+        f"{_stat('Health Status', health)}"
+        f"{_stat('Live Groups', live_count)}"
+        f"{_stat('Paused Groups', paused_count)}"
+        f"\n"
+        f"📈 <b>Performance Metrics</b>\n"
+        f"{_stat('Total Sent', f'{total_sent:,}')}"
+        f"{_stat('Total Failed', f'{total_failed:,}')}"
+        f"{_stat('Success Rate', rate)}"
+        f"\n"
+        f"↳ <i>Real-time individual user telemetry.</i>"
+        f"{_footer()}"
+    )
+
+
+def premium_info_text(is_premium: bool) -> str:
+    status = "💎 Active (Premium)" if is_premium else "🆓 Free Plan"
+    return (
+        f"{_header('Premium Membership')}"
+        f"{_stat('Plan Status', status)}"
+        f"{_stat('Monthly Price', '499/- INR')}"
+        f"\n"
+        f"✨ <b>Premium Benefits:</b>\n"
+        f"• Remove enforced profile bio\n"
+        f"• Remove enforced last name suffix\n"
+        f"• Priority broadcasting protection\n\n"
+        f"{'↳ <i>You are a Premium Member! Enjoy full branding freedom.</i>' if is_premium else '↳ <i>To upgrade to Premium, please contact the Owner/Admin with your User ID.</i>'}"
+        f"{_footer()}"
+    )
+
+
+def live_groups_text(groups: list[str]) -> str:
+    text = f"{_header('Live Groups')}"
+    for i, g in enumerate(groups[:30], 1):
+        display = g if len(g) <= 35 else g[:32] + "..."
+        text += f"{i}. <code>{display}</code>\n"
+    if len(groups) > 30:
+        text += f"\n↳ <i>+ {len(groups) - 30} more live groups.</i>\n"
+    if not groups:
+        text += "<i>No live groups found.</i>\n"
+    text += f"\n{_stat('Total Live', len(groups))}"
+    text += _footer()
+    return text
+
+
+def paused_groups_text(groups: list[str]) -> str:
+    text = f"{_header('Paused Groups')}"
+    for i, g in enumerate(groups[:30], 1):
+        display = g if len(g) <= 35 else g[:32] + "..."
+        text += f"{i}. <code>{display}</code>\n"
+    if len(groups) > 30:
+        text += f"\n↳ <i>+ {len(groups) - 30} more paused groups.</i>\n"
+    if not groups:
+        text += "<i>No paused groups found.</i>\n"
+    text += f"\n{_stat('Total Paused', len(groups))}"
+    text += _footer()
+    return text
+
+
+def admin_premium_prompt_text() -> str:
+    return (
+        f"{_header('Manage Premium')}"
+        f"Enter the Telegram User ID of the user\n"
+        f"you want to upgrade or downgrade.\n\n"
+        f"↳ <i>Waiting for User ID input...</i>"
+        f"{_footer()}"
+    )
+
+
+def admin_premium_user_text(user: dict) -> str:
+    user_id = user.get("telegram_user_id")
+    username = user.get("username", "None")
+    is_premium = user.get("is_premium", False)
+    status = "💎 Premium" if is_premium else "🆓 Free Plan"
+    return (
+        f"{_header('User Premium Status')}"
+        f"{_stat('User ID', user_id)}"
+        f"{_stat('Username', f'@{username}')}"
+        f"{_stat('Current Tier', status)}"
+        f"\n"
+        f"↳ <i>Select an action below:</i>"
+        f"{_footer()}"
+    )
+
+
+def admin_all_users_stats_text(users: list[dict]) -> str:
+    text = f"{_header('All Users Telemetry')}"
+    for u in users[:20]:
+        uid = u.get("telegram_user_id")
+        phone = u.get("phone_masked") or u.get("username") or "Unlinked"
+        sent = u.get("total_sent", 0)
+        failed = u.get("total_failed", 0)
+        health = u.get("health_status", "N/A").split(" ")[0]
+        prem = "💎" if u.get("is_premium") else "🆓"
+        text += f"• <code>{uid}</code> ({phone}) | {prem} | {health} | S:{sent} F:{failed}\n"
+    
+    if len(users) > 20:
+        text += f"\n↳ <i>+ {len(users) - 20} more users.</i>\n"
+    text += f"\n{_stat('Total Users', len(users))}"
+    text += _footer()
+    return text
