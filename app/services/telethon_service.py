@@ -308,34 +308,84 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool, u
 
         orig_bio = user.get("original_bio")
         orig_lname = user.get("original_last_name")
+        orig_fname = user.get("original_first_name")
 
-        if orig_bio is None or orig_lname is None:
-            orig_bio = about.replace(ENFORCED_BIO, "").strip() if orig_bio is None else orig_bio
-            orig_lname = last_name.replace(ENFORCED_NAME_SUFFIX, "").strip() if orig_lname is None else orig_lname
-            await update_user(user_id, original_bio=orig_bio, original_last_name=orig_lname)
+        branding_suffixes = [
+            ENFORCED_NAME_SUFFIX,
+            " | Kurup Ads",
+            "| Kurup Ads",
+            " ‣ Kᴜʀᴜᴘ Aᴅꜱ",
+            "‣ Kᴜʀᴜᴘ Aᴅꜱ",
+            " ‣ Kᴜʀᴜᴘ Aᴅs",
+            "‣ Kᴜʀᴜᴘ Aᴅs"
+        ]
+
+        # Clean fname & lname to detect original names and avoid duplicates
+        clean_fname = first_name
+        for sfx in branding_suffixes:
+            clean_fname = clean_fname.replace(sfx, "")
+        clean_fname = clean_fname.strip()
+        if not clean_fname:
+            clean_fname = "User"
+
+        clean_lname = last_name
+        for sfx in branding_suffixes:
+            clean_lname = clean_lname.replace(sfx, "")
+        clean_lname = clean_lname.strip()
+
+        # Save originals if not already in DB
+        if orig_bio is None or orig_lname is None or orig_fname is None:
+            updates = {}
+            if orig_bio is None:
+                orig_bio = about.replace(ENFORCED_BIO, "").strip()
+                updates["original_bio"] = orig_bio
+            if orig_fname is None:
+                orig_fname = clean_fname
+                updates["original_first_name"] = orig_fname
+            if orig_lname is None:
+                orig_lname = clean_lname
+                updates["original_last_name"] = orig_lname
+            if updates:
+                await update_user(user_id, **updates)
 
         updated = False
         new_about = about
+        new_first_name = first_name
         new_last_name = last_name
 
         if not is_premium:
             if ENFORCED_BIO not in about:
                 new_about = ENFORCED_BIO
                 updated = True
-            if ENFORCED_NAME_SUFFIX not in last_name:
-                clean_lname = last_name.replace(ENFORCED_NAME_SUFFIX, "").strip()
-                new_last_name = f"{clean_lname} {ENFORCED_NAME_SUFFIX}".strip()
+            
+            # Remove any duplicate suffix inside first_name
+            if first_name != clean_fname:
+                new_first_name = clean_fname
+                updated = True
+
+            expected_suffix = ENFORCED_NAME_SUFFIX.strip()
+            if clean_lname:
+                new_last_name = f"{clean_lname} {expected_suffix}"
+            else:
+                new_last_name = expected_suffix
+                
+            if last_name != new_last_name:
                 updated = True
         else:
-            if about != orig_bio or last_name != orig_lname:
-                new_about = orig_bio or ""
-                new_last_name = orig_lname or ""
+            target_bio = orig_bio or ""
+            target_fname = orig_fname or clean_fname
+            target_lname = orig_lname or clean_lname
+
+            if about != target_bio or first_name != target_fname or last_name != target_lname:
+                new_about = target_bio
+                new_first_name = target_fname
+                new_last_name = target_lname
                 updated = True
 
         if updated:
             await client(UpdateProfileRequest(
                 about=new_about[:70],
-                first_name=first_name,
+                first_name=new_first_name[:64],
                 last_name=new_last_name[:64]
             ))
             logger.info(f"Profile branding updated for user {me.id} (Premium: {is_premium})")
@@ -353,51 +403,57 @@ async def check_account_health(user_id: int, client: TelegramClient) -> dict:
     try:
         if not await client.is_user_authorized():
             score = 0
-            details.append("▪ ⚠️ Session Standing : Unauthorized / Expired")
+            details.append("▪ ⚠️ Session: Expired")
             status_str = "🔴 Session Expired (0%)"
         else:
             me = await client.get_me()
-            details.append(f"▪ 👤 Account ID : <code>{me.id}</code>")
+            details.append(f"▪ 👤 ID: <code>{me.id}</code>")
             
             if getattr(me, 'restricted', False):
                 score -= 40
-                details.append("▪ ⚠️ Restriction Flag : Active (Account Limited)")
+                details.append("▪ ⚠️ Status: Restricted")
                 if getattr(me, 'restriction_reason', None):
                     for r in me.restriction_reason:
-                        details.append(f"▪ ↳ Reason : {r.platform} - {r.reason} ({r.text})")
+                        reason_text = f"{r.platform}-{r.reason}"
+                        if len(reason_text) > 15:
+                            reason_text = reason_text[:12] + ".."
+                        details.append(f"▪ ↳ {reason_text}")
             else:
-                details.append("▪ ✅ Restriction Flag : None (Unrestricted)")
+                details.append("▪ ✅ Status: Unrestricted")
 
             if getattr(me, 'scam', False):
                 score -= 30
-                details.append("▪ ⚠️ Scam Flag : Active")
+                details.append("▪ ⚠️ Scam Flag: Active")
             elif getattr(me, 'fake', False):
                 score -= 30
-                details.append("▪ ⚠️ Fake Flag : Active")
+                details.append("▪ ⚠️ Fake Flag: Active")
             else:
-                details.append("▪ ✅ Reputation Standing : Verified Clean")
+                details.append("▪ ✅ Reputation: Clean")
 
             # Check profile completeness
             full = await client(GetFullUserRequest(me.id))
             if not full.full_user.about:
                 score -= 10
-                details.append("▪ ⚠️ Profile Bio : Empty (Add bio for better standing)")
+                details.append("▪ ⚠️ Bio: Empty")
             if not me.photo:
                 score -= 10
-                details.append("▪ ⚠️ Profile Avatar : Missing (Add photo for trust score)")
+                details.append("▪ ⚠️ Avatar: Missing")
 
             if score == 100:
-                details.append("▪ ✅ Overall Standing : Excellent & Fully Trusted")
+                details.append("▪ ✅ Standing: Perfect")
                 status_str = f"🟢 Excellent ({score}%)"
             elif score >= 70:
-                status_str = f"🟡 Good / Minor Warnings ({score}%)"
+                status_str = f"🟡 Good ({score}%)"
             else:
-                status_str = f"🔴 Restricted / Flagged ({score}%)"
+                status_str = f"🔴 Flagged ({score}%)"
 
     except Exception as e:
         score = 0
-        details.append(f"▪ ❌ Diagnostic Error : {type(e).__name__}")
-        status_str = "🔴 Diagnostic Error (0%)"
+        err_name = type(e).__name__
+        if len(err_name) > 15:
+            err_name = err_name[:12] + ".."
+        details.append(f"▪ ❌ Error: {err_name}")
+        status_str = "🔴 Diag Error (0%)"
 
     await update_user(user_id, health_status=status_str, last_health_check=datetime.utcnow())
     return {"score": score, "status": status_str, "details": "\n".join(details)}

@@ -29,7 +29,7 @@ from telethon.errors import (
 )
 from telethon.tl.types import InputPeerChat, InputPeerChannel, InputPeerUser
 
-from app.config import MAX_FAIL_SKIP, MIN_INTERVAL
+from app.config import MAX_FAIL_SKIP, MIN_INTERVAL, SEND_DELAY_MIN, SEND_DELAY_MAX
 from app.database.models import (
     get_user, update_user, set_broadcasting, increment_sent,
     increment_failed, increment_group_fail, reset_group_fail,
@@ -51,6 +51,56 @@ logger = logging.getLogger(__name__)
 
 # Track active asyncio tasks: {user_id: Task}
 active_tasks = {}
+
+# Concurrency Semaphore to limit simultaneous active broadcasters
+_worker_semaphore = asyncio.Semaphore(10)
+
+_watchdog_task = None
+
+
+async def start_watchdog():
+    """Start the worker health monitor watchdog."""
+    global _watchdog_task
+    if _watchdog_task is None:
+        _watchdog_task = asyncio.create_task(_worker_watchdog_loop())
+        logger.info("Worker Health Watchdog initialized.")
+
+
+async def _worker_watchdog_loop():
+    """Watchdog loop to monitor and heal dead broadcast tasks."""
+    from app.services.channel_logger import get_bot
+    await asyncio.sleep(10)  # Wait for startup to settle
+    while True:
+        try:
+            bot = get_bot()
+            from app.database.models import get_broadcasting_users
+            users = await get_broadcasting_users()
+            
+            for u in users:
+                user_id = u["telegram_user_id"]
+                # If user is marked as broadcasting, but no active task is running (or it's done)
+                if user_id not in active_tasks or active_tasks[user_id].done():
+                    logger.warning(f"Watchdog detected stalled broadcast loop for user {user_id}. Restoring...")
+                    if user_id in active_tasks:
+                        del active_tasks[user_id]
+                    
+                    task = asyncio.create_task(_broadcast_loop(user_id))
+                    active_tasks[user_id] = task
+                    
+                    if bot:
+                        try:
+                            await bot.send_message(
+                                chat_id=user_id,
+                                text="🔧 <b>System Auto-Recovery</b>\n\nYour broadcast worker encountered a minor interruption. The watchdog has successfully restored your session.",
+                                parse_mode="HTML"
+                            )
+                        except Exception as restore_err:
+                            logger.warning(f"Failed to send recovery message to {user_id}: {restore_err}")
+        except Exception as watchdog_err:
+            logger.error(f"Error in Worker Health Watchdog loop: {watchdog_err}")
+        
+        await asyncio.sleep(60)
+
 
 
 def _setup_auto_responder(client: TelegramClient, user_id: int):
@@ -183,8 +233,22 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
     # Apply/Remove branding at start of cycle
     await enforce_or_remove_branding(client, user.get("is_premium", False), user_id)
 
+    # Cache user doc locally to optimize database I/O performance
+    cached_user = user
+    last_fetch_time = 0.0
+
     for i, group_link in enumerate(groups):
-        curr_user = await get_user(user_id)
+        now_time = time.time()
+        if now_time - last_fetch_time > 10.0:
+            curr_user = await get_user(user_id)
+            if curr_user:
+                cached_user = curr_user
+                last_fetch_time = now_time
+            else:
+                curr_user = cached_user
+        else:
+            curr_user = cached_user
+
         if not curr_user or not curr_user.get("session_encrypted") or not curr_user.get("groups"):
             logger.info(f"Broadcast stopped mid-cycle for user {user_id} (prerequisites missing)")
             await set_broadcasting(user_id, False)
@@ -210,15 +274,61 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
                         logger.warning(f"Failed to update night mode progress mid-cycle: {e}")
             break
 
-        fails = group_fails.get(group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_"), 0)
+        clean_link = group_link.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+        fails = group_fails.get(clean_link, 0)
         if fails >= MAX_FAIL_SKIP:
             skipped += 1
             await _update_progress(user_id, sent, failed, skipped, total_groups, start_time, bot)
             continue
 
+        # Proactive SlowMode Skip Check
+        group_slowmodes = curr_user.get("group_slowmodes", {})
+        group_last_posts = curr_user.get("group_last_posts", {})
+        
+        if clean_link in group_slowmodes:
+            slowmode_seconds = group_slowmodes[clean_link]
+            last_posted = group_last_posts.get(clean_link, 0.0)
+            elapsed = time.time() - last_posted
+            if elapsed < slowmode_seconds:
+                remaining_wait = int(slowmode_seconds - elapsed)
+                logger.info(f"Skipping {group_link} due to active SlowMode ({remaining_wait}s remaining)")
+                await set_group_reason(user_id, group_link, f"SlowMode Active (Wait {remaining_wait}s)")
+                skipped += 1
+                await _update_progress(user_id, sent, failed, skipped, total_groups, start_time, bot)
+                continue
+
         try:
             entity = await _resolve_group(client, group_link, user_id)
             
+            # Group Audit Check: Verify default rights
+            is_restricted = False
+            restriction_reason = ""
+            if hasattr(entity, 'default_banned_rights') and entity.default_banned_rights:
+                rights = entity.default_banned_rights
+                if rights.send_messages:
+                    is_restricted = True
+                    restriction_reason = "Send Messages Banned"
+                elif rights.embed_links:
+                    is_restricted = True
+                    restriction_reason = "Embed Links Banned"
+                elif rights.send_media:
+                    is_restricted = True
+                    restriction_reason = "Send Media Banned"
+
+            if is_restricted:
+                logger.warning(f"Group {group_link} audit failed: {restriction_reason}")
+                await set_group_reason(user_id, group_link, f"Restricted ({restriction_reason})")
+                skipped += 1
+                await _update_progress(user_id, sent, failed, skipped, total_groups, start_time, bot)
+                continue
+            
+            # Anti-Detection: Simulate human typing indicator
+            try:
+                async with client.action(entity, 'typing'):
+                    await asyncio.sleep(random.uniform(1.5, 3.0))
+            except Exception:
+                await asyncio.sleep(random.uniform(1.5, 3.0))
+
             # Forward saved messages
             await forward_saved_messages_to_entity(client, entity)
             
@@ -226,7 +336,14 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
             await increment_sent(user_id)
             await reset_group_fail(user_id, group_link)
 
-            delay = random.uniform(2.0, 5.0)
+            # Update last posted timestamp
+            group_last_posts = curr_user.get("group_last_posts", {})
+            group_last_posts[clean_link] = time.time()
+            await update_user(user_id, group_last_posts=group_last_posts)
+
+            # Config-based delay with jitter
+            delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
+            logger.info(f"Sleeping for {delay:.2f}s post-send (Jitter).")
             await asyncio.sleep(delay)
 
         except FloodWaitError as e:
@@ -243,6 +360,14 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
             await increment_group_fail(user_id, group_link)
             await set_group_reason(user_id, group_link, f"SlowMode ({e.seconds}s)")
             logger.warning(f"SlowMode in broadcast for {user_id}: sleeping {e.seconds}s")
+            
+            # Save the slowmode constraint
+            group_slowmodes = curr_user.get("group_slowmodes", {})
+            group_slowmodes[clean_link] = e.seconds
+            group_last_posts = curr_user.get("group_last_posts", {})
+            group_last_posts[clean_link] = time.time()
+            
+            await update_user(user_id, group_slowmodes=group_slowmodes, group_last_posts=group_last_posts)
             await asyncio.sleep(e.seconds + random.uniform(1.0, 2.0))
 
         except (ChatWriteForbiddenError, ChatAdminRequiredError, UserBannedInChannelError) as e:
@@ -282,108 +407,169 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
     return {"sent": sent, "failed": failed, "skipped": skipped, "total": total_groups}
 
 
+def _get_current_sleep_cycle(hour: int) -> tuple[int, int] | None:
+    """Return (start_hour, end_hour) if the given hour falls inside a configured sleep cycle."""
+    # Cycle 1: 12:00 AM (0) to 5:00 AM (5)
+    if 0 <= hour < 5:
+        return (0, 5)
+    # Cycle 2: 8:00 AM (8) to 10:00 AM (10)
+    if 8 <= hour < 10:
+        return (8, 10)
+    return None
+
+
+def _format_hour(h: int) -> str:
+    """Format hour h in 12-hour format with AM/PM."""
+    if h == 0:
+        return "12:00 AM"
+    elif h == 12:
+        return "12:00 PM"
+    elif h < 12:
+        return f"{h}:00 AM"
+    else:
+        return f"{h-12}:00 PM"
+
+
 async def _broadcast_loop(user_id: int):
     """Main background loop managing broadcast cycles and resting intervals."""
     logger.info(f"Starting broadcast loop for user {user_id}")
     from app.services.channel_logger import get_bot
     bot = get_bot()
 
-    user = await get_user(user_id)
-    if not user or not user.get("session_encrypted"):
-        await set_broadcasting(user_id, False)
-        return
+    if _worker_semaphore.locked():
+        logger.info(f"User {user_id} queued due to worker concurrency limits.")
+        if bot:
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text="⏳ <b>Server Load High</b>\n\nYour broadcast is queued and will start automatically as soon as a slot becomes available.",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
 
-    client = None
-    try:
-        session = decrypt_session(user["session_encrypted"])
-        client = await get_client_from_session(session)
+    async with _worker_semaphore:
+        user = await get_user(user_id)
+        if not user or not user.get("session_encrypted"):
+            await set_broadcasting(user_id, False)
+            return
 
-        _setup_auto_responder(client, user_id)
+        client = None
+        try:
+            session = decrypt_session(user["session_encrypted"])
+            client = await get_client_from_session(session)
 
-        await log_broadcast_started(user_id, len(user.get("groups", [])), user.get("interval_seconds", MIN_INTERVAL))
+            _setup_auto_responder(client, user_id)
 
-        while True:
-            curr = await get_user(user_id)
-            if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
-                logger.info(f"Broadcast prerequisites missing for {user_id}. Halting autonomous loop.")
-                await set_broadcasting(user_id, False)
-                break
+            await log_broadcast_started(user_id, len(user.get("groups", [])), user.get("interval_seconds", MIN_INTERVAL))
 
-            if not curr.get("is_broadcasting"):
-                logger.info(f"Broadcast stopped by admin override for {user_id}.")
-                break
+            was_sleeping = False
 
-            # Check Auto Night Mode (12:00 AM to 5:00 AM)
-            now = datetime.now()
-            if now.hour >= 0 and now.hour < 5:
-                logger.info(f"Auto Night Mode active for {user_id}. Sleeping until 5:00 AM.")
-                if bot and curr.get("progress_chat_id") and curr.get("progress_message_id"):
-                    try:
-                        await bot.edit_message_text(
-                            chat_id=curr["progress_chat_id"],
-                            message_id=curr["progress_message_id"],
-                            text=messages.night_mode_progress_text(),
-                            parse_mode="HTML"
-                        )
-                    except Exception as e:
-                        if "exactly the same" not in str(e).lower():
-                            logger.warning(f"Failed to update night mode progress: {e}")
+            while True:
+                curr = await get_user(user_id)
+                if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                    logger.info(f"Broadcast prerequisites missing for {user_id}. Halting autonomous loop.")
+                    await set_broadcasting(user_id, False)
+                    break
+
+                if not curr.get("is_broadcasting"):
+                    logger.info(f"Broadcast stopped by admin override for {user_id}.")
+                    break
+
+                # Check Auto Sleep Cycles (12:00 AM to 5:00 AM, and 8:00 AM to 10:00 AM)
+                now = datetime.now()
+                sleep_cycle = _get_current_sleep_cycle(now.hour)
+                if sleep_cycle:
+                    start_h, end_h = sleep_cycle
+                    
+                    # Notify the user once upon entering the sleep cycle
+                    if not was_sleeping:
+                        was_sleeping = True
+                        logger.info(f"Auto Sleep Cycle ({start_h}:00-{end_h}:00) activated for {user_id}. Notifying user.")
+                        if bot:
+                            try:
+                                await bot.send_message(
+                                    chat_id=user_id,
+                                    text=(
+                                        f"💤 <b>Sleep Cycle Activated</b>\n\n"
+                                        f"The broadcaster is now going to sleep from <b>{_format_hour(start_h)}</b> to <b>{_format_hour(end_h)}</b>.\n"
+                                        f"Status: <b>Sleeping</b>. It will automatically resume after the sleep cycle ends."
+                                    ),
+                                    parse_mode="HTML"
+                                )
+                            except Exception as e:
+                                logger.warning(f"Failed to notify user about sleep cycle: {e}")
+
+                    if bot and curr.get("progress_chat_id") and curr.get("progress_message_id"):
+                        try:
+                            await bot.edit_message_text(
+                                chat_id=curr["progress_chat_id"],
+                                message_id=curr["progress_message_id"],
+                                text=messages.sleep_mode_progress_text(start_h, end_h),
+                                parse_mode="HTML"
+                            )
+                        except Exception as e:
+                            if "exactly the same" not in str(e).lower():
+                                logger.warning(f"Failed to update sleep cycle progress: {e}")
+                    
+                    # Sleep for 60 seconds, then check again
+                    for _ in range(60):
+                        curr = await get_user(user_id)
+                        if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                            break
+                        if not curr.get("is_broadcasting"):
+                            break
+                        await asyncio.sleep(1)
+                    continue
+                else:
+                    # Outside sleep hours, reset notification flag
+                    was_sleeping = False
+
+                cycle_res = await _execute_cycle(user_id, client, bot)
                 
-                # Sleep for 60 seconds, then check again
-                for _ in range(60):
+                curr = await get_user(user_id)
+                if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
+                    logger.info(f"Broadcast prerequisites missing for {user_id} after cycle. Halting autonomous loop.")
+                    await set_broadcasting(user_id, False)
+                    break
+
+                if not curr.get("is_broadcasting"):
+                    logger.info(f"Broadcast stopped by admin override for {user_id} after cycle.")
+                    break
+
+                await log_broadcast_cycle_complete(
+                    user_id, cycle_res["sent"], cycle_res["failed"], cycle_res["skipped"]
+                )
+
+                interval = curr.get("interval_seconds", MIN_INTERVAL)
+                logger.info(f"Cycle complete for {user_id}. Resting for {interval}s.")
+                
+                for _ in range(interval):
                     curr = await get_user(user_id)
                     if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
                         break
                     if not curr.get("is_broadcasting"):
                         break
                     await asyncio.sleep(1)
-                continue
 
-            cycle_res = await _execute_cycle(user_id, client, bot)
-            
-            curr = await get_user(user_id)
-            if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
-                logger.info(f"Broadcast prerequisites missing for {user_id} after cycle. Halting autonomous loop.")
-                await set_broadcasting(user_id, False)
-                break
-
-            if not curr.get("is_broadcasting"):
-                logger.info(f"Broadcast stopped by admin override for {user_id} after cycle.")
-                break
-
-            await log_broadcast_cycle_complete(
-                user_id, cycle_res["sent"], cycle_res["failed"], cycle_res["skipped"]
-            )
-
-            interval = curr.get("interval_seconds", MIN_INTERVAL)
-            logger.info(f"Cycle complete for {user_id}. Resting for {interval}s.")
-            
-            for _ in range(interval):
-                curr = await get_user(user_id)
-                if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
-                    break
-                if not curr.get("is_broadcasting"):
-                    break
-                await asyncio.sleep(1)
-
-    except (AuthKeyUnregisteredError, UserDeactivatedError, SessionRevokedError, UnauthorizedError) as e:
-        logger.error(f"Fatal session error in loop for {user_id}: {e}")
-        await set_broadcasting(user_id, False)
-        await clear_session(user_id)
-        await log_account_invalid(user_id, str(e))
-    except Exception as e:
-        logger.error(f"Fatal error in broadcast loop for {user_id}: {e}")
-        await set_broadcasting(user_id, False)
-        await log_broadcast_error(user_id, str(e))
-    finally:
-        if client:
-            try:
-                await client.disconnect()
-            except Exception:
-                pass
-        if user_id in active_tasks:
-            del active_tasks[user_id]
-        logger.info(f"Broadcast loop terminated for user {user_id}")
+        except (AuthKeyUnregisteredError, UserDeactivatedError, SessionRevokedError, UnauthorizedError) as e:
+            logger.error(f"Fatal session error in loop for {user_id}: {e}")
+            await set_broadcasting(user_id, False)
+            await clear_session(user_id)
+            await log_account_invalid(user_id, str(e))
+        except Exception as e:
+            logger.error(f"Fatal error in broadcast loop for {user_id}: {e}")
+            await set_broadcasting(user_id, False)
+            await log_broadcast_error(user_id, str(e))
+        finally:
+            if client:
+                try:
+                    await client.disconnect()
+                except Exception:
+                    pass
+            if user_id in active_tasks:
+                del active_tasks[user_id]
+            logger.info(f"Broadcast loop terminated for user {user_id}")
 
 
 async def start(user_id: int) -> dict:
@@ -446,5 +632,9 @@ async def auto_resume():
             task = asyncio.create_task(_broadcast_loop(user_id))
             active_tasks[user_id] = task
             logger.info(f"Started autonomous broadcast for user {user_id}")
+            # Stagger connections to prevent Telegram flood flags
+            await asyncio.sleep(0.5)
         else:
             await set_broadcasting(user_id, False)
+
+    await start_watchdog()

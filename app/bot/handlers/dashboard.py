@@ -259,3 +259,10 @@ async def premium_info_callback(update: Update, context: ContextTypes.DEFAULT_TY
     is_premium = user.get("is_premium", False) if user else False
     text = messages.premium_info_text(is_premium)
     await _send_menu(update, context, text, keyboards.premium_info_keyboard(is_premium))
+
+
+@require_join
+async def stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /stats command by displaying live stats."""
+    await live_stats_callback(update, context)
+

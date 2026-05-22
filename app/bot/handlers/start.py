@@ -265,3 +265,39 @@ async def end_conversation_callback(update: Update, context: ContextTypes.DEFAUL
         await query.answer()
     return ConversationHandler.END
 
+
+@require_join
+async def ping_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Calculate bot response latency and Motor MongoDB latency."""
+    from time import time
+    from app.database.mongo import get_db
+
+    start_time = time()
+    sent_message = await update.message.reply_text("⚡ Ping...")
+    end_time = time()
+    bot_latency = (end_time - start_time) * 1000
+
+    db_start_time = time()
+    db = get_db()
+    await db.command("ping")
+    db_end_time = time()
+    db_latency = (db_end_time - db_start_time) * 1000
+
+    await sent_message.edit_text(
+        f"<b>🏓 Pong!</b>\n\n"
+        f"⚡ <b>Bot Latency:</b> <code>{bot_latency:.1f}ms</code>\n"
+        f"💾 <b>DB Latency:</b> <code>{db_latency:.1f}ms</code>",
+        parse_mode="HTML"
+    )
+
+
+@require_join
+async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /help command."""
+    await _send_menu(
+        update, context,
+        messages.how_to_use_text(),
+        keyboards.guide_keyboard(),
+    )
+
+

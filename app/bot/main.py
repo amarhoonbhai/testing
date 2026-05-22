@@ -19,12 +19,13 @@ from app.services import engine
 from app.bot.handlers.start import (
     start_handler, home_callback, check_join_callback,
     how_to_use_callback, disclaimer_callback, powered_by_callback,
+    ping_handler, help_handler,
 )
 from app.bot.handlers.dashboard import (
     dashboard_callback, health_monitor_callback, live_stats_callback,
     premium_info_callback, auto_responder_callback, toggle_auto_responder_callback,
     build_auto_responder_conversation, toggle_rule_broadcast_callback,
-    toggle_rule_contacts_callback,
+    toggle_rule_contacts_callback, stats_handler,
 )
 from app.bot.handlers.account import (
     build_account_conversation,
@@ -58,6 +59,9 @@ def create_application():
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("dashboard", dashboard_callback))
     app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(CommandHandler("ping", ping_handler))
+    app.add_handler(CommandHandler("help", help_handler))
+    app.add_handler(CommandHandler("stats", stats_handler))
 
     # ── Conversation Handlers (must be registered BEFORE callbacks) ──
     app.add_handler(build_account_conversation())

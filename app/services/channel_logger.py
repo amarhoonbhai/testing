@@ -29,9 +29,14 @@ async def log_to_channel(text: str, silent: bool = True):
     if not _bot or not LOGS_CHANNEL_ID:
         return
     try:
+        formatted_text = (
+            f"📋 <b>Logs | Update</b>\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{text}"
+        )
         await _bot.send_message(
             chat_id=LOGS_CHANNEL_ID,
-            text=text,
+            text=formatted_text,
             parse_mode="HTML",
             disable_notification=silent,
         )

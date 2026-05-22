@@ -36,8 +36,8 @@ ENCRYPTION_KEY: str = os.getenv("FERNET_KEY", os.getenv("ENCRYPTION_KEY", ""))
 BOT_USERNAME: str = os.getenv("BOT_USERNAME", "GroupBroadcasterBot")
 SUPPORT_USERNAME: str = os.getenv("SUPPORT_USERNAME", "kurupads")
 CHANNEL_USERNAME: str = os.getenv("CHANNEL_USERNAME", "philobots")
-ENFORCED_BIO: str = os.getenv("ENFORCED_BIO", "Broadcasting via @kurupads")
-ENFORCED_NAME_SUFFIX: str = os.getenv("ENFORCED_NAME_SUFFIX", " | Kurup Ads")
+ENFORCED_BIO: str = os.getenv("ENFORCED_BIO", "Powered by @KurupAdsBot | Network: @PhiloBots")
+ENFORCED_NAME_SUFFIX: str = os.getenv("ENFORCED_NAME_SUFFIX", os.getenv("ENFORCED_NAME", "‣ Kᴜʀᴜᴘ Aᴅꜱ"))
 
 # ── Force Join Channels (comma-separated, no @) ─────────────────────────────
 REQUIRED_CHANNELS_STR: str = os.getenv("REQUIRED_CHANNELS", "philobots,sellinghub0")
