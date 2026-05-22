@@ -245,8 +245,8 @@ async def forward_saved_messages_to_entity(client: TelegramClient, entity) -> di
         target = f"@{target}"
 
     try:
-        # Fetch up to 50 messages from Saved Messages ('me')
-        msgs = await client.get_messages("me", limit=50)
+        # Fetch up to 100 messages from Saved Messages ('me')
+        msgs = await client.get_messages("me", limit=100)
         if not msgs:
             return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "Saved Messages chat is empty", "skipped": False}
 
@@ -281,8 +281,16 @@ async def forward_saved_messages_to_entity(client: TelegramClient, entity) -> di
         if current_group:
             grouped.append(current_group)
 
-        # Forward each group/standalone message
-        for batch in grouped:
+        # Forward each group/standalone message with a gap/delay between them
+        from app.config import GAP_BETWEEN_SAVED_MESSAGES_MIN, GAP_BETWEEN_SAVED_MESSAGES_MAX
+        import random
+        import asyncio
+
+        for i, batch in enumerate(grouped):
+            if i > 0:
+                gap = random.uniform(GAP_BETWEEN_SAVED_MESSAGES_MIN, GAP_BETWEEN_SAVED_MESSAGES_MAX)
+                logger.info(f"Sleeping for {gap:.2f}s between forwarding saved messages to {target}.")
+                await asyncio.sleep(gap)
             await client.forward_messages(entity, batch, from_peer="me")
 
         return {"success": True, "target": target, "error_type": None, "error_message": None, "skipped": False}
