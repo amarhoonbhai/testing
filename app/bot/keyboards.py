@@ -49,6 +49,9 @@ def dashboard_keyboard(is_broadcasting: bool = False, has_account: bool = False,
         ],
         [
             InlineKeyboardButton("🤖 Auto Reply", callback_data="auto_responder"),
+            InlineKeyboardButton("🌙 Quiet Hours", callback_data="quiet_hours_menu"),
+        ],
+        [
             InlineKeyboardButton("❤️ Health Check", callback_data="health_monitor"),
         ],
     ]
@@ -71,8 +74,15 @@ def back_keyboard(callback_data: str = "dashboard") -> InlineKeyboardMarkup:
         label = "Admin Panel"
     elif callback_data == "auto_responder":
         label = "Auto Responder"
+    elif callback_data == "quiet_hours_menu":
+        label = "Quiet Hours"
+    elif callback_data == "live_stats":
+        label = "Live Stats"
+    elif callback_data == "view_account":
+        label = "Account Overview"
         
     return InlineKeyboardMarkup([[InlineKeyboardButton(f"← Back to {label}", callback_data=callback_data)]])
+
 
 
 def cancel_keyboard() -> InlineKeyboardMarkup:
@@ -84,6 +94,7 @@ def cancel_keyboard() -> InlineKeyboardMarkup:
 def account_info_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔌 Terminate Session", callback_data="disconnect_account")],
+        [InlineKeyboardButton("⚙️ Custom API Settings", callback_data="setup_custom_api")],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
 
@@ -91,8 +102,20 @@ def account_info_keyboard() -> InlineKeyboardMarkup:
 def no_account_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔗 Connect Telegram Account", callback_data="connect_account")],
+        [InlineKeyboardButton("⚙️ Custom API Settings", callback_data="setup_custom_api")],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
+
+
+def custom_api_keyboard(has_custom_keys: bool) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("📝 Configure Custom Keys", callback_data="change_custom_api")]
+    ]
+    if has_custom_keys:
+        buttons.append([InlineKeyboardButton("🧹 Clear Custom Keys", callback_data="clear_custom_api")])
+    buttons.append([InlineKeyboardButton("← Back to Account Overview", callback_data="view_account")])
+    return InlineKeyboardMarkup(buttons)
+
 
 
 def confirm_disconnect_keyboard() -> InlineKeyboardMarkup:
@@ -186,12 +209,17 @@ def auto_responder_keyboard(enabled: bool, rules: dict) -> InlineKeyboardMarkup:
             InlineKeyboardButton(only_bcast, callback_data="toggle_rule_broadcast"),
             InlineKeyboardButton(excl_contacts, callback_data="toggle_rule_contacts"),
         ],
+        [
+            InlineKeyboardButton("⏱ Set Cooldown", callback_data="set_responder_cooldown_menu"),
+            InlineKeyboardButton("🔍 Keyword Rules", callback_data="manage_keywords"),
+        ],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
 
 
 def live_stats_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 View Activity Logs", callback_data="view_activity_logs")],
         [InlineKeyboardButton("🔄 Refresh Stats", callback_data="live_stats")],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
@@ -246,3 +274,47 @@ def admin_user_dashboard_keyboard(user_id: int, is_premium: bool, is_broadcastin
         [InlineKeyboardButton("← Back to User Portal", callback_data="admin_manage_user")],
         [InlineKeyboardButton("← Back to Admin Panel", callback_data="admin")],
     ])
+
+
+# ── Advanced Enhancements ───────────────────────────────────────────────────
+
+def quiet_hours_keyboard(enabled: bool) -> InlineKeyboardMarkup:
+    toggle_text = "🔴 Disable Sleep Mode" if enabled else "🟢 Enable Sleep Mode"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(toggle_text, callback_data="toggle_sleep_mode")],
+        [
+            InlineKeyboardButton("🌅 Set Start Hour", callback_data="set_sleep_start"),
+            InlineKeyboardButton("🌄 Set End Hour", callback_data="set_sleep_end"),
+        ],
+        [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
+    ])
+
+
+def cooldown_settings_keyboard(current_cooldown: int) -> InlineKeyboardMarkup:
+    presets = [
+        ("Disabled", 0),
+        ("30 Mins", 1800),
+        ("1 Hour", 3600),
+        ("6 Hours", 21600),
+        ("12 Hours", 43200),
+        ("24 Hours", 86400),
+    ]
+    buttons = []
+    for label, val in presets:
+        prefix = "🟢 " if val == current_cooldown else ""
+        buttons.append(InlineKeyboardButton(f"{prefix}{label}", callback_data=f"save_cooldown_{val}"))
+    
+    grid = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
+    grid.append([InlineKeyboardButton("← Back to Auto Responder", callback_data="auto_responder")])
+    return InlineKeyboardMarkup(grid)
+
+
+def keyword_rules_keyboard(keywords: dict) -> InlineKeyboardMarkup:
+    buttons = []
+    for kw in keywords.keys():
+        buttons.append([
+            InlineKeyboardButton(f"🗑 {kw}", callback_data=f"del_keyword_{kw}")
+        ])
+    buttons.append([InlineKeyboardButton("➕ Add Keyword Rule", callback_data="add_keyword_rule")])
+    buttons.append([InlineKeyboardButton("← Back to Auto Responder", callback_data="auto_responder")])
+    return InlineKeyboardMarkup(buttons)

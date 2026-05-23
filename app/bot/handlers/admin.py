@@ -128,7 +128,7 @@ async def admin_toggle_premium_callback(update: Update, context: ContextTypes.DE
         client = None
         try:
             session = decrypt_session(target_user["session_encrypted"])
-            client = await get_client_from_session(session)
+            client = await get_client_from_session(session, target_id)
             await enforce_or_remove_branding(client, is_premium, target_id)
         except Exception as e:
             logger.warning(f"Failed instant branding restore for {target_id}: {e}")
@@ -198,7 +198,7 @@ async def admin_remote_health_callback(update: Update, context: ContextTypes.DEF
     client = None
     try:
         session = decrypt_session(target_user["session_encrypted"])
-        client = await get_client_from_session(session)
+        client = await get_client_from_session(session, target_id)
         report = await check_account_health(target_id, client)
         text = messages.health_monitor_text(report["score"], report["status"], report["details"])
         await _send_menu(update, context, text, keyboards.back_keyboard("admin"))

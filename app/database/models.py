@@ -6,21 +6,41 @@ All functions operate on the shared Motor database instance.
 """
 
 from datetime import datetime
+import random
 from typing import Optional
 
 from app.database.mongo import get_db
 from app.config import DEFAULT_INTERVAL
 
 
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  USERS
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Realistic devices for Telethon connection parameter rotation
+DEVICES = [
+    {"device_model": "iPhone 14 Pro", "system_version": "iOS 16.5", "app_version": "10.0.1"},
+    {"device_model": "Samsung Galaxy S23", "system_version": "Android 13", "app_version": "10.0.2"},
+    {"device_model": "Google Pixel 7 Pro", "system_version": "Android 13", "app_version": "10.0.0"},
+    {"device_model": "iPad Pro", "system_version": "iOS 16.4.1", "app_version": "9.6.5"},
+    {"device_model": "Xiaomi 13 Ultra", "system_version": "Android 13", "app_version": "10.1.0"},
+    {"device_model": "iPhone 15 Pro Max", "system_version": "iOS 17.0.3", "app_version": "10.2.2"},
+    {"device_model": "OnePlus 11", "system_version": "Android 13", "app_version": "10.0.5"},
+    {"device_model": "MacBook Pro", "system_version": "macOS 13.5", "app_version": "9.7.0"},
+]
+
+def generate_random_device() -> dict:
+    """Returns a randomly selected device configuration from DEVICES."""
+    return random.choice(DEVICES)
+
 
 async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
     """Create or update a user record."""
     db = get_db()
     now = datetime.utcnow()
 
+    device = generate_random_device()
     default_doc = {
         "telegram_user_id": telegram_user_id,
         "session_encrypted": None,       # Encrypted Telethon session string
@@ -46,9 +66,22 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
             "only_during_broadcast": True,
             "exclude_contacts": True,
         },
+        "auto_responder_cooldown_seconds": 21600,   # default 6 hours
+        "auto_responder_persistent_cooldowns": {},  # {peer_id: UNIX_timestamp}
+        "auto_responder_keywords": {},              # {keyword: reply_msg}
+        "sleep_mode_enabled": True,
+        "sleep_mode_start_hour": 0,                 # 12:00 AM
+        "sleep_mode_end_hour": 5,                   # 5:00 AM
+        "activity_logs": [],                        # last 20 events
         "health_status": "Not Checked",
         "last_health_check": None,
+        "custom_api_id": None,
+        "custom_api_hash": None,
+        "device_model": device["device_model"],
+        "system_version": device["system_version"],
+        "app_version": device["app_version"],
     }
+
 
     await db.users.update_one(
         {"telegram_user_id": telegram_user_id},
@@ -387,6 +420,82 @@ async def get_global_stats() -> dict:
         "total_failed": total_failed,
         "success_rate": success_rate,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ENHANCEMENTS: ACTIVITY LOGS, QUIET HOURS & CUSTOM COOLDOWNS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def add_activity_log(telegram_user_id: int, log_type: str, group: str, details: str) -> None:
+    """Add a broadcast log entry, keeping only the last 20 entries."""
+    db = get_db()
+    entry = {
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "type": log_type,
+        "group": group,
+        "details": details
+    }
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {
+            "$push": {
+                "activity_logs": {
+                    "$each": [entry],
+                    "$slice": -20  # Keep only the last 20 elements
+                }
+            }
+        }
+    )
+
+
+async def set_responder_persistent_cooldown(telegram_user_id: int, peer_id: int, timestamp: float) -> None:
+    """Save the last reply timestamp for a peer to prevent spamming."""
+    db = get_db()
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$set": {f"auto_responder_persistent_cooldowns.{peer_id}": timestamp}}
+    )
+
+
+async def add_keyword_rule(telegram_user_id: int, keyword: str, reply: str) -> dict:
+    """Add or update a keyword reply rule (case-insensitive keyword stored clean)."""
+    db = get_db()
+    clean_keyword = keyword.strip().lower()
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$set": {f"auto_responder_keywords.{clean_keyword}": reply}}
+    )
+    return await get_user(telegram_user_id)
+
+
+async def delete_keyword_rule(telegram_user_id: int, keyword: str) -> dict:
+    """Remove a keyword rule."""
+    db = get_db()
+    clean_keyword = keyword.strip().lower()
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {"$unset": {f"auto_responder_keywords.{clean_keyword}": ""}}
+    )
+    return await get_user(telegram_user_id)
+
+
+async def update_user_api_credentials(telegram_user_id: int, api_id: int, api_hash: str) -> dict:
+    """Update custom API ID and Hash for a user."""
+    return await update_user(
+        telegram_user_id,
+        custom_api_id=api_id,
+        custom_api_hash=api_hash,
+    )
+
+
+async def clear_user_api_credentials(telegram_user_id: int) -> dict:
+    """Clear custom API credentials (revert to default server keys)."""
+    return await update_user(
+        telegram_user_id,
+        custom_api_id=None,
+        custom_api_hash=None,
+    )
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -5,7 +5,10 @@ Emojis are strictly reserved for primary status definitions.
 """
 
 from datetime import datetime
-from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME
+import pytz
+from app.config import BOT_USERNAME, SUPPORT_USERNAME, CHANNEL_USERNAME, TIMEZONE
+
+_tz = pytz.timezone(TIMEZONE)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -124,6 +127,15 @@ def powered_by_text() -> str:
 #  DASHBOARD
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+def _is_in_sleep_cycle(hour: int, enabled: bool, start_h: int, end_h: int) -> bool:
+    if not enabled:
+        return False
+    if start_h <= end_h:
+        return start_h <= hour < end_h
+    else:
+        return hour >= start_h or hour < end_h
+
+
 def dashboard_text(
     has_account: bool,
     group_count: int,
@@ -134,11 +146,24 @@ def dashboard_text(
     phone_masked: str = None,
     is_premium: bool = False,
     health_status: str = "Not Checked",
+    sleep_enabled: bool = True,
+    sleep_start_hour: int = 0,
+    sleep_end_hour: int = 5,
 ) -> str:
-    status = "🟢 Broadcasting" if is_broadcasting else "🟡 Standby (Idle)"
-    now = datetime.now()
-    if is_broadcasting and (now.hour >= 0 and now.hour < 5):
-        status = "🌙 Sleeping (Night)"
+    # Format hour with AM/PM
+    def format_h(h: int) -> str:
+        if h == 0:
+            return "12 AM"
+        elif h == 12:
+            return "12 PM"
+        elif h < 12:
+            return f"{h} AM"
+        else:
+            return f"{h-12} PM"
+
+    now = datetime.now(_tz)
+    in_sleep = is_broadcasting and _is_in_sleep_cycle(now.hour, sleep_enabled, sleep_start_hour, sleep_end_hour)
+    status = "🌙 Sleeping (Night)" if in_sleep else ("🟢 Broadcasting" if is_broadcasting else "🟡 Standby (Idle)")
 
     account_status = f"{phone_masked}" if has_account else "🔴 Unlinked"
     tier = "💎 Premium" if is_premium else "🆓 Free"
@@ -146,8 +171,8 @@ def dashboard_text(
     total = total_sent + total_failed
     rate = f"{(total_sent / total * 100):.1f}%" if total > 0 else "N/A"
 
-    if is_broadcasting and (now.hour >= 0 and now.hour < 5):
-        footer_note = "<b>│</b> ↳ <i>🌙 Sleeping (Night Mode) until 5:00 AM.</i>"
+    if in_sleep:
+        footer_note = f"<b>│</b> ↳ <i>🌙 Sleeping (Night Mode) until {format_h(sleep_end_hour)}.</i>"
     elif is_broadcasting:
         footer_note = "<b>│</b> ↳ <i>Bot is broadcasting in background.</i>"
     else:
@@ -784,3 +809,165 @@ def admin_global_broadcast_success_text(sent: int, failed: int) -> str:
         f"{_end_sub()}"
         f"{_footer()}"
     )
+
+
+# ── Advanced Enhancements ───────────────────────────────────────────────────
+
+def quiet_hours_menu_text(enabled: bool, start_h: int, end_h: int) -> str:
+    def format_h(h: int) -> str:
+        if h == 0:
+            return "12:00 AM"
+        elif h == 12:
+            return "12:00 PM"
+        elif h < 12:
+            return f"{h}:00 AM"
+        else:
+            return f"{h-12}:00 PM"
+    status = "🟢 Enabled" if enabled else "🔴 Disabled"
+    return (
+        f"{_header('Quiet Hours')}"
+        f"{_sub('Status')}"
+        f"{_stat('Sleep Mode', status)}"
+        f"{_stat('Start Time', format_h(start_h))}"
+        f"{_stat('End Time', format_h(end_h))}"
+        f"{_end_sub()}"
+        f"<b>│</b> ↳ <i>Broadcasting pauses during these hours.</i>"
+        f"{_footer()}"
+    )
+
+
+def responder_cooldown_text(seconds: int) -> str:
+    if seconds == 0:
+        cd_display = "Disabled"
+    elif seconds < 3600:
+        cd_display = f"{seconds // 60} Minutes"
+    else:
+        cd_display = f"{seconds // 3600} Hour(s)"
+    return (
+        f"{_header('Responder Cooldown')}"
+        f"<b>│</b> Current rate limit: <b>{cd_display}</b>\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> ↳ <i>Prevents duplicate replies within this window.</i>"
+        f"{_footer()}"
+    )
+
+
+def keyword_rules_text(keywords: dict) -> str:
+    text = f"{_header('Keyword Rules')}"
+    if not keywords:
+        text += "<b>│</b> ◽ <i>No keyword rules defined yet.</i>\n"
+    else:
+        text += f"{_sub('Current Mappings')}"
+        for i, (kw, rep) in enumerate(keywords.items(), 1):
+            preview = rep[:25] + "..." if len(rep) > 25 else rep
+            text += f"<b>│</b> {i}. <code>{kw}</code> ➜ <i>{preview}</i>\n"
+        text += f"{_end_sub()}"
+    text += f"<b>│</b>\n"
+    text += f"<b>│</b> ↳ <i>Matches incoming message keywords.</i>"
+    text += _footer()
+    return text
+
+
+def activity_logs_text(logs: list) -> str:
+    text = f"{_header('Activity Logs')}"
+    if not logs:
+        text += "<b>│</b> ◽ <i>No recent broadcast activities.</i>\n"
+    else:
+        # Display logs from newest to oldest
+        for entry in reversed(logs):
+            ts = entry.get("timestamp", "")
+            if ts:
+                try:
+                    # ts is like '2026-05-23T13:28:15.123456Z'
+                    time_part = ts.split("T")[1][:5]
+                except Exception:
+                    time_part = "Time"
+            else:
+                time_part = "Time"
+            
+            type_ = entry.get("type", "sent")
+            group = entry.get("group", "")
+            details = entry.get("details", "")
+            
+            disp_group = group.replace("https://t.me/", "")
+            if len(disp_group) > 15:
+                disp_group = disp_group[:12] + ".."
+            
+            if type_ == "sent":
+                emoji = "✅"
+            elif type_ == "skipped":
+                emoji = "⏭"
+            else:
+                emoji = "❌"
+            
+            text += f"<b>│</b> {emoji} <code>[{time_part}]</code> {disp_group}: {details}\n"
+    text += f"<b>│</b>\n"
+    text += f"<b>│</b> ↳ <i>Showing last 20 actions.</i>"
+    text += _footer()
+    return text
+
+
+def custom_api_menu_text(has_custom: bool, api_id: int | None, api_hash: str | None) -> str:
+    status = "🟢 Configured (Custom)" if has_custom else "⚪ Default Shared Keys"
+    masked_hash = f"{api_hash[:4]}...{api_hash[-4:]}" if api_hash and len(api_hash) > 8 else "None"
+    return (
+        f"{_header('Custom API')}"
+        f"{_sub('Current Configuration')}"
+        f"{_stat('Status', status)}"
+        f"{_stat('API ID', api_id or 'Default')}"
+        f"{_stat('API Hash', masked_hash)}"
+        f"{_end_sub()}"
+        f"<b>│</b> ↳ <i>Configure your own API ID and API Hash from</i>\n"
+        f"<b>│</b>   my.telegram.org to bypass shared rate limits\n"
+        f"<b>│</b>   and enhance security.\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> ℹ️ <i>Device identifiers are automatically generated</i>\n"
+        f"<b>│</b>   <i>and rotated to match real phone parameters.</i>"
+        f"{_footer()}"
+    )
+
+
+def prompt_custom_api_id_text() -> str:
+    return (
+        f"{_header('API Config')}"
+        f"<b>│</b> Please send your custom <b>API ID</b>.\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> ℹ️ <i>You can obtain this from:</i>\n"
+        f"<b>│</b>   https://my.telegram.org\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> ⚠️ <i>Must be a valid integer.</i>"
+        f"{_footer()}"
+    )
+
+
+def prompt_custom_api_hash_text() -> str:
+    return (
+        f"{_header('API Config')}"
+        f"<b>│</b> 🔐 API ID accepted.\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> Please send your custom <b>API Hash</b>."
+        f"{_footer()}"
+    )
+
+
+def api_credentials_saved_text() -> str:
+    return (
+        f"{_header('Success')}"
+        f"<b>│</b> ✅ Custom API credentials saved.\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> They will be used next time you link\n"
+        f"<b>│</b> or authenticate your account."
+        f"{_footer()}"
+    )
+
+
+def api_credentials_cleared_text() -> str:
+    return (
+        f"{_header('Success')}"
+        f"<b>│</b> 🧹 Custom API credentials cleared.\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> The default shared API credentials\n"
+        f"<b>│</b> will be used."
+        f"{_footer()}"
+    )
+

@@ -35,20 +35,62 @@ from app.config import API_ID, API_HASH
 logger = logging.getLogger(__name__)
 
 
-async def create_client(session_string: str = "") -> TelegramClient:
+async def create_client(session_string: str = "", user_id: int | None = None) -> TelegramClient:
     """Create a Telethon client with the given session string."""
+    api_id = API_ID
+    api_hash = API_HASH
+    device_model = "Group Broadcaster SaaS"
+    system_version = "1.0"
+    app_version = "3.0"
+
+    if user_id is not None:
+        from app.database.models import get_user, update_user, generate_random_device
+        user = await get_user(user_id)
+        if user:
+            # Custom API credentials
+            custom_id = user.get("custom_api_id")
+            custom_hash = user.get("custom_api_hash")
+            if custom_id and custom_hash:
+                try:
+                    api_id = int(custom_id)
+                    api_hash = str(custom_hash).strip()
+                except ValueError:
+                    logger.warning(f"Invalid custom API ID format for user {user_id}: {custom_id}")
+
+            # Rotated/persistent device configuration
+            u_device = user.get("device_model")
+            u_system = user.get("system_version")
+            u_app = user.get("app_version")
+            if not u_device or not u_system or not u_app:
+                # Generate, persist, and use
+                dev = generate_random_device()
+                device_model = dev["device_model"]
+                system_version = dev["system_version"]
+                app_version = dev["app_version"]
+                await update_user(
+                    user_id,
+                    device_model=device_model,
+                    system_version=system_version,
+                    app_version=app_version
+                )
+            else:
+                device_model = u_device
+                system_version = u_system
+                app_version = u_app
+
     client = TelegramClient(
         StringSession(session_string),
-        API_ID,
-        API_HASH,
-        device_model="Group Broadcaster SaaS",
-        system_version="1.0",
-        app_version="3.0",
+        api_id,
+        api_hash,
+        device_model=device_model,
+        system_version=system_version,
+        app_version=app_version,
     )
     return client
 
 
-async def send_login_code(phone: str) -> dict:
+
+async def send_login_code(phone: str, user_id: int) -> dict:
     """
     Send a Telegram login code to the given phone number.
 
@@ -58,7 +100,8 @@ async def send_login_code(phone: str) -> dict:
         - success: bool
         - error: str (if failed)
     """
-    client = await create_client()
+    client = await create_client(user_id=user_id)
+
 
     try:
         await client.connect()
@@ -98,11 +141,17 @@ async def send_login_code(phone: str) -> dict:
         }
     except ApiIdInvalidError:
         await client.disconnect()
+        from app.database.models import get_user
+        user = await get_user(user_id) if user_id else None
+        if user and user.get("custom_api_id") and user.get("custom_api_hash"):
+            err_msg = "Your custom API credentials (API ID / API Hash) are invalid. Please check them under Custom API Settings or clear them to use defaults."
+        else:
+            err_msg = "API credentials are invalid. Contact support."
         return {
             "client": None,
             "phone_code_hash": None,
             "success": False,
-            "error": "API credentials are invalid. Contact support.",
+            "error": err_msg,
         }
     except Exception as e:
         await client.disconnect()
@@ -216,12 +265,13 @@ async def verify_2fa(client: TelegramClient, password: str) -> dict:
         }
 
 
-async def get_client_from_session(session_string: str) -> TelegramClient:
+async def get_client_from_session(session_string: str, user_id: int | None = None) -> TelegramClient:
     """
     Create and connect a Telethon client from an existing session string.
     Caller is responsible for disconnecting when done.
     """
-    client = await create_client(session_string)
+    client = await create_client(session_string, user_id=user_id)
+
     await client.connect()
 
     if not await client.is_user_authorized():

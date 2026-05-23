@@ -26,11 +26,18 @@ from app.bot.handlers.dashboard import (
     premium_info_callback, auto_responder_callback, toggle_auto_responder_callback,
     build_auto_responder_conversation, toggle_rule_broadcast_callback,
     toggle_rule_contacts_callback, stats_handler,
+    build_sleep_settings_conversation, build_keyword_rules_conversation,
+    view_activity_logs_callback, quiet_hours_menu_callback,
+    toggle_sleep_mode_callback, set_responder_cooldown_menu_callback,
+    save_responder_cooldown_callback, manage_keywords_callback,
+    delete_keyword_rule_callback,
 )
 from app.bot.handlers.account import (
     build_account_conversation,
     view_account_callback, disconnect_account_callback,
     confirm_disconnect_callback,
+    build_custom_api_conversation, setup_custom_api_callback,
+    clear_custom_api_callback,
 )
 from app.bot.handlers.groups import (
     manage_groups_callback, view_groups_callback,
@@ -65,10 +72,13 @@ def create_application():
 
     # ── Conversation Handlers (must be registered BEFORE callbacks) ──
     app.add_handler(build_account_conversation())
+    app.add_handler(build_custom_api_conversation())
     app.add_handler(build_add_groups_conversation())
     app.add_handler(build_interval_conversation())
     app.add_handler(build_auto_responder_conversation())
     app.add_handler(build_admin_premium_conversation())
+    app.add_handler(build_sleep_settings_conversation())
+    app.add_handler(build_keyword_rules_conversation())
 
     # ── Callback Query Handlers ──────────────────────────────
     callbacks = [
@@ -82,6 +92,8 @@ def create_application():
         ("^view_account$", view_account_callback),
         ("^disconnect_account$", disconnect_account_callback),
         ("^confirm_disconnect$", confirm_disconnect_callback),
+        ("^setup_custom_api$", setup_custom_api_callback),
+        ("^clear_custom_api$", clear_custom_api_callback),
         # Groups
         ("^manage_groups$", manage_groups_callback),
         ("^view_groups$", view_groups_callback),
@@ -100,6 +112,13 @@ def create_application():
         ("^toggle_auto_responder$", toggle_auto_responder_callback),
         ("^toggle_rule_broadcast$", toggle_rule_broadcast_callback),
         ("^toggle_rule_contacts$", toggle_rule_contacts_callback),
+        ("^view_activity_logs$", view_activity_logs_callback),
+        ("^quiet_hours_menu$", quiet_hours_menu_callback),
+        ("^toggle_sleep_mode$", toggle_sleep_mode_callback),
+        ("^set_responder_cooldown_menu$", set_responder_cooldown_menu_callback),
+        ("^save_cooldown_.*$", save_responder_cooldown_callback),
+        ("^manage_keywords$", manage_keywords_callback),
+        ("^del_keyword_.*$", delete_keyword_rule_callback),
         # Admin
         ("^admin$", admin_callback),
         ("^admin_view_all_users$", admin_view_all_users_callback),

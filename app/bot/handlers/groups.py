@@ -3,6 +3,7 @@ Groups handler — Add, view, manage broadcast target groups, diagnostics, and p
 """
 
 import logging
+import re
 from telegram import Update
 from telegram.ext import (
     ContextTypes, ConversationHandler,
@@ -47,21 +48,43 @@ async def add_groups_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     return WAITING_LINKS
 
 
+def is_valid_group_link(link: str) -> bool:
+    link = link.strip()
+    if not link:
+        return False
+    # Accept standard t.me or telegram.me links (with optional http/https prefix)
+    if re.match(r"^(https?://)?(www\.)?(t\.me|telegram\.me)/", link):
+        return True
+    # Accept usernames starting with @
+    if link.startswith("@") and len(link) > 1:
+        return bool(re.match(r"^@[a-zA-Z0-9_]{5,32}$", link))
+    # Accept raw usernames (5-32 chars, only letters/numbers/underscores)
+    return bool(re.match(r"^[a-zA-Z0-9_]{5,32}$", link))
+
+
 async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Receive group links (one per line)."""
     user_id = update.effective_user.id
     text = update.message.text.strip()
 
-    links = [line.strip() for line in text.split("\n") if line.strip()]
+    raw_lines = [line.strip() for line in text.split("\n") if line.strip()]
+    valid_links = []
+    invalid_links = []
+    
+    for l in raw_lines:
+        if is_valid_group_link(l):
+            valid_links.append(l)
+        else:
+            invalid_links.append(l)
 
-    if not links:
+    if not valid_links:
         await update.message.reply_text(
-            messages.error_text("No valid links found. Send one link per line."),
+            messages.error_text("No valid group links or usernames found.\n\nMake sure to send formats like @groupname or t.me/groupname."),
             parse_mode="HTML",
         )
         return WAITING_LINKS
 
-    result = await add_groups(user_id, links)
+    result = await add_groups(user_id, valid_links)
     await log_groups_added(user_id, result["added"], result["total"])
 
     user = await get_user(user_id)
@@ -71,6 +94,12 @@ async def receive_group_links(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = messages.groups_added_text(result["added"], result["total"])
     if result.get("limit_reached"):
         text += "\n\n⚠️ <b>Note:</b> Maximum limit of 50 groups per account reached."
+
+    if invalid_links:
+        rejected_preview = ", ".join(invalid_links[:5])
+        if len(invalid_links) > 5:
+            rejected_preview += f" (+{len(invalid_links) - 5} more)"
+        text += f"\n\n⚠️ <b>Rejected {len(invalid_links)} invalid formats:</b>\n<code>{rejected_preview}</code>"
 
     await update.message.reply_text(
         text,
