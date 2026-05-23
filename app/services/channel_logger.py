@@ -52,6 +52,12 @@ def _divider() -> str:
     return "━━━━━━━━━━━━━━━━━━"
 
 
+def _progress_bar(percentage: float, width: int = 10) -> str:
+    filled = int(round(percentage * width / 100))
+    return "▰" * filled + "▱" * (width - filled)
+
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  LOG EVENTS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -112,10 +118,15 @@ async def log_broadcast_stopped(user_id: int):
 async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int):
     total = sent + failed + skipped
     status = "CLEAN" if failed == 0 else "PARTIAL"
+    
+    pct = (sent / total * 100) if total > 0 else 0.0
+    pbar = _progress_bar(pct, width=10)
+    
     await log_to_channel(
         f"✅ <b>CYCLE COMPLETE [{status}]</b>\n"
         f"{_divider()}\n"
         f"👤 User: <code>{user_id}</code>\n"
+        f"📊 Progress: <code>{pbar}</code> {pct:.1f}%\n"
         f"📤 Sent: <b>{sent}</b> / {total}\n"
         f"❌ Failed: <b>{failed}</b>\n"
         f"⏭ Skipped: <b>{skipped}</b>\n"
