@@ -263,6 +263,15 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
     if not user:
         return {"sent": 0, "failed": 0, "skipped": 0, "total": 0}
 
+    # Run auto-pruning before starting the cycle
+    from app.database.models import auto_prune_dead_groups
+    pruned_count = await auto_prune_dead_groups(user_id)
+    if pruned_count > 0:
+        logger.info(f"Auto-pruned {pruned_count} dead groups for user {user_id}")
+        user = await get_user(user_id)
+        if not user:
+            return {"sent": 0, "failed": 0, "skipped": 0, "total": 0}
+
     groups = user.get("groups", [])
     group_fails = user.get("group_fails", {})
     total_groups = len(groups)

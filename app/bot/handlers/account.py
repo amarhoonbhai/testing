@@ -200,6 +200,17 @@ async def _save_account(update, context, phone, session_string, client):
     encrypted = encrypt_session(session_string)
     await set_session(user_id, encrypted, phone_masked)
 
+    # Check if Saved Messages has any valid messages
+    has_saved_msgs = False
+    try:
+        if client and client.is_connected():
+            msgs = await client.get_messages("me", limit=100)
+            valid_msgs = [m for m in msgs if m.message or m.media]
+            if valid_msgs:
+                has_saved_msgs = True
+    except Exception as e:
+        logger.warning(f"Failed to check Saved Messages on login: {e}")
+
     # Disconnect the login client
     try:
         await client.disconnect()
@@ -220,7 +231,7 @@ async def _save_account(update, context, phone, session_string, client):
         await engine.start(user_id)
 
     await update.message.reply_text(
-        messages.account_connected_text(phone_masked),
+        messages.account_connected_text(phone_masked, has_saved_messages=has_saved_msgs),
         parse_mode="HTML",
         reply_markup=keyboards.back_keyboard("dashboard"),
     )

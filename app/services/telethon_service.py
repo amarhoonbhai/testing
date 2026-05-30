@@ -395,7 +395,16 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool, u
         if orig_bio is None or orig_lname is None or orig_fname is None:
             updates = {}
             if orig_bio is None:
-                orig_bio = about.replace(ENFORCED_BIO, "").strip()
+                # Remove known branding bios to restore original bio correctly
+                clean_bio = about
+                known_bios = [
+                    ENFORCED_BIO,
+                    "Powered by @KurupAdsBot | Network: @PhiloBots",
+                    "📢 Free Ad Posting by @KurupAdsBot | Powered by @PhiloBots"
+                ]
+                for kb in known_bios:
+                    clean_bio = clean_bio.replace(kb, "")
+                orig_bio = clean_bio.strip()
                 updates["original_bio"] = orig_bio
             if orig_fname is None:
                 orig_fname = clean_fname

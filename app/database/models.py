@@ -60,6 +60,7 @@ async def upsert_user(telegram_user_id: int, username: str = "") -> dict:
         "is_premium": False,
         "original_bio": None,
         "original_last_name": None,
+        "group_dead_since": {},
         "auto_responder_enabled": False,
         "auto_responder_message": "Hello! I am currently busy. I will get back to you soon.",
         "auto_responder_rules": {
@@ -188,7 +189,7 @@ async def clear_groups(telegram_user_id: int) -> int:
     """Remove all groups. Returns count removed."""
     user = await get_user(telegram_user_id)
     count = len(user.get("groups", [])) if user else 0
-    await update_user(telegram_user_id, groups=[], group_fails={}, group_reasons={}, entity_cache={})
+    await update_user(telegram_user_id, groups=[], group_fails={}, group_reasons={}, entity_cache={}, group_dead_since={})
     return count
 
 
@@ -236,6 +237,7 @@ async def prune_dead_groups(telegram_user_id: int, max_fails: int) -> int:
         unset_dict[f"group_fails.{safe_key}"] = ""
         unset_dict[f"group_reasons.{safe_key}"] = ""
         unset_dict[f"entity_cache.{safe_key}"] = ""
+        unset_dict[f"group_dead_since.{safe_key}"] = ""
 
     if unset_dict:
         await db.users.update_one(
@@ -244,6 +246,70 @@ async def prune_dead_groups(telegram_user_id: int, max_fails: int) -> int:
         )
 
     return len(dead_groups)
+
+
+async def auto_prune_dead_groups(telegram_user_id: int) -> int:
+    """
+    Automatically remove groups that have been in a dead state (fails >= MAX_FAIL_SKIP)
+    for more than 6 hours (21,600 seconds). Returns count of pruned groups.
+    """
+    import time
+    db = get_db()
+    user = await get_user(telegram_user_id)
+    if not user:
+        return 0
+
+    groups = user.get("groups", [])
+    group_dead_since = user.get("group_dead_since", {})
+    now = time.time()
+    
+    # 6 hours = 21600 seconds
+    COOLDOWN = 21600
+    
+    dead_groups_to_prune = []
+    for g in groups:
+        safe_key = g.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+        dead_timestamp = group_dead_since.get(safe_key)
+        if dead_timestamp and (now - dead_timestamp >= COOLDOWN):
+            dead_groups_to_prune.append(g)
+
+    if not dead_groups_to_prune:
+        return 0
+
+    # Pull dead groups from the main groups list
+    await db.users.update_one(
+        {"telegram_user_id": telegram_user_id},
+        {
+            "$pull": {"groups": {"$in": dead_groups_to_prune}},
+            "$set": {"updated_at": datetime.utcnow()},
+        },
+    )
+
+    # Unset related diagnostic fields
+    unset_dict = {}
+    for g in dead_groups_to_prune:
+        safe_key = g.replace(".", "_DOT_").replace("$", "_DOLLAR_")
+        unset_dict[f"group_fails.{safe_key}"] = ""
+        unset_dict[f"group_reasons.{safe_key}"] = ""
+        unset_dict[f"entity_cache.{safe_key}"] = ""
+        unset_dict[f"group_dead_since.{safe_key}"] = ""
+
+    if unset_dict:
+        await db.users.update_one(
+            {"telegram_user_id": telegram_user_id},
+            {"$unset": unset_dict}
+        )
+
+    # Add activity log for pruned groups
+    for g in dead_groups_to_prune:
+        await add_activity_log(
+            telegram_user_id,
+            "skipped",
+            g,
+            "Auto-pruned after failing for 6 hours"
+        )
+
+    return len(dead_groups_to_prune)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -352,7 +418,20 @@ async def increment_group_fail(telegram_user_id: int, group_link: str) -> int:
         {"$inc": {f"group_fails.{safe_key}": 1}},
     )
     user = await get_user(telegram_user_id)
-    return user.get("group_fails", {}).get(safe_key, 0)
+    new_fails = user.get("group_fails", {}).get(safe_key, 0)
+    
+    # If the group is now dead (fails >= MAX_FAIL_SKIP), set dead timestamp if not already set
+    from app.config import MAX_FAIL_SKIP
+    if new_fails >= MAX_FAIL_SKIP:
+        group_dead_since = user.get("group_dead_since", {})
+        if safe_key not in group_dead_since:
+            import time
+            await db.users.update_one(
+                {"telegram_user_id": telegram_user_id},
+                {"$set": {f"group_dead_since.{safe_key}": time.time()}}
+            )
+            
+    return new_fails
 
 
 async def reset_group_fail(telegram_user_id: int, group_link: str) -> None:
@@ -365,6 +444,9 @@ async def reset_group_fail(telegram_user_id: int, group_link: str) -> None:
             "$set": {
                 f"group_fails.{safe_key}": 0,
                 f"group_reasons.{safe_key}": "Operational",
+            },
+            "$unset": {
+                f"group_dead_since.{safe_key}": ""
             }
         },
     )

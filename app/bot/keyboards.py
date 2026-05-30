@@ -19,12 +19,12 @@ def start_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 Executive Dashboard", callback_data="dashboard")],
         [
-            InlineKeyboardButton("📖 Guide", callback_data="how_to_use"),
-            InlineKeyboardButton("📜 Terms", callback_data="disclaimer"),
+            InlineKeyboardButton("📖 User Guide", callback_data="how_to_use"),
+            InlineKeyboardButton("📜 Terms & Policy", callback_data="disclaimer"),
         ],
         [
-            InlineKeyboardButton("📢 Channel", url=f"https://t.me/{CHANNEL_USERNAME}"),
-            InlineKeyboardButton("💬 Support", url=f"https://t.me/{SUPPORT_USERNAME}"),
+            InlineKeyboardButton("📢 Updates Channel", url=f"https://t.me/{CHANNEL_USERNAME}"),
+            InlineKeyboardButton("💬 Live Support", url=f"https://t.me/{SUPPORT_USERNAME}"),
         ]
     ])
 
@@ -33,31 +33,31 @@ def dashboard_keyboard(is_broadcasting: bool = False, has_account: bool = False,
                        is_owner: bool = False) -> InlineKeyboardMarkup:
     # Account button
     if has_account:
-        account_btn = InlineKeyboardButton("🔗 My Account", callback_data="view_account")
+        account_btn = InlineKeyboardButton("🔌 Linked Account Overview", callback_data="view_account")
     else:
-        account_btn = InlineKeyboardButton("🔴 Connect", callback_data="connect_account")
+        account_btn = InlineKeyboardButton("🔴 Connect Account", callback_data="connect_account")
 
     buttons = [
         [InlineKeyboardButton("👥 Manage Target Groups", callback_data="manage_groups")],
         [
             account_btn,
-            InlineKeyboardButton("⏱ Set Delay", callback_data="set_interval"),
+            InlineKeyboardButton("⏱ Adjust Delay", callback_data="set_interval"),
         ],
         [
-            InlineKeyboardButton("📊 Live Stats", callback_data="live_stats"),
-            InlineKeyboardButton("💎 Premium", callback_data="premium_info"),
+            InlineKeyboardButton("📊 Live Statistics", callback_data="live_stats"),
+            InlineKeyboardButton("💎 Premium Features", callback_data="premium_info"),
         ],
         [
-            InlineKeyboardButton("🤖 Auto Reply", callback_data="auto_responder"),
-            InlineKeyboardButton("🌙 Quiet Hours", callback_data="quiet_hours_menu"),
+            InlineKeyboardButton("🤖 Auto-Responder", callback_data="auto_responder"),
+            InlineKeyboardButton("🌙 Quiet Hours (Sleep)", callback_data="quiet_hours_menu"),
         ],
         [
-            InlineKeyboardButton("❤️ Health Check", callback_data="health_monitor"),
+            InlineKeyboardButton("🛡️ Run Diagnostic Health Check", callback_data="health_monitor"),
         ],
     ]
 
     if is_owner:
-        buttons.append([InlineKeyboardButton("🔧 Elite Admin Command Center", callback_data="admin")])
+        buttons.append([InlineKeyboardButton("🔧 Elite Admin Control Center", callback_data="admin")])
 
     buttons.append([InlineKeyboardButton("← Back to Main Menu", callback_data="home")])
     return InlineKeyboardMarkup(buttons)
@@ -93,7 +93,7 @@ def cancel_keyboard() -> InlineKeyboardMarkup:
 
 def account_info_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔌 Terminate Session", callback_data="disconnect_account")],
+        [InlineKeyboardButton("🔌 Disconnect Session", callback_data="disconnect_account")],
         [InlineKeyboardButton("⚙️ Custom API Settings", callback_data="setup_custom_api")],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
@@ -129,17 +129,17 @@ def confirm_disconnect_keyboard() -> InlineKeyboardMarkup:
 
 def groups_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Import Groups", callback_data="add_groups")],
+        [InlineKeyboardButton("➕ Import Group Links / Usernames", callback_data="add_groups")],
         [
-            InlineKeyboardButton("🟢 Active", callback_data="live_groups"),
-            InlineKeyboardButton("⏸ Paused", callback_data="paused_groups"),
+            InlineKeyboardButton("🟢 Active Roster", callback_data="live_groups"),
+            InlineKeyboardButton("⏸ Paused Roster", callback_data="paused_groups"),
         ],
         [
-            InlineKeyboardButton("🛠️ Diagnostics", callback_data="group_diagnostics"),
-            InlineKeyboardButton("🧹 Prune Dead", callback_data="prune_dead_groups"),
+            InlineKeyboardButton("🛠️ Diagnostic Report", callback_data="group_diagnostics"),
+            InlineKeyboardButton("🧹 Auto-Prune Dead", callback_data="prune_dead_groups"),
         ],
-        [InlineKeyboardButton("📋 View Roster", callback_data="view_groups")],
-        [InlineKeyboardButton("🗑 Purge Roster", callback_data="clear_groups")],
+        [InlineKeyboardButton("📋 View Configured Groups", callback_data="view_groups")],
+        [InlineKeyboardButton("🗑 Purge Entire Roster", callback_data="clear_groups")],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
 
@@ -198,20 +198,20 @@ def health_monitor_keyboard() -> InlineKeyboardMarkup:
 
 
 def auto_responder_keyboard(enabled: bool, rules: dict) -> InlineKeyboardMarkup:
-    toggle_text = "🔴 Disable Auto Reply" if enabled else "🟢 Enable Auto Reply"
-    only_bcast = "🔴 Always Reply" if not rules.get("only_during_broadcast", True) else "🟢 Bcast Only"
-    excl_contacts = "🔴 Reply Contacts" if not rules.get("exclude_contacts", True) else "🟢 Skip Contacts"
+    toggle_text = "🔴 Stop Auto Responder" if enabled else "🟢 Start Auto Responder"
+    only_bcast = "🔴 Always Responding" if not rules.get("only_during_broadcast", True) else "🟢 Broadcast Only"
+    excl_contacts = "🔴 Reply to Contacts" if not rules.get("exclude_contacts", True) else "🟢 Ignore Contacts"
     
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(toggle_text, callback_data="toggle_auto_responder")],
-        [InlineKeyboardButton("📝 Set Reply Message", callback_data="set_auto_responder_message")],
+        [InlineKeyboardButton("📝 Edit Auto-Reply Message", callback_data="set_auto_responder_message")],
         [
             InlineKeyboardButton(only_bcast, callback_data="toggle_rule_broadcast"),
             InlineKeyboardButton(excl_contacts, callback_data="toggle_rule_contacts"),
         ],
         [
-            InlineKeyboardButton("⏱ Set Cooldown", callback_data="set_responder_cooldown_menu"),
-            InlineKeyboardButton("🔍 Keyword Rules", callback_data="manage_keywords"),
+            InlineKeyboardButton("⏱ Custom Cooldown Timer", callback_data="set_responder_cooldown_menu"),
+            InlineKeyboardButton("🔍 Keyword-Specific Rules", callback_data="manage_keywords"),
         ],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])
@@ -279,12 +279,12 @@ def admin_user_dashboard_keyboard(user_id: int, is_premium: bool, is_broadcastin
 # ── Advanced Enhancements ───────────────────────────────────────────────────
 
 def quiet_hours_keyboard(enabled: bool) -> InlineKeyboardMarkup:
-    toggle_text = "🔴 Disable Sleep Mode" if enabled else "🟢 Enable Sleep Mode"
+    toggle_text = "🔴 Deactivate Sleep Mode" if enabled else "🟢 Activate Sleep Mode"
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(toggle_text, callback_data="toggle_sleep_mode")],
         [
-            InlineKeyboardButton("🌅 Set Start Hour", callback_data="set_sleep_start"),
-            InlineKeyboardButton("🌄 Set End Hour", callback_data="set_sleep_end"),
+            InlineKeyboardButton("🌅 Set Start Time", callback_data="set_sleep_start"),
+            InlineKeyboardButton("🌄 Set End Time", callback_data="set_sleep_end"),
         ],
         [InlineKeyboardButton("← Back to Dashboard", callback_data="dashboard")],
     ])

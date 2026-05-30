@@ -24,7 +24,7 @@ def _header(title: str) -> str:
 def _footer() -> str:
     return (
         f"<b>│</b>\n"
-        f"<b>└𓊈 ⚡️ Kᴜʀᴜᴘ Aᴅꜱ Aᴜᴛᴏᴍᴀᴛɪᴏɴ 𓊉</b>"
+        f"<b>└𓊈 ⚡️ Powered by @PhiloBots 𓊉</b>"
     )
 
 def _progress_bar(percentage: float, width: int = 10) -> str:
@@ -32,7 +32,7 @@ def _progress_bar(percentage: float, width: int = 10) -> str:
     return "▰" * filled + "▱" * (width - filled)
 
 def _stat(label: str, value) -> str:
-    return f"<b>│</b> ◽ <b>{label}:</b> <code>{value}</code>\n"
+    return f"<b>│</b> ✦ <b>{label}:</b> <code>{value}</code>\n"
 
 def _sub(title: str) -> str:
     return f"<b>│ 📂 {title}</b>\n"
@@ -41,7 +41,7 @@ def _end_sub() -> str:
     return f"<b>│</b>\n"
 
 def _item(text: str) -> str:
-    return f"<b>│</b> ▫ {text}\n"
+    return f"<b>│</b> ▪ {text}\n"
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -240,12 +240,22 @@ def password_2fa_text() -> str:
     )
 
 
-def account_connected_text(phone: str) -> str:
+def account_connected_text(phone: str, has_saved_messages: bool = True) -> str:
+    reminder = ""
+    if not has_saved_messages:
+        reminder = (
+            f"<b>│</b>\n"
+            f"<b>│</b> ⚠️ <b>Instruction:</b> Your <b>Saved Messages</b> chat\n"
+            f"<b>│</b> is empty. Set your messages/ads in your\n"
+            f"<b>│</b> Telegram <b>Saved Messages</b> first so the bot\n"
+            f"<b>│</b> can fetch and broadcast them.\n"
+        )
     return (
         f"{_header('Connected')}"
         f"<b>│</b> Account <code>{phone}</code> linked.\n"
         f"<b>│</b>\n"
         f"<b>│</b> ◽ Status: Active & Secure\n"
+        f"{reminder}"
         f"<b>│</b> ↳ <i>Ready for broadcasting.</i>"
         f"{_footer()}"
     )
