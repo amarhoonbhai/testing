@@ -57,6 +57,12 @@ _tz = pytz.timezone(TIMEZONE)
 # Track active asyncio tasks: {user_id: Task}
 active_tasks = {}
 
+# Track last activity timestamp (heartbeat) for active tasks: {user_id: float_timestamp}
+active_heartbeats = {}
+
+# Track the current active run ID for each user to prevent duplicate tasks
+active_run_ids = {}
+
 # Concurrency Semaphore to limit simultaneous active broadcasters
 _worker_semaphore = asyncio.Semaphore(10)
 
@@ -72,7 +78,8 @@ async def start_watchdog():
 
 
 async def _worker_watchdog_loop():
-    """Watchdog loop to monitor and heal dead broadcast tasks."""
+    """Watchdog loop to monitor and heal dead or stalled broadcast tasks."""
+    import time
     from app.services.channel_logger import get_bot
     await asyncio.sleep(10)  # Wait for startup to settle
     while True:
@@ -89,13 +96,36 @@ async def _worker_watchdog_loop():
                     await set_broadcasting(user_id, False)
                     continue
 
-                # If user is marked as broadcasting, but no active task is running (or it's done)
-                if user_id not in active_tasks or active_tasks[user_id].done():
-                    logger.warning(f"Watchdog detected stalled broadcast loop for user {user_id}. Restoring...")
+                task = active_tasks.get(user_id)
+                stalled = False
+                now = time.time()
+                
+                # Check if task is running but stalled (no heartbeat update)
+                if task and not task.done():
+                    last_heartbeat = active_heartbeats.get(user_id, now)
+                    interval = u.get("interval_seconds", 1200)
+                    # Safe threshold: at least 10 minutes (600s), or 2x the user's interval
+                    threshold = max(interval * 2, 600)
+                    if now - last_heartbeat > threshold:
+                        stalled = True
+                        logger.warning(f"Watchdog detected STALLED broadcast loop for user {user_id} (No heartbeat for {now - last_heartbeat:.0f}s, threshold {threshold}s). Cancelling task...")
+                        task.cancel()
+                        try:
+                            await asyncio.wait_for(task, timeout=5.0)
+                        except Exception:
+                            pass
+
+                # If user is marked as broadcasting, but no active task is running (or it's done or stalled)
+                if not task or task.done() or stalled:
+                    logger.warning(f"Watchdog detected stalled/missing broadcast loop for user {user_id}. Restoring...")
                     if user_id in active_tasks:
                         del active_tasks[user_id]
                     
-                    task = asyncio.create_task(_broadcast_loop(user_id))
+                    run_id = time.time()
+                    active_run_ids[user_id] = run_id
+                    active_heartbeats[user_id] = now
+                    
+                    task = asyncio.create_task(_broadcast_loop(user_id, run_id))
                     active_tasks[user_id] = task
                     
                     if bot:
@@ -201,8 +231,23 @@ async def _resolve_group(client: TelegramClient, group_link: str, user_id: int):
             logger.warning(f"Cached entity invalid for {group_link}: {e}")
 
     # Not cached or invalid, fetch via API
-    if group_link.startswith("https://t.me/+"):
-        entity = await client.get_entity(group_link)
+    if group_link.startswith("https://t.me/+") or "joinchat/" in group_link:
+        if "+" in group_link:
+            invite_hash = group_link.split("+")[-1].strip()
+        else:
+            invite_hash = group_link.split("joinchat/")[-1].strip()
+        invite_hash = invite_hash.split("/")[0].split("?")[0]
+
+        from telethon.tl.functions.messages import CheckChatInviteRequest
+        from telethon.tl.types import ChatInviteAlready
+        try:
+            invite = await client(CheckChatInviteRequest(invite_hash))
+            if isinstance(invite, ChatInviteAlready):
+                entity = invite.chat
+            else:
+                entity = await client.get_entity(group_link)
+        except Exception:
+            entity = await client.get_entity(group_link)
     elif group_link.startswith("https://t.me/c/"):
         parts = group_link.split("/")
         channel_id = int(parts[4])
@@ -257,7 +302,7 @@ async def _update_progress(user_id: int, sent: int, failed: int, skipped: int, t
                 logger.warning(f"Failed to update progress message: {e}")
 
 
-async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict:
+async def _execute_cycle(user_id: int, client: TelegramClient, bot=None, run_id: float = None) -> dict:
     """Execute one complete broadcast cycle across all valid groups."""
     user = await get_user(user_id)
     if not user:
@@ -288,7 +333,44 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
     cached_user = user
     last_fetch_time = 0.0
 
+    # Pre-fetch Saved Messages to optimize database & network operations
+    pre_fetched_grouped = None
+    try:
+        msgs = await client.get_messages("me", limit=100)
+        pre_fetched_grouped = []
+        if msgs:
+            valid_msgs = [m for m in msgs if m.message or m.media]
+            if valid_msgs:
+                msgs_to_forward = list(reversed(valid_msgs))
+                current_group = []
+                current_group_id = None
+                for m in msgs_to_forward:
+                    if m.grouped_id:
+                        if m.grouped_id == current_group_id:
+                            current_group.append(m)
+                        else:
+                            if current_group:
+                                pre_fetched_grouped.append(current_group)
+                            current_group = [m]
+                            current_group_id = m.grouped_id
+                    else:
+                        if current_group:
+                            pre_fetched_grouped.append(current_group)
+                            current_group = []
+                            current_group_id = None
+                        pre_fetched_grouped.append([m])
+                if current_group:
+                    pre_fetched_grouped.append(current_group)
+    except Exception as e:
+        logger.error(f"Failed to pre-fetch Saved Messages for user {user_id}: {e}")
+        pre_fetched_grouped = None
+
     for i, group_link in enumerate(groups):
+        if run_id is not None and active_run_ids.get(user_id) != run_id:
+            logger.info(f"Broadcast cycle for user {user_id} interrupted: superseded by new Run ID.")
+            break
+
+        active_heartbeats[user_id] = time.time()
         now_time = time.time()
         if now_time - last_fetch_time > 10.0:
             curr_user = await get_user(user_id)
@@ -385,7 +467,7 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
                 await asyncio.sleep(random.uniform(1.5, 3.0))
 
             # Forward saved messages
-            await forward_saved_messages_to_entity(client, entity)
+            await forward_saved_messages_to_entity(client, entity, grouped_messages=pre_fetched_grouped)
             
             sent += 1
             await increment_sent(user_id)
@@ -400,7 +482,7 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
             # Config-based delay with jitter
             delay = random.uniform(SEND_DELAY_MIN, SEND_DELAY_MAX)
             logger.info(f"Sleeping for {delay:.2f}s post-send (Jitter).")
-            active = await _interruptible_sleep(delay, user_id)
+            active = await _interruptible_sleep(delay, user_id, run_id)
             if not active:
                 break
 
@@ -411,7 +493,7 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
             await set_group_reason(user_id, group_link, f"FloodWait ({e.seconds}s)")
             await add_activity_log(user_id, "failed", group_link, f"FloodWait error ({e.seconds}s)")
             logger.warning(f"FloodWait in broadcast for {user_id}: sleeping {e.seconds}s")
-            active = await _interruptible_sleep(e.seconds + random.uniform(1.0, 3.0), user_id)
+            active = await _interruptible_sleep(e.seconds + random.uniform(1.0, 3.0), user_id, run_id)
             if not active:
                 break
 
@@ -430,7 +512,7 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
             group_last_posts[clean_link] = time.time()
             
             await update_user(user_id, group_slowmodes=group_slowmodes, group_last_posts=group_last_posts)
-            active = await _interruptible_sleep(e.seconds + random.uniform(1.0, 2.0), user_id)
+            active = await _interruptible_sleep(e.seconds + random.uniform(1.0, 2.0), user_id, run_id)
             if not active:
                 break
 
@@ -474,9 +556,12 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None) -> dict
     return {"sent": sent, "failed": failed, "skipped": skipped, "total": total_groups}
 
 
-async def _interruptible_sleep(seconds: float, user_id: int) -> bool:
+async def _interruptible_sleep(seconds: float, user_id: int, run_id: float = None) -> bool:
     """Sleep in 1-second increments, checking if broadcasting is still active. Returns False if interrupted."""
     for _ in range(int(seconds)):
+        if run_id is not None and active_run_ids.get(user_id) != run_id:
+            return False
+        active_heartbeats[user_id] = time.time()
         curr = await get_user(user_id)
         if not curr or not curr.get("is_broadcasting"):
             return False
@@ -484,6 +569,9 @@ async def _interruptible_sleep(seconds: float, user_id: int) -> bool:
     fraction = seconds - int(seconds)
     if fraction > 0:
         await asyncio.sleep(fraction)
+        if run_id is not None and active_run_ids.get(user_id) != run_id:
+            return False
+        active_heartbeats[user_id] = time.time()
         curr = await get_user(user_id)
         if not curr or not curr.get("is_broadcasting"):
             return False
@@ -519,9 +607,13 @@ def _format_hour(h: int) -> str:
         return f"{h-12}:00 PM"
 
 
-async def _broadcast_loop(user_id: int):
+async def _broadcast_loop(user_id: int, run_id: float):
     """Main background loop managing broadcast cycles and resting intervals."""
-    logger.info(f"Starting broadcast loop for user {user_id}")
+    logger.info(f"Starting broadcast loop for user {user_id} (Run ID: {run_id})")
+    
+    # Initialize heartbeat immediately
+    active_heartbeats[user_id] = time.time()
+    
     from app.services.channel_logger import get_bot
     bot = get_bot()
 
@@ -555,6 +647,11 @@ async def _broadcast_loop(user_id: int):
             was_sleeping = False
 
             while True:
+                # Fencing token check
+                if active_run_ids.get(user_id) != run_id:
+                    logger.info(f"Broadcast loop for user {user_id} with old Run ID {run_id} superseded. Exiting loop.")
+                    break
+
                 curr = await get_user(user_id)
                 if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
                     logger.info(f"Broadcast prerequisites missing for {user_id}. Halting autonomous loop.")
@@ -603,6 +700,8 @@ async def _broadcast_loop(user_id: int):
                     
                     # Sleep for 60 seconds, then check again
                     for _ in range(60):
+                        if active_run_ids.get(user_id) != run_id:
+                            break
                         curr = await get_user(user_id)
                         if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
                             break
@@ -614,7 +713,10 @@ async def _broadcast_loop(user_id: int):
                     # Outside sleep hours, reset notification flag
                     was_sleeping = False
 
-                cycle_res = await _execute_cycle(user_id, client, bot)
+                if active_run_ids.get(user_id) != run_id:
+                    break
+
+                cycle_res = await _execute_cycle(user_id, client, bot, run_id)
                 
                 curr = await get_user(user_id)
                 if not curr or not curr.get("session_encrypted") or not curr.get("groups"):
@@ -632,7 +734,7 @@ async def _broadcast_loop(user_id: int):
 
                 interval = curr.get("interval_seconds", MIN_INTERVAL)
                 logger.info(f"Cycle complete for {user_id}. Resting for {interval}s.")
-                active = await _interruptible_sleep(interval, user_id)
+                active = await _interruptible_sleep(interval, user_id, run_id)
                 if not active:
                     break
 
@@ -668,9 +770,13 @@ async def _broadcast_loop(user_id: int):
                     await client.disconnect()
                 except Exception:
                     pass
-            if user_id in active_tasks:
-                del active_tasks[user_id]
-            logger.info(f"Broadcast loop terminated for user {user_id}")
+            # Only clean up if this loop execution is still the active one
+            if active_run_ids.get(user_id) == run_id:
+                if user_id in active_tasks:
+                    del active_tasks[user_id]
+                active_heartbeats.pop(user_id, None)
+                active_run_ids.pop(user_id, None)
+            logger.info(f"Broadcast loop terminated for user {user_id} (Run ID: {run_id})")
 
 
 async def start(user_id: int) -> dict:
@@ -686,14 +792,18 @@ async def start(user_id: int) -> dict:
     if not groups:
         return {"success": False, "error": "You must add at least one target group."}
 
+    run_id = time.time()
+    active_run_ids[user_id] = run_id
+
     if user_id in active_tasks:
-        if not user.get("is_broadcasting"):
-            await set_broadcasting(user_id, True)
-        return {"success": True, "total_groups": len(groups)}
+        old_task = active_tasks[user_id]
+        if not old_task.done():
+            old_task.cancel()
+            logger.info(f"Cancelled old broadcast task for user {user_id} during start().")
 
     await set_broadcasting(user_id, True)
 
-    task = asyncio.create_task(_broadcast_loop(user_id))
+    task = asyncio.create_task(_broadcast_loop(user_id, run_id))
     active_tasks[user_id] = task
 
     return {"success": True, "total_groups": len(groups)}
@@ -704,12 +814,15 @@ async def stop(user_id: int) -> dict:
     await set_broadcasting(user_id, False)
     await clear_progress_message(user_id)
 
+    # Wipe the run ID to prevent any ongoing sends immediately
+    active_run_ids.pop(user_id, None)
+
     if user_id in active_tasks:
         task = active_tasks[user_id]
         task.cancel()
         try:
-            await task
-        except asyncio.CancelledError:
+            await asyncio.wait_for(task, timeout=5.0)
+        except Exception:
             pass
         if user_id in active_tasks:
             del active_tasks[user_id]
@@ -730,7 +843,9 @@ async def auto_resume():
         user_id = u["telegram_user_id"]
         if u.get("session_encrypted") and u.get("groups"):
             await set_broadcasting(user_id, True)
-            task = asyncio.create_task(_broadcast_loop(user_id))
+            run_id = time.time()
+            active_run_ids[user_id] = run_id
+            task = asyncio.create_task(_broadcast_loop(user_id, run_id))
             active_tasks[user_id] = task
             logger.info(f"Started autonomous broadcast for user {user_id}")
             # Stagger connections to prevent Telegram flood flags

@@ -281,10 +281,11 @@ async def get_client_from_session(session_string: str, user_id: int | None = Non
     return client
 
 
-async def forward_saved_messages_to_entity(client: TelegramClient, entity) -> dict:
+async def forward_saved_messages_to_entity(client: TelegramClient, entity, grouped_messages: list = None) -> dict:
     """
     Fetch all messages from user's Saved Messages ('me') and forward them to the target entity.
     Preserves Telegram Albums (media groups with grouped_id).
+    If grouped_messages is provided, uses it instead of fetching.
     Returns a structured dictionary:
     { "success": bool, "target": str, "error_type": str, "error_message": str, "skipped": bool }
     """
@@ -295,41 +296,46 @@ async def forward_saved_messages_to_entity(client: TelegramClient, entity) -> di
         target = f"@{target}"
 
     try:
-        # Fetch up to 100 messages from Saved Messages ('me')
-        msgs = await client.get_messages("me", limit=100)
-        if not msgs:
-            return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "Saved Messages chat is empty", "skipped": False}
+        if grouped_messages is not None:
+            grouped = grouped_messages
+            if not grouped:
+                return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "Saved Messages list is empty", "skipped": False}
+        else:
+            # Fetch up to 100 messages from Saved Messages ('me')
+            msgs = await client.get_messages("me", limit=100)
+            if not msgs:
+                return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "Saved Messages chat is empty", "skipped": False}
 
-        valid_msgs = [m for m in msgs if m.message or m.media]
-        if not valid_msgs:
-            return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "No valid broadcast content found in Saved Messages", "skipped": False}
+            valid_msgs = [m for m in msgs if m.message or m.media]
+            if not valid_msgs:
+                return {"success": False, "target": target, "error_type": "NoMessages", "error_message": "No valid broadcast content found in Saved Messages", "skipped": False}
 
-        # Reverse to forward in chronological order (oldest first)
-        msgs_to_forward = list(reversed(valid_msgs))
+            # Reverse to forward in chronological order (oldest first)
+            msgs_to_forward = list(reversed(valid_msgs))
 
-        # Group by grouped_id to preserve Albums/Media Groups
-        grouped = []
-        current_group = []
-        current_group_id = None
+            # Group by grouped_id to preserve Albums/Media Groups
+            grouped = []
+            current_group = []
+            current_group_id = None
 
-        for m in msgs_to_forward:
-            if m.grouped_id:
-                if m.grouped_id == current_group_id:
-                    current_group.append(m)
+            for m in msgs_to_forward:
+                if m.grouped_id:
+                    if m.grouped_id == current_group_id:
+                        current_group.append(m)
+                    else:
+                        if current_group:
+                            grouped.append(current_group)
+                        current_group = [m]
+                        current_group_id = m.grouped_id
                 else:
                     if current_group:
                         grouped.append(current_group)
-                    current_group = [m]
-                    current_group_id = m.grouped_id
-            else:
-                if current_group:
-                    grouped.append(current_group)
-                    current_group = []
-                    current_group_id = None
-                grouped.append([m])
+                        current_group = []
+                        current_group_id = None
+                    grouped.append([m])
 
-        if current_group:
-            grouped.append(current_group)
+            if current_group:
+                grouped.append(current_group)
 
         # Forward each group/standalone message with a gap/delay between them
         from app.config import GAP_BETWEEN_SAVED_MESSAGES_MIN, GAP_BETWEEN_SAVED_MESSAGES_MAX
