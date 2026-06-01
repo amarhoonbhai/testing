@@ -542,6 +542,32 @@ async def _execute_cycle(user_id: int, client: TelegramClient, bot=None, run_id:
                     pass
             break
 
+        except ConnectionError as e:
+            if "no longer authorized" in str(e).lower():
+                logger.error(f"Session unauthorized during broadcast for {user_id}: {e}")
+                await set_broadcasting(user_id, False)
+                await clear_session(user_id)
+                await log_account_invalid(user_id, str(e))
+                await add_activity_log(user_id, "failed", group_link, "Session terminated: Unauthorized")
+                if bot and curr_user.get("progress_chat_id"):
+                    try:
+                        await bot.send_message(
+                            chat_id=curr_user["progress_chat_id"],
+                            text=messages.error_text("Your Telegram session was terminated (Unauthorized). Broadcasting stopped."),
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        pass
+                break
+            else:
+                failed += 1
+                await increment_failed(user_id)
+                await increment_group_fail(user_id, group_link)
+                await set_group_reason(user_id, group_link, f"ConnectionError ({type(e).__name__})")
+                await add_activity_log(user_id, "failed", group_link, f"Connection Error: {type(e).__name__}")
+                logger.error(f"Connection error in broadcast to {group_link} for {user_id}: {e}")
+                await asyncio.sleep(1.0)
+
         except Exception as e:
             failed += 1
             await increment_failed(user_id)
@@ -760,6 +786,35 @@ async def _broadcast_loop(user_id: int, run_id: float):
             await set_broadcasting(user_id, False)
             await clear_session(user_id)
             await log_account_invalid(user_id, str(e))
+            if bot:
+                try:
+                    await bot.send_message(
+                        chat_id=user_id,
+                        text="⚠️ <b>Session Terminated</b>\n\nYour Telegram session is no longer authorized. Please reconnect your account.",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+
+        except ConnectionError as e:
+            if "no longer authorized" in str(e).lower():
+                logger.error(f"Fatal session error in loop for {user_id}: {e}")
+                await set_broadcasting(user_id, False)
+                await clear_session(user_id)
+                await log_account_invalid(user_id, str(e))
+                if bot:
+                    try:
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text="⚠️ <b>Session Terminated</b>\n\nYour Telegram session is no longer authorized. Please reconnect your account.",
+                            parse_mode="HTML"
+                        )
+                    except Exception:
+                        pass
+            else:
+                logger.error(f"Fatal connection error in broadcast loop for {user_id}: {e}")
+                await set_broadcasting(user_id, False)
+                await log_broadcast_error(user_id, str(e))
         except Exception as e:
             logger.error(f"Fatal error in broadcast loop for {user_id}: {e}")
             await set_broadcasting(user_id, False)
