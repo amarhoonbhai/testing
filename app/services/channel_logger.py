@@ -25,12 +25,12 @@ def get_bot():
     return _bot
 
 
-async def log_to_channel(text: str, silent: bool = True):
+async def log_to_channel(text: str, header: str, silent: bool = True):
     if not _bot or not LOGS_CHANNEL_ID:
         return
     try:
         formatted_text = (
-            f"📋 <b>Logs | Update</b>\n"
+            f"{header}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"{text}"
         )
@@ -48,14 +48,9 @@ def _now_str() -> str:
     return datetime.now(_tz).strftime("%I:%M %p")
 
 
-def _divider() -> str:
-    return "━━━━━━━━━━━━━━━━━━"
-
-
 def _progress_bar(percentage: float, width: int = 10) -> str:
     filled = int(round(percentage * width / 100))
     return "▰" * filled + "▱" * (width - filled)
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -65,62 +60,53 @@ def _progress_bar(percentage: float, width: int = 10) -> str:
 async def log_user_start(user_id: int, username: str, first_name: str):
     user_link = f"<a href='tg://user?id={user_id}'>{first_name}</a>"
     handle = f"@{username}" if username else "None"
-    await log_to_channel(
-        f"👤 <b>NEW USER REGISTERED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"🆔 ID: <code>{user_id}</code>\n"
         f"👤 Name: {user_link}\n"
         f"🔗 Handle: {handle}\n"
         f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="👤 <b>NEW USER REGISTERED</b>")
 
 
 async def log_account_connected(user_id: int, phone: str):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"🟢 <b>ACCOUNT AUTHORIZED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"📞 Phone: <code>{phone}</code>\n"
-        f"⏱ Time: {_now_str()}\n",
-        silent=False,
+        f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="🟢 <b>ACCOUNT AUTHORIZED</b>", silent=False)
 
 
 async def log_account_disconnected(user_id: int, phone: str):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"🔴 <b>ACCOUNT DISCONNECTED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"📞 Phone: <code>{phone}</code>\n"
-        f"⏱ Time: {_now_str()}\n",
-        silent=False,
+        f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="🔴 <b>ACCOUNT DISCONNECTED</b>", silent=False)
 
 
 async def log_broadcast_started(user_id: int, group_count: int, interval: int):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"🚀 <b>CAMPAIGN ACTIVATED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"🎯 Targets: <code>{group_count}</code> groups\n"
         f"⏳ Interval: <code>{interval // 60}</code> min\n"
-        f"⏱ Started: {_now_str()}\n",
-        silent=False,
+        f"⏱ Started: {_now_str()}\n"
     )
+    await log_to_channel(text, header="🚀 <b>CAMPAIGN ACTIVATED</b>", silent=False)
 
 
 async def log_broadcast_stopped(user_id: int):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"🛑 <b>CAMPAIGN SUSPENDED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
-        f"⏱ Time: {_now_str()}\n",
-        silent=False,
+        f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="🛑 <b>CAMPAIGN SUSPENDED</b>", silent=False)
 
 
 async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int):
@@ -131,10 +117,8 @@ async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int
     pbar = _progress_bar(pct, width=10)
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
     
-    await log_to_channel(
-        f"⚡ <b>BROADCAST CYCLE COMPLETED</b>\n"
+    text = (
         f"📊 Status: <code>{status}</code>\n"
-        f"{_divider()}\n"
         f"👤 User: {user_link}\n"
         f"📈 Progress: <code>{pbar}</code> {pct:.1f}%\n"
         f"📤 Success: <b>{sent}</b> / {total}\n"
@@ -142,6 +126,7 @@ async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int
         f"⏭ Skipped: <b>{skipped}</b>\n"
         f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header=f"⚡ <b>CYCLE COMPLETED [{status}]</b>")
 
 
 async def log_broadcast_cycle_complete(user_id: int, sent: int, failed: int, skipped: int):
@@ -150,40 +135,36 @@ async def log_broadcast_cycle_complete(user_id: int, sent: int, failed: int, ski
 
 async def log_send_failed(user_id: int, group_link: str, error_type: str, details: str):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"⚠️ <b>MESSAGE DISPATCH FAILED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"📢 Target: {group_link}\n"
         f"❌ Reason: {error_type}\n"
         f"🧾 Details: <i>{details[:100]}</i>\n"
         f"➡️ Action: Skipped and continued\n"
     )
+    await log_to_channel(text, header="⚠️ <b>MESSAGE DISPATCH FAILED</b>")
 
 
 async def log_groups_added(user_id: int, added: int, total: int):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"📥 <b>ROSTER TARGETS IMPORTED</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"➕ Added: <b>{added}</b>\n"
         f"📊 Total Roster: <b>{total}</b>\n"
         f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="📥 <b>ROSTER TARGETS IMPORTED</b>")
 
 
 async def log_error(user_id: int, error_type: str, details: str = ""):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"🚨 <b>SYSTEM CRITICAL ERROR</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"❌ Type: {error_type}\n"
         f"🧾 Detail: <i>{details[:150]}</i>\n"
-        f"⏱ Time: {_now_str()}\n",
-        silent=False,
+        f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="🚨 <b>SYSTEM CRITICAL ERROR</b>", silent=False)
 
 
 async def log_broadcast_error(user_id: int, details: str):
@@ -192,12 +173,10 @@ async def log_broadcast_error(user_id: int, details: str):
 
 async def log_account_invalid(user_id: int, details: str):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
-    await log_to_channel(
-        f"🔒 <b>SESSION REVOKED / INVALID</b>\n"
-        f"{_divider()}\n"
+    text = (
         f"👤 User: {user_link}\n"
         f"❌ Reason: <b>{details}</b>\n"
         f"➡️ Action: Session cleared & broadcasting stopped\n"
-        f"⏱ Time: {_now_str()}\n",
-        silent=False,
+        f"⏱ Time: {_now_str()}\n"
     )
+    await log_to_channel(text, header="🔒 <b>SESSION REVOKED / INVALID</b>", silent=False)
