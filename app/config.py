@@ -58,10 +58,10 @@ BANNER_PATH: str = os.getenv("BANNER_PATH", "assets/banner.png")
 TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
 
 # ── Broadcast Algorithm ─────────────────────────────────────────────────────
-SEND_DELAY_MIN: int = _safe_int(os.getenv("SEND_DELAY_MIN"), 20)    # Min seconds between sends
-SEND_DELAY_MAX: int = _safe_int(os.getenv("SEND_DELAY_MAX"), 40)    # Max seconds between sends
-GAP_BETWEEN_SAVED_MESSAGES_MIN: int = _safe_int(os.getenv("GAP_BETWEEN_SAVED_MESSAGES_MIN"), 420) # Min seconds between individual saved messages (7 min)
-GAP_BETWEEN_SAVED_MESSAGES_MAX: int = _safe_int(os.getenv("GAP_BETWEEN_SAVED_MESSAGES_MAX"), 480) # Max seconds between individual saved messages (8 min)
+SEND_DELAY_MIN: int = _safe_int(os.getenv("SEND_DELAY_MIN"), 5)    # Min seconds between sends
+SEND_DELAY_MAX: int = _safe_int(os.getenv("SEND_DELAY_MAX"), 10)    # Max seconds between sends
+GAP_BETWEEN_SAVED_MESSAGES_MIN: int = _safe_int(os.getenv("GAP_BETWEEN_SAVED_MESSAGES_MIN"), 5) # Min seconds between individual saved messages
+GAP_BETWEEN_SAVED_MESSAGES_MAX: int = _safe_int(os.getenv("GAP_BETWEEN_SAVED_MESSAGES_MAX"), 15) # Max seconds between individual saved messages
 BATCH_SIZE: int = _safe_int(os.getenv("BATCH_SIZE"), 5)            # Groups per batch
 BATCH_GAP_MIN: int = _safe_int(os.getenv("BATCH_GAP_MIN"), 30)    # Min gap after batch
 BATCH_GAP_MAX: int = _safe_int(os.getenv("BATCH_GAP_MAX"), 60)    # Max gap after batch
