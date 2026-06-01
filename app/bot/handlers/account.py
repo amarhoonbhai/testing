@@ -106,11 +106,12 @@ async def receive_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["phone_code_hash"] = result["phone_code_hash"]
     context.user_data["temp_otp"] = ""
 
-    await update.message.reply_text(
+    prompt_msg = await update.message.reply_text(
         messages.otp_prompt_text(""),
         parse_mode="HTML",
         reply_markup=keyboards.otp_keyboard(""),
     )
+    context.user_data["otp_prompt_message_id"] = prompt_msg.message_id
     return OTP
 
 
@@ -135,11 +136,20 @@ async def _verify_and_login_otp(update: Update, context: ContextTypes.DEFAULT_TY
     if is_callback:
         status_msg = update.callback_query.message
         await status_msg.edit_text("⏳ Verifying OTP code...", reply_markup=None)
+        context.user_data.pop("otp_prompt_message_id", None)
     else:
         try:
             await update.message.delete()
         except Exception:
             pass
+
+        prompt_msg_id = context.user_data.pop("otp_prompt_message_id", None)
+        if prompt_msg_id:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=prompt_msg_id)
+            except Exception:
+                pass
+
         status_msg = await update.message.reply_text("⏳ Verifying OTP code...", parse_mode="HTML")
 
     result = await verify_code(client, phone, code, phone_code_hash)
