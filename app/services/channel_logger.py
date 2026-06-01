@@ -69,11 +69,13 @@ async def log_user_start(user_id: int, username: str, first_name: str):
     await log_to_channel(text, header="👤 <b>NEW USER REGISTERED</b>")
 
 
-async def log_account_connected(user_id: int, phone: str):
+async def log_account_connected(user_id: int, phone: str, is_premium: bool = False):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
+    plan_name = "⭐️ Premium Plan" if is_premium else "🆓 Free Plan"
     text = (
         f"👤 User: {user_link}\n"
         f"📞 Phone: <code>{phone}</code>\n"
+        f"💳 Plan: <b>{plan_name}</b>\n"
         f"⏱ Time: {_now_str()}\n"
     )
     await log_to_channel(text, header="🟢 <b>ACCOUNT AUTHORIZED</b>", silent=False)
@@ -89,10 +91,12 @@ async def log_account_disconnected(user_id: int, phone: str):
     await log_to_channel(text, header="🔴 <b>ACCOUNT DISCONNECTED</b>", silent=False)
 
 
-async def log_broadcast_started(user_id: int, group_count: int, interval: int):
+async def log_broadcast_started(user_id: int, group_count: int, interval: int, is_premium: bool = False):
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
+    plan_name = "⭐️ Premium Plan" if is_premium else "🆓 Free Plan"
     text = (
         f"👤 User: {user_link}\n"
+        f"💳 Plan: <b>{plan_name}</b>\n"
         f"🎯 Targets: <code>{group_count}</code> groups\n"
         f"⏳ Interval: <code>{interval // 60}</code> min\n"
         f"⏱ Started: {_now_str()}\n"
@@ -109,17 +113,19 @@ async def log_broadcast_stopped(user_id: int):
     await log_to_channel(text, header="🛑 <b>CAMPAIGN SUSPENDED</b>", silent=False)
 
 
-async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int):
+async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int, is_premium: bool = False):
     total = sent + failed + skipped
     status = "CLEAN" if failed == 0 else "PARTIAL"
     
     pct = (sent / total * 100) if total > 0 else 0.0
     pbar = _progress_bar(pct, width=10)
     user_link = f"<a href='tg://user?id={user_id}'>{user_id}</a>"
+    plan_name = "⭐️ Premium Plan" if is_premium else "🆓 Free Plan"
     
     text = (
         f"📊 Status: <code>{status}</code>\n"
         f"👤 User: {user_link}\n"
+        f"💳 Plan: <b>{plan_name}</b>\n"
         f"📈 Progress: <code>{pbar}</code> {pct:.1f}%\n"
         f"📤 Success: <b>{sent}</b> / {total}\n"
         f"❌ Failed: <b>{failed}</b>\n"
@@ -129,8 +135,8 @@ async def log_broadcast_cycle(user_id: int, sent: int, failed: int, skipped: int
     await log_to_channel(text, header=f"⚡ <b>CYCLE COMPLETED [{status}]</b>")
 
 
-async def log_broadcast_cycle_complete(user_id: int, sent: int, failed: int, skipped: int):
-    await log_broadcast_cycle(user_id, sent, failed, skipped)
+async def log_broadcast_cycle_complete(user_id: int, sent: int, failed: int, skipped: int, is_premium: bool = False):
+    await log_broadcast_cycle(user_id, sent, failed, skipped, is_premium)
 
 
 async def log_send_failed(user_id: int, group_link: str, error_type: str, details: str):
