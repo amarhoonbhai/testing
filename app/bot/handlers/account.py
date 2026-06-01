@@ -316,11 +316,13 @@ async def _save_account(update, context, phone, session_string, client, status_m
     context.user_data.pop("phone_code_hash", None)
     context.user_data.pop("temp_otp", None)
 
+    user = await get_user(user_id)
+    is_premium = user.get("is_premium", False) if user else False
+
     # Log to channel
-    await log_account_connected(user_id, phone_masked)
+    await log_account_connected(user_id, phone_masked, is_premium=is_premium)
 
     # Check if user has groups, start autonomous broadcasting
-    user = await get_user(user_id)
     if user and user.get("groups"):
         await engine.start(user_id)
 

@@ -205,6 +205,17 @@ def _setup_auto_responder(client: TelegramClient, user_id: int):
                 await asyncio.sleep(random.uniform(1.5, 4.0))
                 await event.reply(reply_msg)
                 logger.info(f"Auto-responder replied to {event.chat_id} for user {user_id}")
+                
+                # Log to channel
+                from app.services.channel_logger import log_auto_reply_sent
+                asyncio.create_task(
+                    log_auto_reply_sent(
+                        user_id=user_id,
+                        sender_peer=sender,
+                        incoming_message=event.message.message or "",
+                        reply_message=reply_msg
+                    )
+                )
         except Exception as e:
             logger.warning(f"Auto-responder error for {user_id}: {e}")
 
@@ -668,7 +679,7 @@ async def _broadcast_loop(user_id: int, run_id: float):
 
             _setup_auto_responder(client, user_id)
 
-            await log_broadcast_started(user_id, len(user.get("groups", [])), user.get("interval_seconds", MIN_INTERVAL))
+            await log_broadcast_started(user_id, len(user.get("groups", [])), user.get("interval_seconds", MIN_INTERVAL), is_premium=user.get("is_premium", False))
 
             was_sleeping = False
 
@@ -755,7 +766,7 @@ async def _broadcast_loop(user_id: int, run_id: float):
                     break
 
                 await log_broadcast_cycle_complete(
-                    user_id, cycle_res["sent"], cycle_res["failed"], cycle_res["skipped"]
+                    user_id, cycle_res["sent"], cycle_res["failed"], cycle_res["skipped"], is_premium=curr.get("is_premium", False)
                 )
 
                 interval = curr.get("interval_seconds", MIN_INTERVAL)
