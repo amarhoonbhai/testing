@@ -693,7 +693,7 @@ def premium_info_text(is_premium: bool) -> str:
         footer_text = "<b>│</b> ↳ <i>Complete branding freedom & advanced features unlocked.</i>"
     else:
         footer_text = (
-            "<b>│</b> To Upgrade: DM @spinify with your ID\n"
+            "<b>│</b> To Upgrade: Contact @spinify for upgrade the plan\n"
             "<b>│</b> Plan 1: 49/- INR per Week\n"
             "<b>│</b> Plan 2: 169/- INR per Month"
         )
