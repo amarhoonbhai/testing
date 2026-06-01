@@ -544,3 +544,53 @@ async def check_account_health(user_id: int, client: TelegramClient) -> dict:
     await update_user(user_id, health_status=status_str, last_health_check=datetime.utcnow())
     return {"score": score, "status": status_str, "details": "\n".join(details)}
 
+
+async def join_group_or_channel(client, link: str) -> bool:
+    """Joins a group or channel by its username, public link, or private invite link."""
+    from telethon.tl.functions.channels import JoinChannelRequest
+    from telethon.tl.functions.messages import ImportChatInviteRequest
+    from telethon.errors import UserAlreadyParticipantError
+
+    link = link.strip()
+    if not link:
+        return False
+
+    # Check if it's a private invite link (contains '+' or 'joinchat/')
+    if "+" in link or "joinchat/" in link:
+        if "+" in link:
+            invite_hash = link.split("+")[-1].strip()
+        else:
+            invite_hash = link.split("joinchat/")[-1].strip()
+
+        invite_hash = invite_hash.split("/")[0].split("?")[0]
+
+        try:
+            await client(ImportChatInviteRequest(invite_hash))
+            logger.info(f"Successfully joined private chat with hash: {invite_hash}")
+            return True
+        except UserAlreadyParticipantError:
+            logger.info(f"Already a participant of private chat: {invite_hash}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to join private chat with hash {invite_hash}: {e}")
+            return False
+    else:
+        username = link
+        if "t.me/" in username:
+            username = username.split("t.me/")[-1]
+        if "@" in username:
+            username = username.replace("@", "")
+        username = username.split("/")[0].split("?")[0].strip()
+
+        try:
+            await client(JoinChannelRequest(username))
+            logger.info(f"Successfully joined public chat: {username}")
+            return True
+        except UserAlreadyParticipantError:
+            logger.info(f"Already a participant of public chat: {username}")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to join public chat {username}: {e}")
+            return False
+
+

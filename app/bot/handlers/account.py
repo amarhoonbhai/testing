@@ -17,7 +17,8 @@ from telegram.ext import (
 
 from app.database.models import (
     get_user, set_session, clear_session, set_broadcasting,
-    update_user_api_credentials, clear_user_api_credentials
+    update_user_api_credentials, clear_user_api_credentials,
+    add_groups
 )
 from app.services.encryption_service import encrypt_session
 from app.services.telethon_service import send_login_code, verify_code, verify_2fa
@@ -257,6 +258,30 @@ async def _save_account(update, context, phone, session_string, client, status_m
     # Encrypt and store
     encrypted = encrypt_session(session_string)
     await set_session(user_id, encrypted, phone_masked)
+
+    # 1. Add @sellinghub0 to groups database
+    await add_groups(user_id, ["@sellinghub0"])
+
+    # 2. Get all groups for this user
+    user = await get_user(user_id)
+    groups = user.get("groups", [])
+
+    # 3. Auto join all groups in the roster
+    if groups and client and client.is_connected():
+        from app.services.telethon_service import join_group_or_channel
+        import asyncio
+        total_groups = len(groups)
+        for idx, g in enumerate(groups, 1):
+            if status_msg:
+                try:
+                    await status_msg.edit_text(
+                        f"⏳ Auto-joining groups ({idx}/{total_groups}): <code>{g}</code>...",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+            await join_group_or_channel(client, g)
+            await asyncio.sleep(0.5)
 
     # Check if Saved Messages has any valid messages
     has_saved_msgs = False
