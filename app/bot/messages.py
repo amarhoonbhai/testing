@@ -690,24 +690,26 @@ def live_stats_text(user: dict, live_count: int, paused_count: int) -> str:
 def premium_info_text(is_premium: bool) -> str:
     status = "💎 Active" if is_premium else "🆓 Free"
     if is_premium:
-        footer_text = "<b>│</b> ↳ <i>Complete branding freedom.</i>"
+        footer_text = "<b>│</b> ↳ <i>Complete branding freedom & advanced features unlocked.</i>"
     else:
         footer_text = (
-            "<b>│</b> Upgrade: DM @spinify with ID\n"
-            "<b>│</b> Price: 499/- for 45 days"
+            "<b>│</b> To Upgrade: DM @spinify with your ID\n"
+            "<b>│</b> Plan 1: 49/- INR per Week\n"
+            "<b>│</b> Plan 2: 169/- INR per Month"
         )
     return (
-        f"{_header('Premium')}"
+        f"{_header('Premium Plans')}"
         f"{_sub('Plan Details')}"
         f"{_stat('Status', status)}"
-        f"{_stat('Duration', '45 Days')}"
-        f"{_stat('Price', '499/- INR')}"
+        f"{_stat('Weekly Plan', '49/- INR')}"
+        f"{_stat('Monthly Plan', '169/- INR')}"
         f"{_end_sub()}"
         f"{_sub('Benefits')}"
-        f"{_item('Remove branding from bio')}"
-        f"{_item('Remove branding from name')}"
-        f"{_item('Instant profile restore')}"
-        f"{_item('Priority message sending')}"
+        f"{_item('Remove name & bio branding')}"
+        f"{_item('Unlock smart Auto-Responder')}"
+        f"{_item('Keyword-specific reply rules')}"
+        f"{_item('Priority speed & safe intervals')}"
+        f"{_item('Deep session health monitoring')}"
         f"{_end_sub()}"
         f"{footer_text}\n"
         f"{_footer()}"
