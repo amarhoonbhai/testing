@@ -391,29 +391,47 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool, u
             clean_lname = clean_lname.replace(sfx, "")
         clean_lname = clean_lname.strip()
 
-        # Save originals if not already in DB
-        if orig_bio is None or orig_lname is None or orig_fname is None:
-            updates = {}
+        # Clean bio
+        clean_bio = about
+        known_bios = [
+            ENFORCED_BIO,
+            "Powered by @KurupAdsBot | Network: @PhiloBots",
+            "📢 Free Ad Posting by @KurupAdsBot | Powered by @PhiloBots"
+        ]
+        for kb in known_bios:
+            clean_bio = clean_bio.replace(kb, "")
+        clean_bio = clean_bio.strip()
+
+        has_bio_branding = (ENFORCED_BIO in about) or any(kb in about for kb in known_bios)
+        has_name_branding = any(sfx in first_name for sfx in branding_suffixes) or any(sfx in last_name for sfx in branding_suffixes)
+
+        db_updates = {}
+        if not has_bio_branding:
+            if orig_bio != clean_bio or orig_bio is None:
+                orig_bio = clean_bio
+                db_updates["original_bio"] = orig_bio
+        else:
             if orig_bio is None:
-                # Remove known branding bios to restore original bio correctly
-                clean_bio = about
-                known_bios = [
-                    ENFORCED_BIO,
-                    "Powered by @KurupAdsBot | Network: @PhiloBots",
-                    "📢 Free Ad Posting by @KurupAdsBot | Powered by @PhiloBots"
-                ]
-                for kb in known_bios:
-                    clean_bio = clean_bio.replace(kb, "")
-                orig_bio = clean_bio.strip()
-                updates["original_bio"] = orig_bio
+                orig_bio = clean_bio
+                db_updates["original_bio"] = orig_bio
+
+        if not has_name_branding:
+            if orig_fname != clean_fname or orig_fname is None:
+                orig_fname = clean_fname
+                db_updates["original_first_name"] = orig_fname
+            if orig_lname != clean_lname or orig_lname is None:
+                orig_lname = clean_lname
+                db_updates["original_last_name"] = orig_lname
+        else:
             if orig_fname is None:
                 orig_fname = clean_fname
-                updates["original_first_name"] = orig_fname
+                db_updates["original_first_name"] = orig_fname
             if orig_lname is None:
                 orig_lname = clean_lname
-                updates["original_last_name"] = orig_lname
-            if updates:
-                await update_user(user_id, **updates)
+                db_updates["original_last_name"] = orig_lname
+
+        if db_updates:
+            await update_user(user_id, **db_updates)
 
         updated = False
         new_about = about
@@ -439,15 +457,16 @@ async def enforce_or_remove_branding(client: TelegramClient, is_premium: bool, u
             if last_name != new_last_name:
                 updated = True
         else:
-            target_bio = orig_bio or ""
-            target_fname = orig_fname or clean_fname
-            target_lname = orig_lname or clean_lname
+            if has_bio_branding or has_name_branding:
+                target_bio = orig_bio or clean_bio
+                target_fname = orig_fname or clean_fname
+                target_lname = orig_lname or clean_lname
 
-            if about != target_bio or first_name != target_fname or last_name != target_lname:
-                new_about = target_bio
-                new_first_name = target_fname
-                new_last_name = target_lname
-                updated = True
+                if about != target_bio or first_name != target_fname or last_name != target_lname:
+                    new_about = target_bio
+                    new_first_name = target_fname
+                    new_last_name = target_lname
+                    updated = True
 
         if updated:
             await client(UpdateProfileRequest(

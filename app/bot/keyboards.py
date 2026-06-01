@@ -318,3 +318,36 @@ def keyword_rules_keyboard(keywords: dict) -> InlineKeyboardMarkup:
     buttons.append([InlineKeyboardButton("➕ Add Keyword Rule", callback_data="add_keyword_rule")])
     buttons.append([InlineKeyboardButton("← Back to Auto Responder", callback_data="auto_responder")])
     return InlineKeyboardMarkup(buttons)
+
+
+def otp_keyboard(current_otp: str = "") -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton("1", callback_data="otp_digit_1"),
+            InlineKeyboardButton("2", callback_data="otp_digit_2"),
+            InlineKeyboardButton("3", callback_data="otp_digit_3"),
+        ],
+        [
+            InlineKeyboardButton("4", callback_data="otp_digit_4"),
+            InlineKeyboardButton("5", callback_data="otp_digit_5"),
+            InlineKeyboardButton("6", callback_data="otp_digit_6"),
+        ],
+        [
+            InlineKeyboardButton("7", callback_data="otp_digit_7"),
+            InlineKeyboardButton("8", callback_data="otp_digit_8"),
+            InlineKeyboardButton("9", callback_data="otp_digit_9"),
+        ],
+        [
+            InlineKeyboardButton("🧹 Clear", callback_data="otp_clear"),
+            InlineKeyboardButton("0", callback_data="otp_digit_0"),
+            InlineKeyboardButton("⌫ Del", callback_data="otp_delete"),
+        ],
+        [
+            InlineKeyboardButton("✅ Submit", callback_data="otp_submit"),
+        ],
+        [
+            InlineKeyboardButton("✖ Cancel Operation", callback_data="cancel_conv"),
+        ]
+    ]
+    return InlineKeyboardMarkup(buttons)
+

@@ -103,40 +103,48 @@ async def receive_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["login_phone"] = phone
     context.user_data["login_client"] = result["client"]
     context.user_data["phone_code_hash"] = result["phone_code_hash"]
+    context.user_data["temp_otp"] = ""
 
     await update.message.reply_text(
-        messages.otp_prompt_text(),
+        messages.otp_prompt_text(""),
         parse_mode="HTML",
-        reply_markup=keyboards.cancel_keyboard(),
+        reply_markup=keyboards.otp_keyboard(""),
     )
     return OTP
 
 
-async def receive_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive OTP code, verify login."""
-    code = update.message.text.strip()
+async def _verify_and_login_otp(update: Update, context: ContextTypes.DEFAULT_TYPE, code: str, is_callback: bool):
+    """Common logic to verify OTP code and login."""
+    # Extract only digits (reconstructs code if user types with spaces)
+    code = "".join(c for c in code if c.isdigit())
+
     phone = context.user_data.get("login_phone")
     client = context.user_data.get("login_client")
     phone_code_hash = context.user_data.get("phone_code_hash")
 
     if not client or not phone:
-        await update.message.reply_text(
+        msg_target = update.callback_query.message if is_callback else update.message
+        await msg_target.reply_text(
             messages.error_text("Session expired. Please start over."),
             parse_mode="HTML",
             reply_markup=keyboards.back_keyboard("dashboard"),
         )
         return ConversationHandler.END
 
-    # Delete OTP message for security
-    try:
-        await update.message.delete()
-    except Exception:
-        pass
+    if is_callback:
+        status_msg = update.callback_query.message
+        await status_msg.edit_text("⏳ Verifying OTP code...", reply_markup=None)
+    else:
+        try:
+            await update.message.delete()
+        except Exception:
+            pass
+        status_msg = await update.message.reply_text("⏳ Verifying OTP code...", parse_mode="HTML")
 
     result = await verify_code(client, phone, code, phone_code_hash)
 
     if result["needs_2fa"]:
-        await update.message.reply_text(
+        await status_msg.edit_text(
             messages.password_2fa_text(),
             parse_mode="HTML",
             reply_markup=keyboards.cancel_keyboard(),
@@ -144,16 +152,66 @@ async def receive_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PASSWORD_2FA
 
     if not result["success"]:
-        await update.message.reply_text(
-            messages.error_text(result["error"]),
+        context.user_data["temp_otp"] = ""
+        error_msg = messages.error_text(result["error"]) + "\n\n" + messages.otp_prompt_text("")
+        await status_msg.edit_text(
+            error_msg,
             parse_mode="HTML",
-            reply_markup=keyboards.cancel_keyboard(),
+            reply_markup=keyboards.otp_keyboard(""),
         )
         return OTP
 
     # Success — save account
-    await _save_account(update, context, phone, result["session_string"], client)
+    await _save_account(update, context, phone, result["session_string"], client, status_msg=status_msg)
     return ConversationHandler.END
+
+
+async def receive_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receive OTP code, verify login."""
+    code = update.message.text.strip()
+    return await _verify_and_login_otp(update, context, code, is_callback=False)
+
+
+async def otp_keyboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle OTP keyboard button presses."""
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+    current_otp = context.user_data.get("temp_otp", "")
+
+    if data.startswith("otp_digit_"):
+        digit = data.split("_")[-1]
+        if len(current_otp) < 5:
+            current_otp += digit
+            context.user_data["temp_otp"] = current_otp
+            
+    elif data == "otp_delete":
+        if current_otp:
+            current_otp = current_otp[:-1]
+            context.user_data["temp_otp"] = current_otp
+            
+    elif data == "otp_clear":
+        current_otp = ""
+        context.user_data["temp_otp"] = current_otp
+        
+    elif data == "otp_submit":
+        if len(current_otp) < 5:
+            await query.answer("OTP must be 5 digits.", show_alert=True)
+            return OTP
+        return await _verify_and_login_otp(update, context, current_otp, is_callback=True)
+
+    # Edit message to show updated state
+    await query.message.edit_text(
+        messages.otp_prompt_text(current_otp),
+        parse_mode="HTML",
+        reply_markup=keyboards.otp_keyboard(current_otp),
+    )
+
+    if len(current_otp) == 5:
+        return await _verify_and_login_otp(update, context, current_otp, is_callback=True)
+
+    return OTP
 
 
 async def receive_2fa_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -191,7 +249,7 @@ async def receive_2fa_password(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 
-async def _save_account(update, context, phone, session_string, client):
+async def _save_account(update, context, phone, session_string, client, status_msg=None):
     """Encrypt session, save to DB, notify user."""
     user_id = update.effective_user.id
     phone_masked = _mask_phone(phone)
@@ -221,6 +279,7 @@ async def _save_account(update, context, phone, session_string, client):
     context.user_data.pop("login_phone", None)
     context.user_data.pop("login_client", None)
     context.user_data.pop("phone_code_hash", None)
+    context.user_data.pop("temp_otp", None)
 
     # Log to channel
     await log_account_connected(user_id, phone_masked)
@@ -230,10 +289,25 @@ async def _save_account(update, context, phone, session_string, client):
     if user and user.get("groups"):
         await engine.start(user_id)
 
-    await update.message.reply_text(
-        messages.account_connected_text(phone_masked, has_saved_messages=has_saved_msgs),
+    connected_text = messages.account_connected_text(phone_masked, has_saved_messages=has_saved_msgs)
+    dashboard_kb = keyboards.back_keyboard("dashboard")
+
+    if status_msg:
+        try:
+            await status_msg.edit_text(
+                connected_text,
+                parse_mode="HTML",
+                reply_markup=dashboard_kb,
+            )
+            return
+        except Exception:
+            pass
+
+    target = update.callback_query.message if update.callback_query else update.message
+    await target.reply_text(
+        connected_text,
         parse_mode="HTML",
-        reply_markup=keyboards.back_keyboard("dashboard"),
+        reply_markup=dashboard_kb,
     )
 
 
@@ -252,6 +326,7 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     context.user_data.pop("login_phone", None)
     context.user_data.pop("phone_code_hash", None)
+    context.user_data.pop("temp_otp", None)
 
     await _send_menu(
         update, context,
@@ -346,6 +421,7 @@ def build_account_conversation() -> ConversationHandler:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_phone),
             ],
             OTP: [
+                CallbackQueryHandler(otp_keyboard_callback, pattern="^otp_"),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, receive_otp),
             ],
             PASSWORD_2FA: [

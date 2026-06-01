@@ -218,13 +218,28 @@ def connect_account_text() -> str:
     )
 
 
-def otp_prompt_text() -> str:
+def otp_prompt_text(current_otp: str = "") -> str:
+    display_otp = ""
+    for i in range(5):
+        if i < len(current_otp):
+            display_otp += current_otp[i] + " "
+        else:
+            display_otp += "• "
+    display_otp = display_otp.strip()
+
     return (
         f"{_header('Enter Code')}"
         f"<b>│</b> Enter the 5-digit login code\n"
         f"<b>│</b> sent to your Telegram app.\n"
         f"<b>│</b>\n"
-        f"<b>│</b> ◽ <i>Waiting for code...</i>"
+        f"<b>│</b> ◽ Code: <code>{display_otp}</code>\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> ⚠️ <b>IMPORTANT:</b> If entering manually, you\n"
+        f"<b>│</b> MUST put a space between each digit\n"
+        f"<b>│</b> (e.g. <code>1 2 3 4 5</code>) to avoid Telegram\n"
+        f"<b>│</b> blocking the message.\n"
+        f"<b>│</b>\n"
+        f"<b>│</b> ↳ <i>Tap buttons or enter manually</i>"
         f"{_footer()}"
     )
 
